@@ -4,15 +4,18 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import Header from '../../components/Header';
 import BottomNav from '../../components/BottomNav';
 
-const DiscoveryCard = ({ item, children }: { item: any, children?: React.ReactNode }) => (
+const DiscoveryCard = ({ item, onClick, children }: { item: any, onClick: () => void, children?: React.ReactNode }) => (
   <div className="min-w-[164px] w-[164px] flex flex-col gap-2.5">
-    <div className="aspect-[4/3] clay-img overflow-hidden relative group">
+    <div 
+      onClick={onClick}
+      className="aspect-[4/3] clay-img overflow-hidden relative group cursor-pointer"
+    >
       <img alt={item.title} className="w-full h-full object-cover opacity-95 mix-blend-multiply" src={item.img} />
       <div className="absolute inset-0 bg-gradient-to-tr from-indigo-100/20 to-transparent"></div>
       {children}
     </div>
     <div className="flex justify-between items-start gap-1">
-      <div className="flex-1">
+      <div className="flex-1 cursor-pointer" onClick={onClick}>
         <h4 className="font-bold text-[14px] leading-[1.3] text-black line-clamp-2">{item.title}</h4>
         <div className="flex items-center gap-1 mt-1">
           <span className="material-symbols-outlined text-[14px] text-amber-400" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
@@ -112,7 +115,6 @@ const CoursesDashboard: React.FC = () => {
               </div>
             </section>
 
-            {/* Missing Status Filters Added Here */}
             <section>
               <div className="bg-slate-100/80 p-1 rounded-2xl flex gap-1 shadow-inner">
                 <button 
@@ -137,7 +139,10 @@ const CoursesDashboard: React.FC = () => {
             </section>
 
             <section className="space-y-4">
-              <div className="flex items-center gap-3 p-4 bg-white rounded-3xl border border-slate-100 shadow-sm group active:scale-[0.98] transition-all">
+              <div 
+                onClick={() => navigate('/course-detail')}
+                className="flex items-center gap-3 p-4 bg-white rounded-3xl border border-slate-100 shadow-sm group active:scale-[0.98] transition-all cursor-pointer"
+              >
                 <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex-shrink-0 flex items-center justify-center shadow-inner">
                   <span className="material-symbols-outlined text-primary" style={{ fontVariationSettings: "'FILL' 1" }}>psychology</span>
                 </div>
@@ -147,7 +152,10 @@ const CoursesDashboard: React.FC = () => {
                     <div className="bg-primary h-full w-[65%] rounded-full"></div>
                   </div>
                 </div>
-                <button onClick={() => navigate('/knowledge-tree')} className="h-10 px-4 bg-black rounded-full flex-shrink-0 flex items-center justify-center shadow-lg">
+                <button 
+                  onClick={(e) => { e.stopPropagation(); navigate('/knowledge-tree'); }} 
+                  className="h-10 px-4 bg-black rounded-full flex-shrink-0 flex items-center justify-center shadow-lg"
+                >
                   <span className="text-[10px] font-black text-white uppercase tracking-widest">Study</span>
                 </button>
               </div>
@@ -169,7 +177,11 @@ const CoursesDashboard: React.FC = () => {
                 <div className="overflow-x-auto no-scrollbar -mx-6 px-6">
                   <div className="flex gap-4 pb-2">
                     {section.items.map(item => (
-                      <DiscoveryCard key={item.id} item={item}>
+                      <DiscoveryCard 
+                        key={item.id} 
+                        item={item}
+                        onClick={() => navigate('/course-detail')}
+                      >
                         {section.id === 'friends' && (
                           <div className="absolute bottom-2 left-2 flex -space-x-1.5">
                             <img alt="friend" className="w-6 h-6 rounded-full border-2 border-white" src="https://picsum.photos/40/40?random=1"/>
@@ -178,7 +190,6 @@ const CoursesDashboard: React.FC = () => {
                         )}
                       </DiscoveryCard>
                     ))}
-                    {/* Add extra spacer for horizontal scroll end padding */}
                     <div className="min-w-[1px] invisible"></div>
                   </div>
                 </div>

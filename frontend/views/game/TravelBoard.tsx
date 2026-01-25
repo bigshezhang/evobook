@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import GameHeader from '../../components/GameHeader';
 import BottomNav from '../../components/BottomNav';
+import Mascot from '../../components/Mascot';
 
 type TileType = 'gold' | 'xp' | 'roll' | 'normal' | 'star' | 'gift' | 'map';
 
@@ -23,10 +24,11 @@ const TravelBoard: React.FC = () => {
   const [path, setPath] = useState<TileData[]>([]);
   const pathRef = useRef<TileData[]>([]);
 
-  // 物理常量 - 稍微增加间距让前方的路更清晰
   const TILE_H = 120; 
   const GAP = 80;    
   const STEP_UNIT = TILE_H + GAP; 
+
+  const MASCOT_SRC = "https://lh3.googleusercontent.com/aida-public/AB6AXuCnRMVMv3VQCalsOm2RCkci09ous1fHuESh9sMZOzls1ru6VuE5HAlxYcKU6AswyAOsq12l9kr0vdwHeD8hswbrsxz4xZRK5oDlUPQMkmsbBJks_RVJ7JpcWNSLbPi4ISfkMH__idCAOv8RTmRLMNFkIzfyPwb3vJzSQ628ux_fwHE7XdjKa0LbGIrGOhhEmLaWRqfg-nPFNVhkih46KYodq5ipAZkQGeaLwK99YG7Az-UcKbMDqfxhd6RQqOg4faz2K3kd90U7PsXV";
 
   useEffect(() => {
     generateMoreTiles(50);
@@ -96,7 +98,6 @@ const TravelBoard: React.FC = () => {
   const visibleTiles = useMemo(() => {
     return path.filter(tile => {
       const relIdx = tile.id - currentStep;
-      // 渲染范围略微调整，侧重前方
       return relIdx >= -3 && relIdx <= 15;
     });
   }, [path, currentStep]);
@@ -129,27 +130,20 @@ const TravelBoard: React.FC = () => {
           </button>
         </div>
 
-        {/* 3D 路径系统 - 调整视角角度使其更平坦 */}
         <div 
           className="absolute inset-0 flex flex-col items-center pointer-events-none"
-          style={{ 
-            perspective: '1000px',
-            perspectiveOrigin: '50% 50%', 
-            transformStyle: 'preserve-3d'
-          }}
+          style={{ perspective: '1000px', perspectiveOrigin: '50% 50%', transformStyle: 'preserve-3d' }}
         >
           <div 
             className="absolute top-[70%] w-full h-full transition-transform duration-500 ease-out"
             style={{ 
               transformStyle: 'preserve-3d',
-              // 将角度从 58deg 下调至 45deg，使视野更开阔，格子看起来更“平铺”
               transform: `rotateX(45deg) translateY(${currentStep * STEP_UNIT}px)`
             }}
           >
             {visibleTiles.map((tile) => {
               const relIdx = tile.id - currentStep;
               const isActive = relIdx === 0;
-              // 调整透明度衰减，让前方的格子更清晰
               const opacity = relIdx < 0 ? 1 - (Math.abs(relIdx) * 0.2) : 1 - (relIdx * 0.08);
               const scale = relIdx > 0 ? 1 - (relIdx * 0.04) : 1;
 
@@ -177,16 +171,13 @@ const TravelBoard: React.FC = () => {
           </div>
         </div>
 
-        {/* 吉祥物：进一步缩小体积，腾出视觉空间 */}
         <div className="absolute left-1/2 -translate-x-1/2 top-[70%] z-[150] pointer-events-none flex flex-col items-center">
           <div className={`transition-all duration-[400ms] transform-gpu ${isJumping ? '-translate-y-40 scale-110' : '-translate-y-[85px] scale-100'}`}>
-            <img 
-              alt="Mascot" 
-              className="drop-shadow-[0_20px_40px_rgba(0,0,0,0.25)]" 
-              width="100"
-              src="https://lh3.googleusercontent.com/aida-public/AB6AXuCnRMVMv3VQCalsOm2RCkci09ous1fHuESh9sMZOzls1ru6VuE5HAlxYcKU6AswyAOsq12l9kr0vdwHeD8hswbrsxz4xZRK5oDlUPQMkmsbBJks_RVJ7JpcWNSLbPi4ISfkMH__idCAOv8RTmRLMNFkIzfyPwb3vJzSQ628ux_fwHE7XdjKa0LbGIrGOhhEmLaWRqfg-nPFNVhkih46KYodq5ipAZkQGeaLwK99YG7Az-UcKbMDqfxhd6RQqOg4faz2K3kd90U7PsXV" 
+            <Mascot 
+              src={MASCOT_SRC}
+              width="90" 
+              className="drop-shadow-[0_20px_40px_rgba(0,0,0,0.25)]"
             />
-            {/* 影子适配缩小后的角色 */}
             <div className={`mt-1 bg-black/15 blur-2xl rounded-[100%] transition-all duration-400 mx-auto ${isJumping ? 'w-8 h-2 opacity-5 scale-50' : 'w-24 h-5 opacity-30 scale-100'}`}></div>
           </div>
         </div>

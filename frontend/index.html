@@ -23,6 +23,8 @@
                         "accent-blue": "#A4C9FF",
                         "accent-orange": "#FFB865",
                         "accent-gold": "#FFD700",
+                        "reward-yellow": "#FFF9DB",
+                        "exp-gold": "#F59E0B",
                     },
                     fontFamily: {
                         sans: ["Plus Jakarta Sans", "sans-serif"],
@@ -48,6 +50,16 @@
         @layer utilities {
             .no-scrollbar::-webkit-scrollbar { display: none; }
             .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+            .bg-vibrant-gradient { background: linear-gradient(180deg, #E9E3FF 0%, #FFFFFF 100%); }
+            .mascot-shadow { filter: drop-shadow(0 20px 40px rgba(139, 92, 246, 0.3)); }
+            .qr-container { box-shadow: 0 -20px 50px rgba(0, 0, 0, 0.04); border-top: 1px solid rgba(255, 255, 255, 0.8); }
+            .reward-pill-shadow { box-shadow: 0 4px 0px #FACC15; border: 1px solid #FEF08A; }
+            
+            /* 3D Knowledge Map Nodes */
+            .node-3d { @apply transition-all duration-100 relative active:translate-y-1 active:shadow-none; }
+            .node-completed { background-color: #FFB938; box-shadow: 0 6px 0 #D99A20; color: #1A1A1A; }
+            .node-current { background-color: #1A1A1A; box-shadow: 0 6px 0 #000000; color: #FFFFFF; }
+            .node-locked { background-color: #EAEAEA; border: 1px solid #E5E7EB; box-shadow: 0 4px 0 #D1D5DB; color: #9CA3AF; }
         }
         body {
             @apply font-sans antialiased text-charcoal bg-white;
@@ -128,9 +140,6 @@
         .three-d-element {
             background: radial-gradient(circle at 30% 30%, #ffffff 0%, #e0d9ff 100%);
             box-shadow: 2px 2px 10px rgba(182, 163, 255, 0.2), inset -2px -2px 5px rgba(0,0,0,0.05);
-        }
-        .node-3d {
-            @apply transition-all duration-100 relative active:translate-y-1 active:shadow-none;
         }
         .clay-card {
             @apply bg-white border border-slate-100;

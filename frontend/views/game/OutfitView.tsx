@@ -2,10 +2,13 @@
 import React, { useState } from 'react';
 import GameHeader from '../../components/GameHeader';
 import BottomNav from '../../components/BottomNav';
+import Mascot from '../../components/Mascot';
 
 const OutfitView: React.FC = () => {
   const [activeSubTab, setActiveSubTab] = useState<'Mine' | 'Shop'>('Mine');
   const [category, setCategory] = useState('Hats');
+
+  const MASCOT_SRC = "https://lh3.googleusercontent.com/aida-public/AB6AXuCnRMVMv3VQCalsOm2RCkci09ous1fHuESh9sMZOzls1ru6VuE5HAlxYcKU6AswyAOsq12l9kr0vdwHeD8hswbrsxz4xZRK5oDlUPQMkmsbBJks_RVJ7JpcWNSLbPi4ISfkMH__idCAOv8RTmRLMNFkIzfyPwb3vJzSQ628ux_fwHE7XdjKa0LbGIrGOhhEmLaWRqfg-nPFNVhkih46KYodq5ipAZkQGeaLwK99YG7Az-UcKbMDqfxhd6RQqOg4faz2K3kd90U7PsXV";
 
   const categories = ['Hats', 'Clothes', 'Accessories', 'Shoes'];
   const items = [
@@ -24,21 +27,17 @@ const OutfitView: React.FC = () => {
     <div className="flex flex-col h-screen bg-[#F9F9F9] overflow-hidden select-none font-sans">
       <GameHeader />
       
-      {/* Mascot Preview Area - Occupies top 1/3 */}
       <main className="h-[35%] relative flex flex-col items-center justify-center">
         <div className="absolute w-[240px] h-[240px] bg-primary/5 rounded-full blur-[60px] -z-10"></div>
         <div className="relative z-10 scale-110 drop-shadow-2xl animate-in fade-in zoom-in duration-500">
-          <img alt="Mascot" className="drop-shadow-2xl" height="200" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCnRMVMv3VQCalsOm2RCkci09ous1fHuESh9sMZOzls1ru6VuE5HAlxYcKU6AswyAOsq12l9kr0vdwHeD8hswbrsxz4xZRK5oDlUPQMkmsbBJks_RVJ7JpcWNSLbPi4ISfkMH__idCAOv8RTmRLMNFkIzfyPwb3vJzSQ628ux_fwHE7XdjKa0LbGIrGOhhEmLaWRqfg-nPFNVhkih46KYodq5ipAZkQGeaLwK99YG7Az-UcKbMDqfxhd6RQqOg4faz2K3kd90U7PsXV" width="200"/>
+          <Mascot src={MASCOT_SRC} width="200" className="drop-shadow-2xl" />
         </div>
         <div className="absolute bottom-4 w-40 h-4 bg-black/5 blur-xl rounded-[100%]"></div>
       </main>
 
-      {/* Outfit Panel Section - Occupies bottom 2/3 (65%) */}
       <div className="h-[65%] bg-white rounded-t-[48px] shadow-[0_-30px_100px_rgba(0,0,0,0.08)] p-6 z-40 overflow-hidden flex flex-col border-t border-slate-50">
-        {/* Handle Bar */}
         <div className="w-12 h-1.5 bg-slate-100 rounded-full mx-auto mb-6 flex-shrink-0"></div>
 
-        {/* Sub-tabs: Mine / Shop */}
         <div className="px-10 mb-6 flex-shrink-0">
           <div className="bg-slate-50 p-1 rounded-2xl flex items-center border border-slate-100 shadow-inner">
             <button 
@@ -52,7 +51,6 @@ const OutfitView: React.FC = () => {
           </div>
         </div>
 
-        {/* Category Icons */}
         <div className="flex gap-2.5 mb-6 overflow-x-auto no-scrollbar flex-shrink-0">
           {categories.map(cat => (
             <button 
@@ -65,7 +63,6 @@ const OutfitView: React.FC = () => {
           ))}
         </div>
 
-        {/* Scrollable Item Grid */}
         <div className="flex-1 overflow-y-auto no-scrollbar pb-28">
           <div className="grid grid-cols-3 gap-4 p-1">
             {items.map(item => (

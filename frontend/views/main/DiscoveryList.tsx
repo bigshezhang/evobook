@@ -24,7 +24,6 @@ const DiscoveryList: React.FC = () => {
   ];
 
   const handleBack = () => {
-    // Navigate back to the dashboard with the discovery tab active
     navigate('/dashboard?tab=discovery');
   };
 
@@ -46,12 +45,15 @@ const DiscoveryList: React.FC = () => {
         <div className="grid grid-cols-2 gap-x-4 gap-y-6">
           {mockCourses.map(item => (
             <div key={item.id} className="flex flex-col gap-2.5">
-              <div className="aspect-[4/3] clay-img overflow-hidden relative group">
+              <div 
+                onClick={() => navigate('/course-detail')}
+                className="aspect-[4/3] clay-img overflow-hidden relative group cursor-pointer"
+              >
                 <img alt={item.title} className="w-full h-full object-cover opacity-95 mix-blend-multiply" src={item.img}/>
                 <div className="absolute inset-0 bg-gradient-to-tr from-indigo-100/30 to-transparent"></div>
               </div>
               <div className="flex justify-between items-start gap-1">
-                <div className="flex-1">
+                <div className="flex-1 cursor-pointer" onClick={() => navigate('/course-detail')}>
                   <h4 className="font-bold text-[14px] leading-[1.3] text-black line-clamp-2">{item.title}</h4>
                   <div className="flex items-center gap-1 mt-1">
                     <span className="material-symbols-outlined text-[14px] text-amber-400" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>

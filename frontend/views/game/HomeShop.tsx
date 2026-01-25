@@ -2,6 +2,7 @@
 import React, { useState, useRef } from 'react';
 import GameHeader from '../../components/GameHeader';
 import BottomNav from '../../components/BottomNav';
+import Mascot from '../../components/Mascot';
 
 interface ShopItem {
   id: number;
@@ -15,6 +16,8 @@ const HomeShop: React.FC = () => {
   const [scrollTop, setScrollTop] = useState(0);
   const [category, setCategory] = useState('Furniture');
   const [selectedItem, setSelectedItem] = useState<ShopItem | null>(null);
+
+  const MASCOT_SRC = "https://lh3.googleusercontent.com/aida-public/AB6AXuCnRMVMv3VQCalsOm2RCkci09ous1fHuESh9sMZOzls1ru6VuE5HAlxYcKU6AswyAOsq12l9kr0vdwHeD8hswbrsxz4xZRK5oDlUPQMkmsbBJks_RVJ7JpcWNSLbPi4ISfkMH__idCAOv8RTmRLMNFkIzfyPwb3vJzSQ628ux_fwHE7XdjKa0LbGIrGOhhEmLaWRqfg-nPFNVhkih46KYodq5ipAZkQGeaLwK99YG7Az-UcKbMDqfxhd6RQqOg4faz2K3kd90U7PsXV";
 
   const categories = ['Furniture', 'Decor', 'Walls', 'Floor'];
   const shopItems: ShopItem[] = [
@@ -32,56 +35,40 @@ const HomeShop: React.FC = () => {
     setScrollTop(e.currentTarget.scrollTop);
   };
 
-  // Centering & Scaling logic based on scroll position
-  // The room shrinks as the shop moves up
   const roomScale = Math.max(0.65, 1 - scrollTop / 600);
-  const roomTranslateY = scrollTop * 0.4; // Parallax effect
+  const roomTranslateY = scrollTop * 0.4; 
   const roomOpacity = Math.max(0.1, 1 - scrollTop / 400);
 
   return (
     <div className="relative h-screen flex flex-col bg-[#F9F9F9] overflow-hidden select-none">
       <GameHeader />
       
-      {/* Scrollable Container */}
-      <main 
-        onScroll={handleScroll}
-        className="flex-1 overflow-y-auto no-scrollbar relative"
-      >
-        {/* Dynamic Preview Section - Parallax Centering */}
+      <main onScroll={handleScroll} className="flex-1 overflow-y-auto no-scrollbar relative">
         <section 
           className="sticky top-0 w-full h-[40vh] flex flex-col items-center justify-center pointer-events-none z-10"
-          style={{ 
-            transform: `translateY(${-roomTranslateY}px) scale(${roomScale})`,
-            opacity: roomOpacity
-          }}
+          style={{ transform: `translateY(${-roomTranslateY}px) scale(${roomScale})`, opacity: roomOpacity }}
         >
-          {/* Background Ambient Glow */}
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[380px] h-[380px] bg-indigo-50 rounded-full blur-[90px] -z-10"></div>
           
           <div className="relative flex flex-col items-center">
-             {/* Isometric Room Animation */}
              <div className="isometric-room relative w-[280px] h-[280px] bg-white rounded-2xl shadow-[0_40px_80px_rgba(0,0,0,0.06)] border-4 border-white transition-transform duration-300">
                 <div className="absolute inset-0 grid grid-cols-4 grid-rows-4 opacity-[0.04]">
                   {[...Array(16)].map((_, i) => <div key={i} className="border border-slate-900"></div>)}
                 </div>
                 
-                {/* Mascot - Animated and Centered */}
                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-40 h-40 flex items-center justify-center">
                   <div className="transform rotate-[45deg] rotate-x-[-55deg] scale-[2] translate-y-[-15px]">
-                    <img 
-                      alt="Mascot" 
-                      className="drop-shadow-2xl animate-bounce" 
+                    <Mascot 
+                      src={MASCOT_SRC} 
+                      className="drop-shadow-2xl animate-bounce"
                       style={{ animationDuration: '3.5s' }}
-                      src="https://lh3.googleusercontent.com/aida-public/AB6AXuCnRMVMv3VQCalsOm2RCkci09ous1fHuESh9sMZOzls1ru6VuE5HAlxYcKU6AswyAOsq12l9kr0vdwHeD8hswbrsxz4xZRK5oDlUPQMkmsbBJks_RVJ7JpcWNSLbPi4ISfkMH__idCAOv8RTmRLMNFkIzfyPwb3vJzSQ628ux_fwHE7XdjKa0LbGIrGOhhEmLaWRqfg-nPFNVhkih46KYodq5ipAZkQGeaLwK99YG7Az-UcKbMDqfxhd6RQqOg4faz2K3kd90U7PsXV" 
                     />
                   </div>
                 </div>
              </div>
-             {/* Shadow below room */}
              <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 w-56 h-6 bg-black/[0.03] blur-xl rounded-[100%]"></div>
           </div>
 
-          {/* Interaction Floating Buttons */}
           <div className="absolute right-8 top-1/2 -translate-y-1/2 flex flex-col gap-4 pointer-events-auto">
              <button className="clay-pill bg-black/90 backdrop-blur-md text-white w-14 h-14 rounded-full flex flex-col items-center justify-center active:scale-90 shadow-xl border border-white/10 transition-transform">
                 <span className="material-symbols-outlined text-amber-300" style={{ fontVariationSettings: "'FILL' 1" }}>cookie</span>
@@ -94,12 +81,9 @@ const HomeShop: React.FC = () => {
           </div>
         </section>
 
-        {/* Shop Panel Section - 2/3 Height (approx 65vh) */}
         <section className="relative z-20 min-h-[65vh] bg-white rounded-t-[48px] shadow-[0_-30px_100px_rgba(0,0,0,0.08)] px-6 pt-4 border-t border-slate-100 flex flex-col">
-          {/* Spacer to push it down initially so room is visible */}
           <div className="absolute -top-12 left-0 right-0 h-12 bg-transparent"></div>
           
-          {/* Handle Bar */}
           <div className="flex flex-col items-center mb-8">
             <div className="w-12 h-1.5 bg-slate-100 rounded-full mb-8"></div>
             <div className="w-full flex justify-between items-center">
@@ -114,7 +98,6 @@ const HomeShop: React.FC = () => {
             </div>
           </div>
 
-          {/* Categories Tab Bar */}
           <div className="flex gap-2.5 mb-8 overflow-x-auto no-scrollbar">
             {categories.map(cat => (
               <button 
@@ -127,7 +110,6 @@ const HomeShop: React.FC = () => {
             ))}
           </div>
 
-          {/* Grid of Items */}
           <div className="grid grid-cols-2 gap-4 pb-48">
             {shopItems.map(item => (
               <div 
@@ -149,10 +131,8 @@ const HomeShop: React.FC = () => {
         </section>
       </main>
 
-      {/* Navigation Restored */}
       <BottomNav activeTab="game" />
 
-      {/* Simple Purchase Dialog */}
       {selectedItem && (
         <div className="absolute inset-0 z-[200] flex items-center justify-center px-8 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
           <div className="bg-white w-full max-w-sm rounded-[40px] p-10 flex flex-col items-center shadow-2xl animate-in zoom-in duration-300 border border-white/20">
