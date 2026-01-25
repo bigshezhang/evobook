@@ -1,0 +1,160 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EvoBook AI</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,typography,container-queries"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Outfit:wght@300;400;500;600;700;800&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&family=Material+Icons+Round&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        primary: "#b6a3ff",
+                        secondary: "#7C3AED",
+                        charcoal: "#1A1A1A",
+                        "background-light": "#F8F9FD",
+                        "lavender-pale": "#F0EFFF",
+                        "soft-grey": "#EFEFEF",
+                        "accent-purple": "#B6A1FF",
+                        "accent-blue": "#A4C9FF",
+                        "accent-orange": "#FFB865",
+                        "accent-gold": "#FFD700",
+                    },
+                    fontFamily: {
+                        sans: ["Plus Jakarta Sans", "sans-serif"],
+                        display: ["Outfit", "Plus Jakarta Sans", "sans-serif"],
+                    },
+                    borderRadius: {
+                        DEFAULT: "24px",
+                        bubble: "24px",
+                        input: "50px",
+                        large: "40px",
+                        "xl": "32px",
+                    },
+                    boxShadow: {
+                        soft: "0 8px 30px rgba(0, 0, 0, 0.04)",
+                        element: "inset -2px -2px 6px rgba(0,0,0,0.05), 2px 2px 8px rgba(255,255,255,0.8)",
+                        "3d": "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)",
+                    }
+                },
+            },
+        };
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .no-scrollbar::-webkit-scrollbar { display: none; }
+            .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        }
+        body {
+            @apply font-sans antialiased text-charcoal bg-white;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        /* Discovery styles */
+        .clay-img {
+            border-radius: 20px;
+            box-shadow: 
+                inset 0 -4px 8px rgba(0,0,0,0.06),
+                0 8px 16px -4px rgba(0,0,0,0.08);
+            background: linear-gradient(145deg, #f8f9fa, #ffffff);
+            transition: transform 0.2s ease;
+        }
+        .clay-img:active {
+            transform: scale(0.98);
+        }
+
+        /* Game Specific 3D Styles */
+        .isometric-room {
+            transform: rotateX(55deg) rotateZ(-45deg);
+            transform-style: preserve-3d;
+            perspective: 1000px;
+        }
+        .furniture-3d {
+            box-shadow: 0 8px 0 rgba(0,0,0,0.05);
+            transition: transform 0.2s ease;
+            transform-style: preserve-3d;
+        }
+        .perspective-container {
+            perspective: 1200px;
+        }
+        .immersive-path {
+            transform: rotateX(40deg) translateY(-20px);
+            transform-style: preserve-3d;
+        }
+        .tile-3d {
+            box-shadow: 0 12px 0 rgba(0,0,0,0.06);
+            transition: transform 0.2s ease;
+            transform-style: preserve-3d;
+            border-bottom: 4px solid rgba(0,0,0,0.05);
+        }
+        .claymorphic-icon {
+            filter: drop-shadow(0 4px 6px rgba(0,0,0,0.1));
+            @apply flex items-center justify-center rounded-full;
+        }
+        .clay-gold { background: radial-gradient(circle at 30% 30%, #FFEB3B, #FBC02D); border: 1.5px solid #000; }
+        .clay-purple { background: radial-gradient(circle at 30% 30%, #D1C4E9, #7E57C2); border: 1.5px solid #000; }
+        .clay-blue { background: radial-gradient(circle at 30% 30%, #B3E5FC, #039BE5); border: 1.5px solid #000; }
+        .clay-pink { background: radial-gradient(circle at 30% 30%, #F8BBD0, #EC407A); border: 1.5px solid #000; }
+        .clay-map { background: radial-gradient(circle at 30% 30%, #C8E6C9, #43A047); border: 1.5px solid #000; }
+        .claymorphic-dice {
+            background: linear-gradient(145deg, #B5A3FF, #8B76E0);
+            box-shadow: 
+                inset 4px 4px 8px rgba(255, 255, 255, 0.4),
+                inset -4px -4px 8px rgba(0, 0, 0, 0.2),
+                0 10px 20px rgba(139, 118, 224, 0.4),
+                0 15px 0px #6E59C7;
+            border: 2px solid rgba(255,255,255,0.2);
+        }
+        .dice-dot {
+            @apply bg-white;
+            box-shadow: inset 1px 1px 2px rgba(0,0,0,0.3);
+        }
+        .pedestal-shadow {
+            filter: blur(12px);
+            background: rgba(0,0,0,0.06);
+        }
+        .clay-pill {
+            box-shadow: 0 4px 0px rgba(0,0,0,0.1);
+        }
+        .clay-item-card {
+            box-shadow: 0 6px 0px rgba(0,0,0,0.05);
+        }
+        
+        /* App UI */
+        .three-d-element {
+            background: radial-gradient(circle at 30% 30%, #ffffff 0%, #e0d9ff 100%);
+            box-shadow: 2px 2px 10px rgba(182, 163, 255, 0.2), inset -2px -2px 5px rgba(0,0,0,0.05);
+        }
+        .node-3d {
+            @apply transition-all duration-100 relative active:translate-y-1 active:shadow-none;
+        }
+        .clay-card {
+            @apply bg-white border border-slate-100;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.02), inset 0 -4px 6px rgba(0,0,0,0.02);
+        }
+        .pill-tag {
+            @apply bg-lavender-pale text-charcoal px-3.5 py-1.5 rounded-full text-[13px] font-medium border border-black/5;
+        }
+        .book-shadow {
+            box-shadow: 0 12px 30px -10px rgba(0,0,0,0.12);
+        }
+    </style>
+<script type="importmap">
+{
+  "imports": {
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "react": "https://esm.sh/react@^19.2.3",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "react-router-dom": "https://esm.sh/react-router-dom@^7.13.0"
+  }
+}
+</script>
+</head>
+<body>
+    <div id="root"></div>
+</body>
+</html>
