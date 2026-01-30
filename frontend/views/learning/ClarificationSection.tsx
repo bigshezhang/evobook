@@ -16,40 +16,31 @@ const ClarificationSection: React.FC = () => {
   ];
 
   return (
-    <div className="mt-12 pt-10 border-t border-black/[0.05] dark:border-white/[0.05]">
-      <div className="flex items-center gap-3 mb-8">
-        <div className="w-10 h-10 rounded-2xl bg-lavender-pale flex items-center justify-center shadow-inner">
-          <span className="material-symbols-rounded text-[24px] text-secondary">forum</span>
-        </div>
-        <h2 className="text-lg font-black text-primary dark:text-white tracking-tight">Clarifications</h2>
-      </div>
-      
-      <div className="space-y-5">
+    <div className="mt-4 pt-3 border-t border-black/[0.03] dark:border-white/[0.05]">
+      <div className="space-y-2">
         {qaData.map((item) => (
-          <div key={item.id} className="qa-card-3d">
-            {/* Top Actions */}
-            <div className="absolute top-4 right-4 flex items-center gap-2">
-              <button className="px-4 h-8 flex items-center justify-center rounded-full bg-primary text-white dark:bg-white dark:text-primary active:scale-95 transition-all shadow-md">
-                <span className="text-[10px] font-black uppercase tracking-widest">Details</span>
-              </button>
-              <button aria-label="Remove" className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-50 dark:bg-white/10 active:scale-90 transition-all border border-slate-100">
-                <span className="material-symbols-rounded text-slate-400 text-lg">close</span>
-              </button>
-            </div>
-
-            {/* Question */}
-            <div className="pr-24">
-              <p className="text-[15px] font-black text-primary dark:text-white leading-tight">
+          <div key={item.id} className="bg-white dark:bg-card-dark rounded-[24px] py-3 px-5 border border-black/[0.03] dark:border-white/5 shadow-sm hover:shadow-md transition-all">
+            {/* Top Row: Question + Actions - Compacted margin and height */}
+            <div className="flex items-center justify-between gap-4 mb-1.5 min-h-[32px]">
+              <h4 className="flex-1 text-[15px] font-extrabold text-primary dark:text-white leading-none">
                 {item.question}
-              </p>
+              </h4>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <button className="px-3 h-7 flex items-center justify-center rounded-full bg-[#1A1B23] text-white active:scale-95 transition-all shadow-sm">
+                  <span className="text-[9px] font-black uppercase tracking-wider">Details</span>
+                </button>
+                <button aria-label="Remove" className="w-7 h-7 flex items-center justify-center rounded-full bg-slate-50 dark:bg-white/5 active:scale-90 transition-all border border-slate-100 dark:border-white/5">
+                  <span className="material-symbols-rounded text-slate-400 text-[16px]">close</span>
+                </button>
+              </div>
             </div>
 
-            {/* Answer with Icon */}
-            <div className="flex items-start gap-3 pt-2">
-              <div className="w-6 h-6 flex-shrink-0 flex items-center justify-center">
-                <span className="material-symbols-rounded text-[20px] text-secondary">auto_awesome</span>
+            {/* Answer Row - Tightened spacing */}
+            <div className="flex items-start gap-2">
+              <div className="pt-0.5 flex-shrink-0">
+                <span className="material-symbols-rounded text-[16px] text-secondary" style={{ fontVariationSettings: "'FILL' 0" }}>auto_awesome</span>
               </div>
-              <p className="text-[14px] leading-relaxed font-medium text-slate-500 dark:text-slate-400">
+              <p className="text-[13px] leading-snug font-medium text-slate-500 dark:text-slate-400">
                 {item.answer}
               </p>
             </div>

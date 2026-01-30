@@ -8,7 +8,7 @@ const KnowledgeTree: React.FC = () => {
   const navigate = useNavigate();
   
   const courses = [
-    { title: "AI Foundations", progress: 42, color: "bg-primary" },
+    { title: "AI Foundations", progress: 42, color: "bg-secondary" }, // Restored to Secondary (Purple)
     { title: "UX Design Pro", progress: 15, color: "bg-indigo-400" },
     { title: "Python Basics", progress: 88, color: "bg-fuchsia-400" }
   ];
@@ -38,8 +38,8 @@ const KnowledgeTree: React.FC = () => {
         showBack={false}
         rightAction={
           <div className="flex items-center gap-2 pr-2">
-            <span className="material-symbols-outlined text-primary" style={{ fontVariationSettings: "'FILL' 1" }}>school</span>
-            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-primary">EvoBook</span>
+            <span className="material-symbols-outlined text-secondary" style={{ fontVariationSettings: "'FILL' 1" }}>school</span>
+            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-secondary">EvoBook</span>
           </div>
         }
       />
@@ -55,7 +55,7 @@ const KnowledgeTree: React.FC = () => {
             <span className="material-symbols-outlined font-black text-2xl">chevron_left</span>
           </button>
 
-          {/* Banner content area - Click to go to detail */}
+          {/* Banner content area */}
           <div 
             onClick={() => navigate('/course-detail')}
             className="flex-1 text-center px-8 z-10 animate-in fade-in slide-in-from-right-4 duration-300 cursor-pointer"
@@ -90,11 +90,12 @@ const KnowledgeTree: React.FC = () => {
         <svg className="absolute inset-0 w-full h-full pointer-events-none z-0" xmlns="http://www.w3.org/2000/svg">
           <defs>
             <linearGradient id="lineGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-              <stop offset="0%" stopColor="#FFB938" stopOpacity="0.4" />
+              <stop offset="0%" stopColor="#7C3AED" stopOpacity="0.4" />
               <stop offset="100%" stopColor="#E5E7EB" stopOpacity="0.1" />
             </linearGradient>
           </defs>
           
+          {/* Restored Purple/Gold Path Strokes */}
           <path d="M 190 55 Q 190 95 130 135" stroke="#FFB938" strokeWidth="6" fill="none" strokeLinecap="round" />
           <path d="M 190 55 Q 190 95 250 135" stroke="#FFB938" strokeWidth="6" fill="none" strokeLinecap="round" />
           
@@ -135,7 +136,8 @@ const KnowledgeTree: React.FC = () => {
           <div className="relative">
              <button 
               onClick={() => handleNodeClick('nn')}
-              className="node-3d node-current w-52 py-4 rounded-xl flex items-center justify-center gap-2.5 ring-8 ring-charcoal/5"
+              // Restored Purple Ring for Active Node
+              className="node-3d node-current w-52 py-4 rounded-xl flex items-center justify-center gap-2.5 ring-8 ring-secondary/10"
             >
               <span className="material-symbols-outlined text-[20px] font-bold" style={{ fontVariationSettings: "'FILL' 1" }}>workspace_premium</span>
               <span className="text-xs font-black uppercase tracking-widest">Neural Networks</span>

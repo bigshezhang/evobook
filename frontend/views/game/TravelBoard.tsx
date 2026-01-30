@@ -37,7 +37,8 @@ const TravelBoard: React.FC = () => {
   const generateMoreTiles = (count: number) => {
     const types: TileType[] = ['normal', 'gold', 'map', 'gift', 'star', 'roll', 'xp', 'normal'];
     const icons = ['circle', 'monetization_on', 'map', 'featured_seasonal_and_gifts', 'star', 'casino', 'bolt', 'circle'];
-    const colors = ['bg-white', 'clay-gold', 'clay-map', 'clay-pink', 'clay-blue', 'clay-purple', 'clay-blue', 'bg-white'];
+    // Purple accent for special tiles
+    const colors = ['bg-white', 'clay-gold', 'clay-map', 'clay-pink', 'clay-blue', 'bg-secondary', 'clay-blue', 'bg-white'];
 
     const startId = pathRef.current.length;
     const newTiles: TileData[] = [];
@@ -107,13 +108,14 @@ const TravelBoard: React.FC = () => {
       <GameHeader />
 
       <main className="flex-1 relative perspective-container overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-b from-primary/10 via-transparent to-white/95 pointer-events-none z-10"></div>
+        <div className="absolute inset-0 bg-gradient-to-b from-secondary/5 via-transparent to-white/95 pointer-events-none z-10"></div>
 
         <div className="absolute top-8 left-0 right-0 px-8 flex items-center justify-between z-[100]">
           <div className="flex items-center gap-4">
             <div 
               onClick={handleRoll}
-              className={`w-16 h-16 claymorphic-dice rounded-[24px] flex items-center justify-center shadow-2xl transition-all ${isMoving || isRolling ? 'grayscale opacity-50' : 'active:scale-90 cursor-pointer'}`}
+              // Restored Purple Dice
+              className={`w-16 h-16 bg-secondary rounded-[24px] flex items-center justify-center shadow-2xl transition-all ${isMoving || isRolling ? 'grayscale opacity-50' : 'active:scale-90 cursor-pointer'}`}
             >
               <div className="grid grid-cols-2 gap-2">
                 {[...Array(4)].map((_, i) => <div key={i} className="w-2.5 h-2.5 bg-white rounded-full shadow-inner"></div>)}
@@ -150,8 +152,9 @@ const TravelBoard: React.FC = () => {
               return (
                 <div 
                   key={tile.id}
+                  // Restored Purple Active Tile Style
                   className={`absolute w-80 h-[120px] rounded-[40px] flex items-center justify-center transition-all duration-300 border-t-2 border-white/50
-                    ${isActive ? 'bg-primary/30 ring-[6px] ring-primary shadow-[0_30px_60px_rgba(182,163,255,0.4)]' : 'bg-white shadow-xl'}
+                    ${isActive ? 'bg-secondary/10 ring-[6px] ring-secondary shadow-[0_30px_60px_rgba(124,58,237,0.4)]' : 'bg-white shadow-xl'}
                   `}
                   style={{ 
                     left: '50%',
@@ -159,7 +162,7 @@ const TravelBoard: React.FC = () => {
                     opacity: Math.max(0, opacity),
                     transform: `translateX(-50%) scale(${Math.max(0.4, scale)}) translateZ(${isActive ? '30px' : '0px'})`,
                     borderBottomWidth: '15px',
-                    borderBottomColor: isActive ? '#9A8BD9' : '#E2E8F0',
+                    borderBottomColor: isActive ? '#7C3AED' : '#E2E8F0',
                   }}
                 >
                   <div className={`w-18 h-18 claymorphic-icon ${tile.colorClass} shadow-xl scale-125`}>
@@ -178,7 +181,8 @@ const TravelBoard: React.FC = () => {
               width="90" 
               className="drop-shadow-[0_20px_40px_rgba(0,0,0,0.25)]"
             />
-            <div className={`mt-1 bg-black/15 blur-2xl rounded-[100%] transition-all duration-400 mx-auto ${isJumping ? 'w-8 h-2 opacity-5 scale-50' : 'w-24 h-5 opacity-30 scale-100'}`}></div>
+            {/* Purple mascot shadow */}
+            <div className={`mt-1 bg-secondary/20 blur-2xl rounded-[100%] transition-all duration-400 mx-auto ${isJumping ? 'w-8 h-2 opacity-5 scale-50' : 'w-24 h-5 opacity-40 scale-100'}`}></div>
           </div>
         </div>
       </main>
@@ -187,7 +191,7 @@ const TravelBoard: React.FC = () => {
         <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-white/60 backdrop-blur-3xl animate-in fade-in duration-500">
            {!rollResult ? (
              <>
-               <div className="w-48 h-48 claymorphic-dice rounded-[48px] flex items-center justify-center animate-bounce shadow-2xl">
+               <div className="w-48 h-48 bg-secondary rounded-[48px] flex items-center justify-center animate-bounce shadow-2xl">
                  <div className="grid grid-cols-2 gap-5 animate-spin">
                    {[...Array(4)].map((_, i) => <div key={i} className="w-6 h-6 bg-white rounded-full shadow-inner"></div>)}
                  </div>
@@ -196,10 +200,10 @@ const TravelBoard: React.FC = () => {
              </>
            ) : (
              <div className="flex flex-col items-center animate-in zoom-in duration-300">
-               <div className="w-56 h-56 claymorphic-dice rounded-[56px] flex items-center justify-center shadow-[0_40px_80px_rgba(139,118,224,0.7)] relative">
+               <div className="w-56 h-56 bg-secondary rounded-[56px] flex items-center justify-center shadow-[0_40px_80px_rgba(124,58,237,0.5)] relative">
                  <span className="text-[100px] font-black text-white drop-shadow-2xl">{rollResult}</span>
-                 <div className="absolute -top-4 -right-4 w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-xl border-4 border-primary animate-in zoom-in slide-in-from-bottom-2">
-                    <span className="material-symbols-outlined text-primary text-3xl font-black">check</span>
+                 <div className="absolute -top-4 -right-4 w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-xl border-4 border-secondary animate-in zoom-in slide-in-from-bottom-2">
+                    <span className="material-symbols-rounded text-secondary text-3xl font-black">check</span>
                  </div>
                </div>
                <h2 className="mt-12 text-6xl font-black text-slate-900 tracking-tighter italic uppercase animate-bounce">Move {rollResult}!</h2>
