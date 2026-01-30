@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { HashRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 
 // Views
 import WelcomeView from './views/onboarding/WelcomeView';
@@ -17,11 +17,21 @@ import ProfileView from './views/main/ProfileView';
 import KnowledgeCard from './views/learning/KnowledgeCard';
 import LearningChat from './views/learning/LearningChat';
 import QuizView from './views/learning/QuizView';
+import QADetailModal from './views/learning/QADetailModal';
 
 // Game Views
 import TravelBoard from './views/game/TravelBoard';
 import OutfitView from './views/game/OutfitView';
 import HomeShop from './views/game/HomeShop';
+
+// 简单的路由包装器，用于展示 QA 详情
+const QADetailRouteView: React.FC = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const data = location.state?.data;
+  
+  return <QADetailModal isOpen={true} onClose={() => navigate(-1)} data={data} />;
+};
 
 const App: React.FC = () => {
   return (
@@ -42,6 +52,7 @@ const App: React.FC = () => {
           <Route path="/knowledge-card" element={<KnowledgeCard />} />
           <Route path="/learning-chat" element={<LearningChat />} />
           <Route path="/quiz" element={<QuizView />} />
+          <Route path="/qa-detail" element={<QADetailRouteView />} />
           
           {/* Game Flow */}
           <Route path="/game" element={<TravelBoard />} />

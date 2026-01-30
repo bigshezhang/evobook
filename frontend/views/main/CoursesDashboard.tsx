@@ -2,12 +2,14 @@
 import React, { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import BottomNav from '../../components/BottomNav';
+import SuccessFeedbackPill from '../../components/SuccessFeedbackPill';
 
 const CoursesDashboard: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = searchParams.get('tab') || 'mine';
   const [statusFilter, setStatusFilter] = useState<'progress' | 'completed' | 'tolearn'>('progress');
+  const [showAddSuccess, setShowAddSuccess] = useState(false);
 
   // Discovery tab specific data based on the screenshot
   const discoveryData = {
@@ -22,6 +24,10 @@ const CoursesDashboard: React.FC = () => {
     friends: [
       { id: 5, title: 'Neural Architecture', rating: 4.9, img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBVh0Klh6NP9xJlGoCDBYhLviF2v7kGDywuB2iqsR5JNGI77a5jPKpTPYbkMMje-F3pG_KNuL5u_N9-BOuwNUhahvEaRP8Vqr2uJmDeHVnbiJ9JkBjIvRAzDwvr_5uEJF6I7Tr8gW-yVtUGneFoqwThw77OSJboIaADXg4g3G5kWw27D620BJXojoH6XjH_JHIgnR5fHFAfxsYgmA-dRdvovRH2WqenhXO-X_RM7b0HpUvuNEqz0ReqexuKlaDGKkjHpjS1he3E_4VN', hasFriends: true }
     ]
+  };
+
+  const handleAddCourse = () => {
+    setShowAddSuccess(true);
   };
 
   // Fixed CourseCard type definition to allow 'key' prop in maps
@@ -56,7 +62,13 @@ const CoursesDashboard: React.FC = () => {
             <span className="text-[12px] font-bold text-slate-400">{course.rating}</span>
           </div>
         </div>
-        <button className="w-8 h-8 min-w-[32px] bg-black rounded-full flex items-center justify-center shadow-md active:scale-90 transition-transform">
+        <button 
+          onClick={(e) => {
+            e.stopPropagation();
+            handleAddCourse();
+          }}
+          className="w-8 h-8 min-w-[32px] bg-black rounded-full flex items-center justify-center shadow-md active:scale-90 transition-transform cursor-pointer"
+        >
           <span className="material-symbols-rounded text-white text-[18px]">add</span>
         </button>
       </div>
@@ -152,6 +164,10 @@ const CoursesDashboard: React.FC = () => {
                   </div>
                 </div>
                 <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    navigate('/course-detail');
+                  }}
                   className="h-10 px-6 bg-black text-white rounded-full flex-shrink-0 flex items-center justify-center shadow-lg active:scale-95 transition-all"
                 >
                   <span className="text-[10px] font-black uppercase tracking-widest">Study</span>
@@ -200,6 +216,7 @@ const CoursesDashboard: React.FC = () => {
         )}
       </main>
 
+      <SuccessFeedbackPill isOpen={showAddSuccess} onClose={() => setShowAddSuccess(false)} />
       <BottomNav activeTab="courses" />
     </div>
   );

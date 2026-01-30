@@ -1,12 +1,14 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import Header from '../../components/Header';
 import BottomNav from '../../components/BottomNav';
+import SuccessFeedbackPill from '../../components/SuccessFeedbackPill';
 
 const DiscoveryList: React.FC = () => {
   const navigate = useNavigate();
   const { category } = useParams<{ category: string }>();
+  const [showAddSuccess, setShowAddSuccess] = useState(false);
 
   const titleMap: Record<string, string> = {
     recommended: 'Recommended',
@@ -27,13 +29,17 @@ const DiscoveryList: React.FC = () => {
     navigate('/dashboard?tab=discovery');
   };
 
+  const handleAddCourse = () => {
+    setShowAddSuccess(true);
+  };
+
   return (
     <div className="flex flex-col min-h-screen bg-white pb-32">
       <header className="px-6 pt-12 pb-4 sticky top-0 bg-white/90 backdrop-blur-lg z-40">
         <div className="flex flex-col gap-4">
           <button 
             onClick={handleBack}
-            className="w-10 h-10 flex items-center justify-center rounded-full bg-slate-50 border border-slate-100 active:scale-90 transition-transform"
+            className="w-10 h-10 flex items-center justify-center rounded-full bg-slate-50 border border-slate-100 active:scale-90 transition-transform cursor-pointer"
           >
             <span className="material-symbols-outlined text-slate-900">arrow_back</span>
           </button>
@@ -56,12 +62,18 @@ const DiscoveryList: React.FC = () => {
                 <div className="flex-1 cursor-pointer" onClick={() => navigate('/course-detail')}>
                   <h4 className="font-bold text-[14px] leading-[1.3] text-black line-clamp-2">{item.title}</h4>
                   <div className="flex items-center gap-1 mt-1">
-                    <span className="material-symbols-outlined text-[14px] text-amber-400" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
+                    <span className="material-symbols-rounded text-[14px] text-amber-400" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
                     <span className="text-[12px] font-bold text-slate-500">{item.rating}</span>
                   </div>
                 </div>
-                <button className="w-8 h-8 min-w-[32px] bg-black rounded-full flex items-center justify-center shadow-md active:scale-90 transition-transform">
-                  <span className="material-symbols-outlined text-white text-[20px]">add</span>
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleAddCourse();
+                  }}
+                  className="w-8 h-8 min-w-[32px] bg-black rounded-full flex items-center justify-center shadow-md active:scale-90 transition-transform cursor-pointer"
+                >
+                  <span className="material-symbols-rounded text-white text-[20px]">add</span>
                 </button>
               </div>
             </div>
@@ -69,6 +81,7 @@ const DiscoveryList: React.FC = () => {
         </div>
       </main>
 
+      <SuccessFeedbackPill isOpen={showAddSuccess} onClose={() => setShowAddSuccess(false)} />
       <BottomNav activeTab="courses" />
     </div>
   );
