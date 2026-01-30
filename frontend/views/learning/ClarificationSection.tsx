@@ -1,35 +1,7 @@
 
 import React, { useState } from 'react';
-import { createPortal } from 'react-dom';
 import QADetailModal from './QADetailModal';
-
-interface DeleteModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onConfirm: () => void;
-}
-
-const DeleteConfirmationModal: React.FC<DeleteModalProps> = ({ isOpen, onClose, onConfirm }) => {
-  if (!isOpen) return null;
-
-  return createPortal(
-    <div className="fixed inset-0 z-[10000] flex items-center justify-center p-6 animate-in fade-in duration-300">
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-[8px]" onClick={onClose}/>
-      <div className="relative w-[340px] bg-white dark:bg-card-dark rounded-[40px] p-8 flex flex-col items-center text-center shadow-2xl z-10 animate-in zoom-in duration-300">
-        <div className="w-16 h-16 bg-red-50 dark:bg-red-500/10 rounded-full flex items-center justify-center mb-6">
-          <span className="material-symbols-rounded text-red-500 text-[32px]">delete_sweep</span>
-        </div>
-        <h2 className="text-[22px] font-extrabold text-primary dark:text-white leading-tight mb-2">Delete Clarification?</h2>
-        <p className="text-[14px] font-medium text-black/40 dark:text-white/40 leading-relaxed mb-8">This action cannot be recovered.</p>
-        <div className="w-full space-y-3">
-          <button onClick={onConfirm} className="w-full h-14 bg-primary text-white font-bold rounded-full shadow-lg active:scale-[0.97] transition-all text-[15px]">Delete</button>
-          <button onClick={onClose} className="w-full h-14 bg-gray-100 dark:bg-white/5 text-primary/60 dark:text-white/60 font-bold rounded-full active:scale-[0.97] transition-all text-[15px]">Cancel</button>
-        </div>
-      </div>
-    </div>,
-    document.body
-  );
-};
+import DeleteConfirmationModal from '../../components/DeleteConfirmationModal';
 
 // 骨架屏动画组件：更精致的 Shimmer 效果
 const SkeletonLoader: React.FC = () => (
@@ -158,7 +130,12 @@ const ClarificationSection: React.FC<ClarificationSectionProps> = ({ pendingQues
       </div>
 
       <QADetailModal isOpen={!!selectedQA} onClose={() => setSelectedQA(null)} data={selectedQA} />
-      <DeleteConfirmationModal isOpen={deleteTargetId !== null} onClose={() => setDeleteTargetId(null)} onConfirm={handleDeleteConfirm}/>
+      
+      <DeleteConfirmationModal 
+        isOpen={deleteTargetId !== null} 
+        onClose={() => setDeleteTargetId(null)} 
+        onConfirm={handleDeleteConfirm}
+      />
     </div>
   );
 };
