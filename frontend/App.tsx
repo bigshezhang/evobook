@@ -15,7 +15,6 @@ import CoursesDashboard from './views/main/CoursesDashboard';
 import DiscoveryList from './views/main/DiscoveryList';
 import ProfileView from './views/main/ProfileView';
 import KnowledgeCard from './views/learning/KnowledgeCard';
-import LearningChat from './views/learning/LearningChat';
 import QuizView from './views/learning/QuizView';
 import QADetailModal from './views/learning/QADetailModal';
 
@@ -50,7 +49,6 @@ const App: React.FC = () => {
           <Route path="/course-detail" element={<CourseDetail />} />
           <Route path="/knowledge-tree" element={<KnowledgeTree />} />
           <Route path="/knowledge-card" element={<KnowledgeCard />} />
-          <Route path="/learning-chat" element={<LearningChat />} />
           <Route path="/quiz" element={<QuizView />} />
           <Route path="/qa-detail" element={<QADetailRouteView />} />
           

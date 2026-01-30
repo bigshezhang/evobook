@@ -8,6 +8,7 @@ const KnowledgeCard: React.FC = () => {
   const navigate = useNavigate();
   const [showComplete, setShowComplete] = useState(false);
   const [inputValue, setInputValue] = useState('');
+  const [dynamicQuestions, setDynamicQuestions] = useState<string[]>([]);
   
   // Internal card paging state
   const [currentPage, setCurrentPage] = useState(1);
@@ -37,6 +38,24 @@ const KnowledgeCard: React.FC = () => {
     } else {
       navigate('/knowledge-tree');
     }
+  };
+
+  const handleSendQuestion = () => {
+    if (!inputValue.trim()) return;
+    // 将新问题加入列表
+    setDynamicQuestions(prev => [...prev, inputValue.trim()]);
+    setInputValue('');
+    
+    // 自动滚动到最下方：由于 DOM 更新是异步的，使用 setTimeout 确保计算最新的 scrollHeight
+    setTimeout(() => {
+      const mainContainer = document.querySelector('main');
+      if (mainContainer) {
+        mainContainer.scrollTo({
+          top: mainContainer.scrollHeight,
+          behavior: 'smooth'
+        });
+      }
+    }, 100);
   };
 
   return (
@@ -150,7 +169,9 @@ const KnowledgeCard: React.FC = () => {
           </p>
 
           {/* Preserving ClarificationSection (User's Rich Text Block) */}
-          <ClarificationSection />
+          <div id="clarification-section">
+            <ClarificationSection pendingQuestions={dynamicQuestions} />
+          </div>
         </div>
       </main>
 
@@ -180,14 +201,17 @@ const KnowledgeCard: React.FC = () => {
             <input 
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && navigate('/learning-chat')}
+              onKeyDown={(e) => e.key === 'Enter' && handleSendQuestion()}
               className="w-full h-12 pl-12 pr-4 bg-white dark:bg-white/5 border border-black/[0.06] dark:border-white/10 rounded-full text-[14px] font-medium text-primary dark:text-white placeholder:text-black/20 dark:placeholder:text-white/20 focus:outline-none input-shadow" 
               placeholder="ask me" 
               type="text"
             />
-            <div className="absolute left-4 flex items-center justify-center text-accent-purple">
+            <button 
+              onClick={handleSendQuestion}
+              className="absolute left-4 flex items-center justify-center text-accent-purple hover:scale-110 active:scale-95 transition-transform"
+            >
               <span className="material-symbols-rounded text-[20px] fill-current">auto_awesome</span>
-            </div>
+            </button>
           </div>
 
           {/* Forward Action - Unified text color */}

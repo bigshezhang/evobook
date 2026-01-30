@@ -14,48 +14,16 @@ const DeleteConfirmationModal: React.FC<DeleteModalProps> = ({ isOpen, onClose, 
 
   return createPortal(
     <div className="fixed inset-0 z-[10000] flex items-center justify-center p-6 animate-in fade-in duration-300">
-      {/* Diffusion Blur Overlay */}
-      <div 
-        className="absolute inset-0 bg-black/40 backdrop-blur-[8px]" 
-        onClick={onClose}
-      />
-      
-      {/* Modal Content */}
-      <div className="relative w-[340px] bg-white dark:bg-card-dark rounded-[40px] p-8 flex flex-col items-center text-center shadow-[0_20px_50px_rgba(0,0,0,0.1),0_10px_20px_rgba(0,0,0,0.05)] z-10 animate-in zoom-in duration-300">
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-[8px]" onClick={onClose}/>
+      <div className="relative w-[340px] bg-white dark:bg-card-dark rounded-[40px] p-8 flex flex-col items-center text-center shadow-2xl z-10 animate-in zoom-in duration-300">
         <div className="w-16 h-16 bg-red-50 dark:bg-red-500/10 rounded-full flex items-center justify-center mb-6">
           <span className="material-symbols-rounded text-red-500 text-[32px]">delete_sweep</span>
         </div>
-        
-        <h2 className="text-[22px] font-extrabold text-primary dark:text-white leading-tight mb-2">
-          Delete Clarification?
-        </h2>
-        
-        <p className="text-[14px] font-medium text-black/40 dark:text-white/40 leading-relaxed mb-8">
-          This action cannot be recovered.
-        </p>
-
-        <div className="w-full flex items-center justify-between px-2 mb-10">
-          <span className="text-[13px] font-bold text-primary/70 dark:text-white/70">Don't ask me again</span>
-          <label className="relative inline-flex items-center cursor-pointer">
-            <input className="sr-only peer" type="checkbox" />
-            <div className="w-11 h-6 bg-black/5 dark:bg-white/10 rounded-full peer peer-checked:bg-primary transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.1),0_1px_2px_rgba(255,255,255,0.8)]"></div>
-            <div className="absolute left-1 top-1 w-4 h-4 rounded-full transition-all peer-checked:translate-x-5 shadow-[0_4px_6px_rgba(0,0,0,0.1),0_1px_3px_rgba(0,0,0,0.08)] bg-gradient-to-br from-white to-[#f0f0f0]"></div>
-          </label>
-        </div>
-
+        <h2 className="text-[22px] font-extrabold text-primary dark:text-white leading-tight mb-2">Delete Clarification?</h2>
+        <p className="text-[14px] font-medium text-black/40 dark:text-white/40 leading-relaxed mb-8">This action cannot be recovered.</p>
         <div className="w-full space-y-3">
-          <button 
-            onClick={onConfirm}
-            className="w-full h-14 bg-primary text-white font-bold rounded-full shadow-[0_4px_12px_rgba(0,0,0,0.08)] active:scale-[0.97] transition-all text-[15px]"
-          >
-            Delete
-          </button>
-          <button 
-            onClick={onClose}
-            className="w-full h-14 bg-gray-100 dark:bg-white/5 text-primary/60 dark:text-white/60 font-bold rounded-full active:scale-[0.97] transition-all text-[15px]"
-          >
-            Cancel
-          </button>
+          <button onClick={onConfirm} className="w-full h-14 bg-primary text-white font-bold rounded-full shadow-lg active:scale-[0.97] transition-all text-[15px]">Delete</button>
+          <button onClick={onClose} className="w-full h-14 bg-gray-100 dark:bg-white/5 text-primary/60 dark:text-white/60 font-bold rounded-full active:scale-[0.97] transition-all text-[15px]">Cancel</button>
         </div>
       </div>
     </div>,
@@ -63,7 +31,32 @@ const DeleteConfirmationModal: React.FC<DeleteModalProps> = ({ isOpen, onClose, 
   );
 };
 
-const ClarificationSection: React.FC = () => {
+// 骨架屏动画组件：更精致的 Shimmer 效果
+const SkeletonLoader: React.FC = () => (
+  <div className="flex flex-col gap-2.5 w-full mt-2">
+    <div className="h-3.5 bg-slate-100 dark:bg-white/5 rounded-full w-[90%] relative overflow-hidden">
+      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/60 dark:via-white/10 to-transparent -translate-x-full animate-[shimmer_2s_infinite]"></div>
+    </div>
+    <div className="h-3.5 bg-slate-100 dark:bg-white/5 rounded-full w-[75%] relative overflow-hidden">
+      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/60 dark:via-white/10 to-transparent -translate-x-full animate-[shimmer_2s_infinite_0.3s]"></div>
+    </div>
+    <div className="h-3.5 bg-slate-100 dark:bg-white/5 rounded-full w-[85%] relative overflow-hidden">
+      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/60 dark:via-white/10 to-transparent -translate-x-full animate-[shimmer_2s_infinite_0.6s]"></div>
+    </div>
+    <style dangerouslySetInnerHTML={{ __html: `
+      @keyframes shimmer {
+        0% { transform: translateX(-100%); }
+        100% { transform: translateX(100%); }
+      }
+    `}} />
+  </div>
+);
+
+interface ClarificationSectionProps {
+  pendingQuestions?: string[];
+}
+
+const ClarificationSection: React.FC<ClarificationSectionProps> = ({ pendingQuestions = [] }) => {
   const [selectedQA, setSelectedQA] = useState<any>(null);
   const [qaList, setQaList] = useState([
     {
@@ -73,9 +66,8 @@ const ClarificationSection: React.FC = () => {
       detail: {
         title: "Deep Dive: Activation Functions",
         content: [
-          "Activation functions are the mathematical \"gatekeepers\" of a neural network. Without them, a network would just be a giant linear regression model, incapable of learning the complex, non-linear patterns found in real-world data like images or human speech.",
-          "Popular functions include ReLU (Rectified Linear Unit), which outputs the input directly if it's positive, and Sigmoid, which squashes values between 0 and 1.",
-          "Choosing the right function depends on the layer type. For example, Softmax is almost always used in the final layer for classification to produce probability distributions."
+          "Activation functions are the mathematical \"gatekeepers\" of a neural network.",
+          "Popular functions include ReLU (Rectified Linear Unit), which outputs the input directly if it's positive, and Sigmoid, which squashes values between 0 and 1."
         ],
         visualLabel: "Non-Linear Transformation"
       }
@@ -87,9 +79,8 @@ const ClarificationSection: React.FC = () => {
       detail: {
         title: "Deep Dive: Network Depth",
         content: [
-          "Network depth refers to the number of hidden layers between input and output. Deep networks (where the term 'Deep Learning' comes from) are capable of learning hierarchical representations.",
-          "Lower layers typically detect simple features (like edges in images), while deeper layers combine these into complex objects (like faces).",
-          "However, too many layers can lead to 'vanishing gradients', where the signal becomes too weak for the model to learn effectively."
+          "Network depth refers to the number of hidden layers between input and output.",
+          "Too many layers can lead to 'vanishing gradients', where the signal becomes too weak."
         ],
         visualLabel: "Hierarchical Abstraction"
       }
@@ -106,12 +97,13 @@ const ClarificationSection: React.FC = () => {
   };
 
   return (
-    <div className="mt-4 pt-3 border-t border-black/[0.03] dark:border-white/[0.05]">
+    <div className="mt-2 pt-2 border-t border-black/[0.03] dark:border-white/[0.05]">
       <div className="space-y-2">
+        {/* 现有问答列表 */}
         {qaList.map((item) => (
-          <div key={item.id} className="bg-white dark:bg-card-dark rounded-[24px] py-3 px-5 border border-black/[0.03] dark:border-white/5 shadow-sm hover:shadow-md transition-all">
-            <div className="flex items-center justify-between gap-4 mb-1.5 min-h-[32px]">
-              <h4 className="flex-1 text-[15px] font-extrabold text-primary dark:text-white leading-none">
+          <div key={item.id} className="bg-white dark:bg-card-dark rounded-[24px] py-2.5 px-5 border border-black/[0.03] dark:border-white/5 shadow-sm hover:shadow-md transition-all animate-in fade-in slide-in-from-bottom-2">
+            <div className="flex items-center justify-between gap-4 mb-1 min-h-[32px]">
+              <h4 className="flex-1 text-[15px] font-extrabold text-primary dark:text-white leading-tight">
                 {item.question}
               </h4>
               <div className="flex items-center gap-2 flex-shrink-0">
@@ -123,39 +115,50 @@ const ClarificationSection: React.FC = () => {
                 </button>
                 <button 
                   onClick={() => setDeleteTargetId(item.id)}
-                  aria-label="Remove" 
                   className="w-7 h-7 flex items-center justify-center rounded-full bg-slate-50 dark:bg-white/5 active:scale-90 transition-all border border-slate-100 dark:border-white/5 cursor-pointer"
                 >
                   <span className="material-symbols-rounded text-slate-400 text-[16px]">close</span>
                 </button>
               </div>
             </div>
-
             <div className="flex items-start gap-2">
               <div className="pt-0.5 flex-shrink-0">
-                <span className="material-symbols-rounded text-[16px] text-secondary" style={{ fontVariationSettings: "'FILL' 0" }}>auto_awesome</span>
+                <span className="material-symbols-rounded text-[18px] text-secondary" style={{ fontVariationSettings: "'FILL' 0" }}>auto_awesome</span>
               </div>
-              <p className="text-[13px] leading-snug font-medium text-slate-500 dark:text-slate-400">
+              <p className="text-[13.5px] leading-relaxed font-medium text-slate-500 dark:text-slate-400">
                 {item.answer}
               </p>
             </div>
           </div>
         ))}
+
+        {/* 动态加载中的新问题 */}
+        {pendingQuestions.map((q, idx) => (
+          <div key={`pending-${idx}`} className="bg-white dark:bg-card-dark rounded-[24px] py-3 px-5 border-2 border-dashed border-slate-100 dark:border-white/10 shadow-sm animate-in fade-in slide-in-from-bottom-4 duration-500">
+             <div className="flex items-center justify-between gap-4 mb-1 min-h-[32px]">
+              <h4 className="flex-1 text-[15px] font-extrabold text-primary dark:text-white leading-tight">
+                {q}
+              </h4>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <div className="px-3 h-7 flex items-center justify-center rounded-full bg-slate-100 dark:bg-white/5 text-slate-400">
+                  <span className="text-[9px] font-black uppercase tracking-wider">Processing</span>
+                </div>
+              </div>
+            </div>
+            <div className="flex items-start gap-2">
+              <div className="pt-1 flex-shrink-0">
+                <div className="animate-spin text-secondary">
+                   <span className="material-symbols-rounded text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>progress_activity</span>
+                </div>
+              </div>
+              <SkeletonLoader />
+            </div>
+          </div>
+        ))}
       </div>
 
-      {/* Details Modal */}
-      <QADetailModal 
-        isOpen={!!selectedQA} 
-        onClose={() => setSelectedQA(null)} 
-        data={selectedQA} 
-      />
-
-      {/* Delete Confirmation Modal */}
-      <DeleteConfirmationModal 
-        isOpen={deleteTargetId !== null}
-        onClose={() => setDeleteTargetId(null)}
-        onConfirm={handleDeleteConfirm}
-      />
+      <QADetailModal isOpen={!!selectedQA} onClose={() => setSelectedQA(null)} data={selectedQA} />
+      <DeleteConfirmationModal isOpen={deleteTargetId !== null} onClose={() => setDeleteTargetId(null)} onConfirm={handleDeleteConfirm}/>
     </div>
   );
 };
