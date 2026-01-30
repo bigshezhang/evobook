@@ -1,256 +1,172 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../../components/Header';
-
-interface Option {
-  id: string;
-  text: string;
-}
-
-interface QuizProps {
-  question: string;
-  options: Option[];
-  type: 'single' | 'multiple';
-  selectedIds: string[];
-  onToggle: (id: string) => void;
-}
-
-const QuizComponent: React.FC<QuizProps> = ({ question, options, type, selectedIds, onToggle }) => {
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between mb-2">
-        <h3 className="text-xl font-extrabold text-[#1A1A1A]">Knowledge Check</h3>
-        <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 bg-slate-100 px-2 py-1 rounded-md">
-          {type === 'single' ? 'Single Choice' : 'Multiple Choice'}
-        </span>
-      </div>
-      <p className="text-[17px] font-bold text-[#4A5568] leading-snug mb-6">
-        {question}
-      </p>
-      <div className="space-y-3">
-        {options.map((option) => {
-          const isSelected = selectedIds.includes(option.id);
-          return (
-            <button
-              key={option.id}
-              onClick={() => onToggle(option.id)}
-              className={`w-full text-left p-5 rounded-[24px] transition-all duration-200 flex justify-between items-center group ${
-                isSelected
-                  ? 'bg-white border-2 border-[#1A1A1A] shadow-sm'
-                  : 'bg-[#F2F4F7] border-2 border-transparent text-[#98A2B3]'
-              }`}
-            >
-              <span className={`font-bold text-[16px] ${isSelected ? 'text-[#1A1A1A]' : 'text-inherit'}`}>
-                {option.text}
-              </span>
-              {isSelected && (
-                <div className="bg-[#1A1A1A] rounded-full w-6 h-6 flex items-center justify-center animate-in zoom-in duration-200">
-                  <span className="material-symbols-rounded text-white text-[16px] font-bold">check</span>
-                </div>
-              )}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-};
+import ClarificationSection from './ClarificationSection';
 
 const KnowledgeCard: React.FC = () => {
   const navigate = useNavigate();
   const [showComplete, setShowComplete] = useState(false);
-  const [currentCardIndex, setCurrentCardIndex] = useState(0);
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [inputValue, setInputValue] = useState('');
   
-  // Simulated Multi-card Quiz Data
-  const cards = [
-    {
-      id: 'q1',
-      question: "Which component is responsible for introducing non-linearity in a Neural Network?",
-      type: 'single' as const,
-      img: "https://images.unsplash.com/photo-1635070041078-e363dbe005cb?auto=format&fit=crop&q=80&w=800",
-      options: [
-        { id: '1', text: 'Activation Function' },
-        { id: '2', text: 'Input Layer' },
-        { id: '3', text: 'Weight Matrices' },
-      ]
-    },
-    {
-      id: 'q2',
-      question: "Which of these is a common optimization algorithm used to minimize loss?",
-      type: 'single' as const,
-      img: "https://images.unsplash.com/photo-1509228468518-180dd4864904?auto=format&fit=crop&q=80&w=800",
-      options: [
-        { id: '4', text: 'Gradient Descent' },
-        { id: '5', text: 'Backpropagation' },
-        { id: '6', text: 'Sigmoid' },
-      ]
-    },
-    {
-      id: 'q3',
-      question: "Identify the hyperparameters commonly tuned in training (Select all that apply):",
-      type: 'multiple' as const,
-      img: "https://images.unsplash.com/photo-1518186285589-2f7649de83e0?auto=format&fit=crop&q=80&w=800",
-      options: [
-        { id: '7', text: 'Learning Rate' },
-        { id: '8', text: 'Batch Size' },
-        { id: '9', text: 'Number of Neurons' },
-      ]
-    }
-  ];
+  // Internal card paging state
+  const [currentPage, setCurrentPage] = useState(1);
+  const totalPagesInCard = 5; 
 
-  const currentCard = cards[currentCardIndex];
-  const isLastCard = currentCardIndex === cards.length - 1;
+  // Node progress state for Header component
+  const nodeProgress = { current: 3, total: 3 };
 
-  const handleToggle = (id: string) => {
-    if (currentCard.type === 'single') {
-      setSelectedIds([id]);
+  // Animation trigger for content changes
+  const [animate, setAnimate] = useState(true);
+  useEffect(() => {
+    setAnimate(true);
+    const timer = setTimeout(() => setAnimate(false), 300);
+    return () => clearTimeout(timer);
+  }, [currentPage]);
+
+  const handleNext = () => {
+    if (currentPage < totalPagesInCard) {
+      setCurrentPage(prev => prev + 1);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     } else {
-      setSelectedIds(prev => 
-        prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
-      );
-    }
-  };
-
-  const handleNextAction = () => {
-    if (isLastCard) {
       setShowComplete(true);
-    } else {
-      // Transition to next card
-      setCurrentCardIndex(prev => prev + 1);
-      setSelectedIds([]); // Reset selection for next card
     }
   };
 
   const handleBack = () => {
-    if (currentCardIndex > 0) {
-      setCurrentCardIndex(prev => prev - 1);
-      setSelectedIds([]); // Usually reset or keep state? Resetting for simplicity here.
+    if (currentPage > 1) {
+      setCurrentPage(prev => prev - 1);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     } else {
       navigate('/knowledge-tree');
     }
   };
 
   return (
-    <div className="relative flex flex-col h-screen bg-[#F8F9FB] font-sans overflow-hidden">
-      <div className={`flex flex-col h-full transition-all duration-300 ${showComplete ? 'brightness-50' : ''}`}>
-        
-        <Header 
-          onBack={handleBack}
-          rightAction={
-            <div className="bg-white pl-3 pr-4 py-2.5 rounded-full shadow-sm border border-black/5 flex items-center gap-2">
-              <div className="flex items-center justify-center w-4 h-4 bg-[#B6A3FF]/20 rounded-full">
-                <div className="w-2 h-2 bg-[#B6A3FF] rounded-full"></div>
-              </div>
-              <span className="text-[12px] font-black text-[#1A1A1A] uppercase tracking-tight">
-                {currentCardIndex + 1}/{cards.length} Cards
-              </span>
-            </div>
-          }
-        />
+    <div className="relative flex flex-col h-screen bg-white dark:bg-background-dark font-sans overflow-hidden">
+      {/* Top Header - Restoring Menu style */}
+      <header className="pt-12 px-5 pb-3 flex items-center justify-between w-full z-30 border-b border-black/[0.03] dark:border-white/[0.05] bg-white/80 backdrop-blur-md">
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={() => navigate('/knowledge-tree')}
+            className="w-8 h-8 flex items-center justify-center rounded-full bg-black/5 dark:bg-white/10 active:scale-90 transition-transform"
+          >
+            <span className="material-symbols-rounded text-primary dark:text-white text-[20px]">menu</span>
+          </button>
+          <div className="h-4 w-px bg-black/10 dark:bg-white/10"></div>
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-bold text-primary/40 dark:text-white/40 uppercase tracking-widest">Foundations</span>
+          </div>
+        </div>
+        <div className="bg-accent-purple/10 px-2.5 py-1 rounded-full border border-accent-purple/20">
+          <span className="text-[10px] font-extrabold text-accent-purple uppercase tracking-tight">Active Module</span>
+        </div>
+      </header>
 
-        {/* Progress Dots Indicator */}
-        <div className="mt-6 px-8 flex gap-2 w-full z-10">
-          {cards.map((_, idx) => (
+      {/* Main Content Area */}
+      <main className={`flex-1 overflow-y-auto no-scrollbar px-6 pt-6 pb-48 transition-all duration-300 ${animate ? 'opacity-0 translate-y-2' : 'opacity-100 translate-y-0'}`}>
+        <div className="mb-6">
+          <span className="text-[10px] font-extrabold uppercase tracking-[0.15em] text-accent-purple mb-1.5 block">
+            Module 03 • Deep Learning
+          </span>
+          <h1 className="text-[26px] font-extrabold text-primary dark:text-white leading-tight">
+            Neural Networks Architecture
+          </h1>
+        </div>
+
+        <div className="prose prose-sm max-w-none text-primary/80 dark:text-white/80 space-y-5">
+          <p className="text-[15px] leading-relaxed">
+            Neural networks are the backbone of modern AI. They are composed of computational nodes that mimic the way biological neurons transmit signals.
+          </p>
+
+          <div className="bg-black/[0.02] dark:bg-white/[0.02] rounded-2xl p-5 border border-black/[0.03] dark:border-white/[0.03]">
+            <h3 className="text-[14px] font-bold text-primary dark:text-white mb-3 flex items-center gap-2">
+              <span className="w-1 h-4 bg-accent-purple rounded-full"></span>
+              Key Structural Elements
+            </h3>
+            <ul className="space-y-3 m-0 p-0 list-none">
+              <li className="flex gap-3 text-[14px] leading-snug">
+                <span className="text-accent-purple font-bold">•</span>
+                <span><strong className="text-primary dark:text-white">Input Layer:</strong> Receives raw data like pixels or text embeddings.</span>
+              </li>
+              <li className="flex gap-3 text-[14px] leading-snug">
+                <span className="text-accent-purple font-bold">•</span>
+                <span><strong className="text-primary dark:text-white">Hidden Layers:</strong> Perform non-linear transformations using activation functions.</span>
+              </li>
+            </ul>
+          </div>
+
+          {/* Q&A Section Integration */}
+          <ClarificationSection />
+        </div>
+      </main>
+
+      {/* High-fidelity Footer */}
+      <footer className="absolute bottom-0 left-0 right-0 z-50 bg-white/90 dark:bg-background-dark/90 backdrop-blur-xl border-t border-black/[0.05] dark:border-white/[0.05] pb-8 pt-4 px-6">
+        {/* Segmented Progress Bars */}
+        <div className="flex gap-1.5 mb-6 w-full">
+          {[...Array(totalPagesInCard)].map((_, i) => (
             <div 
-              key={idx} 
-              className={`h-1 rounded-full flex-1 transition-all duration-300 ${idx <= currentCardIndex ? 'bg-[#1A1A1A]' : 'bg-black/10'}`}
+              key={i} 
+              className={`h-1 flex-1 rounded-full transition-all duration-300 ${i < currentPage ? 'bg-primary dark:bg-white' : 'bg-black/10 dark:bg-white/10'}`}
             ></div>
           ))}
         </div>
 
-        <div className="flex-1 mt-6 px-4 mb-4 overflow-hidden relative">
-          <div key={currentCard.id} className="w-full h-full bg-white rounded-[40px] shadow-[0_10px_40px_rgba(0,0,0,0.03)] flex flex-col border border-black/5 overflow-hidden animate-in fade-in slide-in-from-right-4 duration-300">
-            <div className="flex-1 overflow-y-auto px-8 pt-8 pb-10 no-scrollbar">
-              <div className="relative w-full aspect-[4/3] rounded-[32px] overflow-hidden mb-8 border border-black/5 bg-slate-100">
-                <img 
-                  alt="Quiz Illustration"
-                  className="w-full h-full object-cover"
-                  src={currentCard.img} 
-                />
-              </div>
+        <div className="flex items-center justify-between gap-3">
+          {/* Back Action */}
+          <button 
+            onClick={handleBack}
+            className="w-12 h-12 flex items-center justify-center rounded-full bg-white dark:bg-white/5 neo-shadow active:scale-95 transition-all border border-black/[0.03] dark:border-white/10"
+          >
+            <span className="material-symbols-rounded text-[24px] text-black/30 dark:text-white/30">arrow_back</span>
+          </button>
 
-              <QuizComponent 
-                question={currentCard.question}
-                options={currentCard.options}
-                type={currentCard.type}
-                selectedIds={selectedIds}
-                onToggle={handleToggle}
-              />
+          {/* Ask Input */}
+          <div className="flex-1 relative flex items-center">
+            <input 
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && navigate('/learning-chat')}
+              className="w-full h-12 pl-12 pr-4 bg-white dark:bg-white/5 border border-black/[0.06] dark:border-white/10 rounded-full text-[14px] font-medium text-primary dark:text-white placeholder:text-black/20 dark:placeholder:text-white/20 focus:outline-none input-shadow" 
+              placeholder="ask me" 
+              type="text"
+            />
+            <div className="absolute left-4 flex items-center justify-center text-accent-purple">
+              <span className="material-symbols-rounded text-[20px] fill-current">auto_awesome</span>
             </div>
           </div>
-        </div>
 
-        <div className="bg-white p-6 pb-12 flex flex-col items-center gap-6">
-          <div className="flex gap-2">
-            {cards.map((_, idx) => (
-              <div 
-                key={idx} 
-                className={`w-1.5 h-1.5 rounded-full transition-all ${idx === currentCardIndex ? 'bg-[#1A1A1A]' : 'bg-[#1A1A1A]/10'}`}
-              ></div>
-            ))}
-          </div>
-          
+          {/* Forward Action */}
           <button 
-            disabled={selectedIds.length === 0}
-            onClick={handleNextAction}
-            className={`w-full max-w-sm py-5 rounded-[24px] font-black text-[17px] flex items-center justify-center gap-3 shadow-xl transition-all ${
-              selectedIds.length > 0 
-                ? 'bg-[#1A1A1A] text-white active:scale-95' 
-                : 'bg-slate-100 text-slate-300'
-            }`}
+            onClick={handleNext}
+            className="w-12 h-12 flex items-center justify-center rounded-full bg-white dark:bg-white/5 neo-shadow active:scale-95 transition-all border border-black/[0.03] dark:border-white/10"
           >
-            {isLastCard ? 'Complete Section' : 'Next Page'}
-            <span className="material-symbols-rounded text-[22px] font-bold">
-              {isLastCard ? 'check_circle' : 'arrow_forward'}
-            </span>
+            <span className="material-symbols-rounded text-[24px] text-black dark:text-white">arrow_forward</span>
           </button>
         </div>
-      </div>
+      </footer>
 
+      {/* Decorative Glows */}
+      <div className="absolute top-20 -right-20 w-64 h-64 bg-accent-blue/10 blur-[80px] rounded-full pointer-events-none -z-10"></div>
+      <div className="absolute bottom-40 -left-20 w-64 h-64 bg-accent-purple/10 blur-[80px] rounded-full pointer-events-none -z-10"></div>
+
+      {/* Completion Modal */}
       {showComplete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center px-6 bg-black/40 backdrop-blur-sm animate-in fade-in duration-300">
-          <div className="w-full max-w-[380px] bg-white rounded-[40px] p-10 flex flex-col items-center text-center shadow-2xl animate-in zoom-in duration-300 border border-white/20">
-            <div className="relative w-48 h-48 mb-6">
-              <div className="absolute inset-0 bg-[#FFB865]/20 blur-[40px] rounded-full"></div>
-              <img alt="Trophy" className="relative w-full h-full object-contain" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDrcgiX1RzOuQ20foFUyXSErk5C9X0S8bbS29NNzsC5WAQgUxxR0MHE4pgzhU-HEy8WY6S9lCh4CCL3xGatnmmYUfqddUlO84eXSSpuNahqFlavZE-I1brddW4uqZfB22Zy4WQOVOO6IHRe2QmdS50DaT-AHJHamw1G7arlmj_MCxhK5LPnChTufwfJbHo3iIbtbCYW-SFbp9ckcoPDRaHyqZlm2Fn4lYNQZLr5N_c3v3MV2f6cjlnMOl0E7WFDjIvdW-Vm4wsIIxnu" />
+        <div className="fixed inset-0 z-[100] flex items-center justify-center px-6 bg-black/40 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="w-full max-w-[380px] bg-white dark:bg-card-dark rounded-[40px] p-10 flex flex-col items-center text-center shadow-2xl animate-in zoom-in duration-300">
+            <div className="w-20 h-20 bg-amber-100 dark:bg-amber-100/10 rounded-3xl flex items-center justify-center mb-6">
+              <span className="material-symbols-rounded text-amber-500 text-5xl">stars</span>
             </div>
-            <h2 className="text-[32px] font-extrabold text-[#1A1A1A] mb-8 tracking-tight">Section Complete!</h2>
-            <div className="flex gap-3 mb-10 w-full">
-              <div className="flex-1 bg-slate-50 p-4 rounded-3xl border border-black/5 flex flex-col items-center gap-2">
-                <div className="w-10 h-10 bg-[#B6A3FF]/20 rounded-xl flex items-center justify-center">
-                  <span className="material-symbols-rounded text-[#B6A3FF] text-[28px]" style={{ fontVariationSettings: "'FILL' 1" }}>casino</span>
-                </div>
-                <span className="text-[13px] font-extrabold text-[#1A1A1A]">+2 Dice Rolls</span>
-              </div>
-              <div className="flex-1 bg-slate-50 p-4 rounded-3xl border border-black/5 flex flex-col items-center gap-2">
-                <div className="w-10 h-10 bg-[#FFB865]/20 rounded-xl flex items-center justify-center">
-                  <span className="material-symbols-rounded text-[#FFB865] text-[28px]" style={{ fontVariationSettings: "'FILL' 1" }}>stars</span>
-                </div>
-                <span className="text-[13px] font-extrabold text-[#1A1A1A]">+50 EXP</span>
-              </div>
-            </div>
-            <div className="w-full space-y-4">
-              <button 
-                onClick={() => navigate('/game')}
-                className="w-full bg-[#1A1A1A] text-white py-5 px-8 rounded-full font-extrabold text-[17px] flex items-center justify-center gap-2 shadow-xl active:scale-95 transition-all"
-              >
-                Go Explore World
-                <span className="material-symbols-rounded text-[22px]">arrow_forward</span>
-              </button>
-              <button 
-                onClick={() => {
-                  setShowComplete(false);
-                  setCurrentCardIndex(0);
-                  setSelectedIds([]);
-                  navigate('/knowledge-tree');
-                }}
-                className="w-full text-slate-400 font-bold text-[15px] hover:text-[#1A1A1A] transition-colors"
-              >
-                Continue Learning
-              </button>
-            </div>
+            <h2 className="text-2xl font-black text-slate-900 dark:text-white mb-2 tracking-tight uppercase italic">Goal Reached!</h2>
+            <p className="text-slate-500 text-sm mb-6 font-medium px-4">You've finished this section. Great job staying focused!</p>
+            <button 
+              onClick={() => navigate('/game')}
+              className="w-full py-4 bg-black dark:bg-white dark:text-black text-white rounded-full font-black text-[15px] shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2"
+            >
+              Go to Travel
+              <span className="material-symbols-rounded text-[18px]">sports_esports</span>
+            </button>
           </div>
         </div>
       )}

@@ -6,41 +6,37 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>EvoBook AI</title>
     <script src="https://cdn.tailwindcss.com?plugins=forms,typography,container-queries"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Outfit:wght@300;400;500;600;700;800&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&family=Material+Icons+Round&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Outfit:wght@300;400;500;600;700;800&family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" rel="stylesheet">
     <script>
         tailwind.config = {
             darkMode: "class",
             theme: {
                 extend: {
                     colors: {
-                        primary: "#b6a3ff",
+                        primary: "#1A1B23",
                         secondary: "#7C3AED",
                         charcoal: "#1A1A1A",
                         "background-light": "#F8F9FD",
+                        "background-dark": "#0F0F12",
+                        "card-light": "#FFFFFF",
+                        "card-dark": "#1C1C1E",
                         "lavender-pale": "#F0EFFF",
-                        "soft-grey": "#EFEFEF",
                         "accent-purple": "#B6A1FF",
                         "accent-blue": "#A4C9FF",
                         "accent-orange": "#FFB865",
-                        "accent-gold": "#FFD700",
                         "reward-yellow": "#FFF9DB",
-                        "exp-gold": "#F59E0B",
+                        "note-bg": "#F5F3FF"
                     },
                     fontFamily: {
                         sans: ["Plus Jakarta Sans", "sans-serif"],
                         display: ["Outfit", "Plus Jakarta Sans", "sans-serif"],
                     },
                     borderRadius: {
-                        DEFAULT: "24px",
+                        DEFAULT: "20px",
                         bubble: "24px",
                         input: "50px",
-                        large: "40px",
-                        "xl": "32px",
-                    },
-                    boxShadow: {
-                        soft: "0 8px 30px rgba(0, 0, 0, 0.04)",
-                        element: "inset -2px -2px 6px rgba(0,0,0,0.05), 2px 2px 8px rgba(255,255,255,0.8)",
-                        "3d": "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)",
+                        large: "32px",
+                        "card": "24px",
                     }
                 },
             },
@@ -50,106 +46,38 @@
         @layer utilities {
             .no-scrollbar::-webkit-scrollbar { display: none; }
             .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-            .bg-vibrant-gradient { background: linear-gradient(180deg, #E9E3FF 0%, #FFFFFF 100%); }
-            .mascot-shadow { filter: drop-shadow(0 20px 40px rgba(139, 92, 246, 0.3)); }
-            .qr-container { box-shadow: 0 -20px 50px rgba(0, 0, 0, 0.04); border-top: 1px solid rgba(255, 255, 255, 0.8); }
-            .reward-pill-shadow { box-shadow: 0 4px 0px #FACC15; border: 1px solid #FEF08A; }
             
-            /* 3D Knowledge Map Nodes */
-            .node-3d { @apply transition-all duration-100 relative active:translate-y-1 active:shadow-none; }
-            .node-completed { background-color: #FFB938; box-shadow: 0 6px 0 #D99A20; color: #1A1A1A; }
-            .node-current { background-color: #1A1A1A; box-shadow: 0 6px 0 #000000; color: #FFFFFF; }
-            .node-locked { background-color: #EAEAEA; border: 1px solid #E5E7EB; box-shadow: 0 4px 0 #D1D5DB; color: #9CA3AF; }
-        }
-        body {
-            @apply font-sans antialiased text-charcoal bg-white;
-            -webkit-tap-highlight-color: transparent;
+            .neo-shadow {
+                box-shadow: 0 8px 30px rgba(0,0,0,0.06), 0 4px 10px rgba(0,0,0,0.02);
+            }
+            .qa-card-3d {
+                @apply bg-white dark:bg-card-dark rounded-card p-6 relative flex flex-col gap-4 border border-black/[0.03] dark:border-white/5 shadow-[0_10px_25px_-5px_rgba(0,0,0,0.04)] transition-all;
+            }
+            .input-shadow {
+                box-shadow: inset 0 2px 4px rgba(0,0,0,0.01), 0 4px 12px rgba(0,0,0,0.03);
+            }
         }
         
-        /* Discovery styles */
-        .clay-img {
-            border-radius: 20px;
-            box-shadow: 
-                inset 0 -4px 8px rgba(0,0,0,0.06),
-                0 8px 16px -4px rgba(0,0,0,0.08);
-            background: linear-gradient(145deg, #f8f9fa, #ffffff);
-            transition: transform 0.2s ease;
-        }
-        .clay-img:active {
-            transform: scale(0.98);
+        /* 关键修复：确保 Material Symbols 渲染为图标而非文字 */
+        .material-symbols-rounded {
+            font-family: 'Material Symbols Rounded' !important;
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            display: inline-block;
+            line-height: 1;
+            width: 1em;
+            height: 1em;
+            overflow: hidden;
+            white-space: nowrap;
+            text-transform: none;
+            letter-spacing: normal;
+            word-wrap: normal;
+            direction: ltr;
+            -webkit-font-smoothing: antialiased;
         }
 
-        /* Game Specific 3D Styles */
-        .isometric-room {
-            transform: rotateX(55deg) rotateZ(-45deg);
-            transform-style: preserve-3d;
-            perspective: 1000px;
-        }
-        .furniture-3d {
-            box-shadow: 0 8px 0 rgba(0,0,0,0.05);
-            transition: transform 0.2s ease;
-            transform-style: preserve-3d;
-        }
-        .perspective-container {
-            perspective: 1200px;
-        }
-        .immersive-path {
-            transform: rotateX(40deg) translateY(-20px);
-            transform-style: preserve-3d;
-        }
-        .tile-3d {
-            box-shadow: 0 12px 0 rgba(0,0,0,0.06);
-            transition: transform 0.2s ease;
-            transform-style: preserve-3d;
-            border-bottom: 4px solid rgba(0,0,0,0.05);
-        }
-        .claymorphic-icon {
-            filter: drop-shadow(0 4px 6px rgba(0,0,0,0.1));
-            @apply flex items-center justify-center rounded-full;
-        }
-        .clay-gold { background: radial-gradient(circle at 30% 30%, #FFEB3B, #FBC02D); border: 1.5px solid #000; }
-        .clay-purple { background: radial-gradient(circle at 30% 30%, #D1C4E9, #7E57C2); border: 1.5px solid #000; }
-        .clay-blue { background: radial-gradient(circle at 30% 30%, #B3E5FC, #039BE5); border: 1.5px solid #000; }
-        .clay-pink { background: radial-gradient(circle at 30% 30%, #F8BBD0, #EC407A); border: 1.5px solid #000; }
-        .clay-map { background: radial-gradient(circle at 30% 30%, #C8E6C9, #43A047); border: 1.5px solid #000; }
-        .claymorphic-dice {
-            background: linear-gradient(145deg, #B5A3FF, #8B76E0);
-            box-shadow: 
-                inset 4px 4px 8px rgba(255, 255, 255, 0.4),
-                inset -4px -4px 8px rgba(0, 0, 0, 0.2),
-                0 10px 20px rgba(139, 118, 224, 0.4),
-                0 15px 0px #6E59C7;
-            border: 2px solid rgba(255,255,255,0.2);
-        }
-        .dice-dot {
-            @apply bg-white;
-            box-shadow: inset 1px 1px 2px rgba(0,0,0,0.3);
-        }
-        .pedestal-shadow {
-            filter: blur(12px);
-            background: rgba(0,0,0,0.06);
-        }
-        .clay-pill {
-            box-shadow: 0 4px 0px rgba(0,0,0,0.1);
-        }
-        .clay-item-card {
-            box-shadow: 0 6px 0px rgba(0,0,0,0.05);
-        }
-        
-        /* App UI */
-        .three-d-element {
-            background: radial-gradient(circle at 30% 30%, #ffffff 0%, #e0d9ff 100%);
-            box-shadow: 2px 2px 10px rgba(182, 163, 255, 0.2), inset -2px -2px 5px rgba(0,0,0,0.05);
-        }
-        .clay-card {
-            @apply bg-white border border-slate-100;
-            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.02), inset 0 -4px 6px rgba(0,0,0,0.02);
-        }
-        .pill-tag {
-            @apply bg-lavender-pale text-charcoal px-3.5 py-1.5 rounded-full text-[13px] font-medium border border-black/5;
-        }
-        .book-shadow {
-            box-shadow: 0 12px 30px -10px rgba(0,0,0,0.12);
+        body {
+            @apply font-sans antialiased text-primary bg-white;
+            -webkit-tap-highlight-color: transparent;
         }
     </style>
 <script type="importmap">

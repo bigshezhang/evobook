@@ -22,7 +22,11 @@ const KnowledgeTree: React.FC = () => {
   };
 
   const handleNodeClick = (id: string, locked: boolean = false) => {
-    if (!locked) {
+    if (locked) return;
+    
+    if (id === 'backprop') {
+      navigate('/quiz');
+    } else {
       navigate('/knowledge-card');
     }
   };
@@ -129,7 +133,6 @@ const KnowledgeTree: React.FC = () => {
           </div>
 
           <div className="relative">
-             {/* Node: Current Style (Neural Networks) */}
              <button 
               onClick={() => handleNodeClick('nn')}
               className="node-3d node-current w-52 py-4 rounded-xl flex items-center justify-center gap-2.5 ring-8 ring-charcoal/5"
@@ -140,10 +143,9 @@ const KnowledgeTree: React.FC = () => {
           </div>
 
           <div className="flex gap-4">
-            {/* Node: Locked Style */}
             <button 
-              onClick={() => handleNodeClick('backprop', true)}
-              className="node-3d node-locked w-36 py-4 rounded-xl flex items-center justify-center gap-2 cursor-not-allowed"
+              onClick={() => handleNodeClick('backprop')}
+              className="node-3d node-completed w-36 py-4 rounded-xl flex items-center justify-center gap-2 border border-white/10"
             >
               <span className="material-symbols-outlined text-[18px]">quiz</span>
               <span className="text-xs font-black uppercase tracking-wider">Backprop</span>
