@@ -1,0 +1,43 @@
+---
+alwaysApply: true
+---
+# Python Coding Standards
+
+## Naming Conventions
+
+- **Classes**: PascalCase (`UserService`, `OrderRepository`)
+- **Functions/Methods**: snake_case (`get_user_by_id`, `create_order`)
+- **Variables**: snake_case (`user_name`, `order_list`)
+- **Constants**: UPPER_SNAKE_CASE (`MAX_RETRY_COUNT`, `DEFAULT_TIMEOUT`)
+- **Private**: prefix with underscore (`_internal_method`, `_private_attr`)
+
+## Type Hints
+
+- Always use type hints for function parameters and return types
+
+```python
+# ✅ Good
+def get_user(user_id: int) -> User | None:
+    ...
+
+# ❌ Bad
+def get_user(user_id):
+    ...
+```
+
+## Docstrings
+
+- Use docstrings for public classes and functions
+- Write docstrings in English
+
+```python
+def calculate_total(items: list[Item]) -> Decimal:
+    """Calculate the total price of items.
+
+    Args:
+        items: List of items to calculate
+
+    Returns:
+        Total price as Decimal
+    """
+```

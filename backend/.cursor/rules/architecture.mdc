@@ -1,0 +1,47 @@
+---
+alwaysApply: true
+---
+# Architecture Conventions
+
+## Layer Structure
+
+```
+src/
+├── domain/          # Domain entities, value objects, domain services
+├── application/     # Use cases, application services, DTOs
+├── infrastructure/  # Database, external APIs, implementations
+└── interfaces/      # API routes, CLI, controllers
+```
+
+## Layer Dependencies
+
+- **domain** → no dependencies (pure business logic)
+- **application** → depends on domain only
+- **infrastructure** → depends on domain, application
+- **interfaces** → depends on application
+
+## Domain Layer
+
+- Entities contain business logic
+- Value objects are immutable
+- Domain services for cross-entity logic
+
+## Application Layer
+
+- One use case per file
+- DTOs for input/output
+- Orchestrates domain objects
+
+## Repository Pattern
+
+```python
+# ✅ Good - Interface in domain, implementation in infrastructure
+# domain/repositories/user_repository.py
+class UserRepository(Protocol):
+    def find_by_id(self, user_id: int) -> User | None: ...
+
+# infrastructure/repositories/user_repository_impl.py
+class UserRepositoryImpl(UserRepository):
+    def find_by_id(self, user_id: int) -> User | None:
+        ...
+```
