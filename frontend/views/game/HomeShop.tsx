@@ -17,8 +17,6 @@ const HomeShop: React.FC = () => {
   const [category, setCategory] = useState('Furniture');
   const [selectedItem, setSelectedItem] = useState<ShopItem | null>(null);
 
-  const MASCOT_SRC = "https://lh3.googleusercontent.com/aida-public/AB6AXuCnRMVMv3VQCalsOm2RCkci09ous1fHuESh9sMZOzls1ru6VuE5HAlxYcKU6AswyAOsq12l9kr0vdwHeD8hswbrsxz4xZRK5oDlUPQMkmsbBJks_RVJ7JpcWNSLbPi4ISfkMH__idCAOv8RTmRLMNFkIzfyPwb3vJzSQ628ux_fwHE7XdjKa0LbGIrGOhhEmLaWRqfg-nPFNVhkih46KYodq5ipAZkQGeaLwK99YG7Az-UcKbMDqfxhd6RQqOg4faz2K3kd90U7PsXV";
-
   const categories = ['Furniture', 'Decor', 'Walls', 'Floor'];
   const shopItems: ShopItem[] = [
     { id: 1, name: 'Modern Chair', price: 250, icon: 'chair', color: 'text-indigo-500' },
@@ -58,8 +56,10 @@ const HomeShop: React.FC = () => {
                 
                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-40 h-40 flex items-center justify-center">
                   <div className="transform rotate-[45deg] rotate-x-[-55deg] scale-[2] translate-y-[-15px]">
+                    {/* 使用角色系统加载正面视角，动作 idle */}
                     <Mascot 
-                      src={MASCOT_SRC} 
+                      view="front"
+                      action="idle"
                       className="drop-shadow-2xl animate-bounce"
                       style={{ animationDuration: '3.5s' }}
                     />
@@ -135,7 +135,7 @@ const HomeShop: React.FC = () => {
 
       {selectedItem && (
         <div className="absolute inset-0 z-[200] flex items-center justify-center px-8 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
-          <div className="bg-white w-full max-w-sm rounded-[40px] p-10 flex flex-col items-center shadow-2xl animate-in zoom-in duration-300 border border-white/20">
+          <div className="bg-white w-full max-sm rounded-[40px] p-10 flex flex-col items-center shadow-2xl animate-in zoom-in duration-300 border border-white/20">
             <div className="w-32 h-32 bg-indigo-50 rounded-[32px] flex items-center justify-center mb-8 shadow-inner border border-indigo-100">
               <span className={`material-symbols-outlined text-[64px] ${selectedItem.color}`} style={{ fontVariationSettings: "'FILL' 1" }}>{selectedItem.icon}</span>
             </div>

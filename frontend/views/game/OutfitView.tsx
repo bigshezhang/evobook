@@ -8,8 +8,6 @@ const OutfitView: React.FC = () => {
   const [activeSubTab, setActiveSubTab] = useState<'Mine' | 'Shop'>('Mine');
   const [category, setCategory] = useState('Hats');
 
-  const MASCOT_SRC = "https://lh3.googleusercontent.com/aida-public/AB6AXuCnRMVMv3VQCalsOm2RCkci09ous1fHuESh9sMZOzls1ru6VuE5HAlxYcKU6AswyAOsq12l9kr0vdwHeD8hswbrsxz4xZRK5oDlUPQMkmsbBJks_RVJ7JpcWNSLbPi4ISfkMH__idCAOv8RTmRLMNFkIzfyPwb3vJzSQ628ux_fwHE7XdjKa0LbGIrGOhhEmLaWRqfg-nPFNVhkih46KYodq5ipAZkQGeaLwK99YG7Az-UcKbMDqfxhd6RQqOg4faz2K3kd90U7PsXV";
-
   const categories = ['Hats', 'Clothes', 'Accessories', 'Shoes'];
   const items = [
     { id: 1, owned: true, img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuB67UsfUV6c1xqCgIQVTDrmG44Jr9S0gTc8ZKvpMi3fyIfKCIrZy9v4wU9eas5Nc8c71xVpp_bL0Z2JeLYEs_eGrbERSYHEVIXxHTzkD4DRAWEGvrSbH9mFSFRm_2WeHupOlGAIe-JbwWerH3lna0eM7nD4OHc9FWYemUZND25BfEuRamnRRnM0-klP7-s-aPduo7wS2SjedS-IeSgd4F118eaCPjLLBkrLRIaDidG7QaC6RuudzLEeaXFjHVLNRVT0zcoJYF5uYPvR' },
@@ -30,7 +28,8 @@ const OutfitView: React.FC = () => {
       <main className="h-[35%] relative flex flex-col items-center justify-center">
         <div className="absolute w-[240px] h-[240px] bg-primary/5 rounded-full blur-[60px] -z-10"></div>
         <div className="relative z-10 scale-110 drop-shadow-2xl animate-in fade-in zoom-in duration-500">
-          <Mascot src={MASCOT_SRC} width="200" className="drop-shadow-2xl" />
+          {/* 使用角色系统加载正面视角 */}
+          <Mascot view="front" width="200" className="drop-shadow-2xl" />
         </div>
         <div className="absolute bottom-4 w-40 h-4 bg-black/5 blur-xl rounded-[100%]"></div>
       </main>

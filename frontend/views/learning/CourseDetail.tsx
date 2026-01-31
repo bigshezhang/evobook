@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../../components/Header';
-import BottomNav from '../../components/BottomNav';
+import SuccessFeedbackPill from '../../components/SuccessFeedbackPill';
 
 const CourseDetail: React.FC = () => {
   const navigate = useNavigate();
@@ -10,11 +10,26 @@ const CourseDetail: React.FC = () => {
   const [commitment, setCommitment] = useState<'Deep' | 'Fast' | 'Lite'>('Deep');
   const [velocity, setVelocity] = useState<'15m' | '30m' | '45m' | '1h'>('30m');
   const [formats, setFormats] = useState<string[]>(['Video', 'Lab', 'Read']);
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [isMainCourse, setIsMainCourse] = useState(false);
+
+  const commitmentTimes = {
+    Deep: '20H',
+    Fast: '10H',
+    Lite: '2H'
+  };
 
   const toggleFormat = (format: string) => {
     setFormats(prev => 
       prev.includes(format) ? prev.filter(f => f !== format) : [...prev, format]
     );
+  };
+
+  const handleSetMainCourse = () => {
+    setIsMainCourse(true);
+    // 模拟修改用户数据表中的主页面课程设置
+    localStorage.setItem('evo_main_course', 'Neural Networks');
+    setShowSuccess(true);
   };
 
   const handleConfirm = () => {
@@ -27,13 +42,21 @@ const CourseDetail: React.FC = () => {
       <Header 
         subtitle="Editorial Plan" 
         rightAction={
-          <button className="w-10 h-10 flex items-center justify-center active:scale-90 transition-transform">
-            <span className="material-symbols-outlined text-[24px] text-charcoal">bookmark</span>
+          <button 
+            onClick={handleSetMainCourse}
+            className="w-10 h-10 flex items-center justify-center active:scale-90 transition-transform"
+          >
+            <span 
+              className={`material-symbols-outlined text-[24px] transition-colors ${isMainCourse ? 'text-amber-400' : 'text-charcoal'}`}
+              style={{ fontVariationSettings: `'FILL' ${isMainCourse ? 1 : 0}` }}
+            >
+              star
+            </span>
           </button>
         }
       />
 
-      <main className="flex-1 px-8 flex flex-col overflow-y-auto no-scrollbar pb-56">
+      <main className="flex-1 px-8 flex flex-col overflow-y-auto no-scrollbar pb-32">
         <section className="flex flex-col items-center pt-4">
           <div className="relative w-44 h-56 bg-[#A28FFF] rounded-[40px] shadow-[0_20px_40px_-15px_rgba(162,143,255,0.5)] flex flex-col items-center justify-center overflow-hidden mb-6">
             <div className="relative z-10 w-24 h-24 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm border border-white/30">
@@ -48,7 +71,7 @@ const CourseDetail: React.FC = () => {
           <p className="mt-2 text-[10px] font-black text-slate-300 uppercase tracking-[0.2em] text-center">Mastering Intelligence</p>
         </section>
 
-        <section className="mt-10">
+        <section className="mt-5">
           <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-4">Knowledge Graph</h3>
           <div className="flex flex-wrap gap-2.5">
             {['Neurons', 'Backprop', 'Gradients', 'Weights', 'Biases', 'Layers'].map(tag => (
@@ -59,10 +82,10 @@ const CourseDetail: React.FC = () => {
           </div>
         </section>
 
-        <section className="mt-10">
+        <section className="mt-5">
           <div className="flex justify-between items-center mb-3">
             <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Total Commitment</h3>
-            <span className="text-[13px] font-black text-charcoal">12H</span>
+            <span className="text-[13px] font-black text-charcoal">{commitmentTimes[commitment]}</span>
           </div>
           <div className="bg-[#F3F4F6] p-1.5 rounded-2xl flex">
             {(['Deep', 'Fast', 'Lite'] as const).map(item => (
@@ -77,7 +100,7 @@ const CourseDetail: React.FC = () => {
           </div>
         </section>
 
-        <section className="mt-10">
+        <section className="mt-5">
           <div className="flex justify-between items-center mb-3">
             <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Daily Velocity</h3>
             <span className="text-[13px] font-black text-charcoal">30M</span>
@@ -95,7 +118,7 @@ const CourseDetail: React.FC = () => {
           </div>
         </section>
 
-        <section className="mt-10">
+        <section className="mt-5 mb-10">
           <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-3">Delivery Format</h3>
           <div className="flex gap-3">
             {[
@@ -120,8 +143,8 @@ const CourseDetail: React.FC = () => {
         </section>
       </main>
 
-      <div className="fixed bottom-28 left-0 right-0 p-8 flex justify-center pointer-events-none z-40">
-        <div className="max-w-md w-full px-8 pointer-events-auto">
+      <div className="p-8 bg-white border-t border-slate-50 flex justify-center z-40">
+        <div className="max-w-md w-full pointer-events-auto">
           <button 
             onClick={handleConfirm}
             className="w-full bg-charcoal text-white py-5 rounded-[24px] flex items-center justify-center gap-3 shadow-2xl active:scale-95 transition-all group"
@@ -132,8 +155,11 @@ const CourseDetail: React.FC = () => {
         </div>
       </div>
 
-      {/* Changed activeTab to 'learning' as 'explore' is invalid */}
-      <BottomNav activeTab="learning" />
+      <SuccessFeedbackPill 
+        isOpen={showSuccess} 
+        onClose={() => setShowSuccess(false)} 
+        message="已加入为主页面课程" 
+      />
     </div>
   );
 };

@@ -1,16 +1,26 @@
 
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { MascotCharacter, setSelectedCharacter } from '../../utils/mascotUtils';
 
-const companions = [
+const companions: { id: MascotCharacter; name: string; title: string; desc: string; icon: string; color: string }[] = [
   { id: 'oliver', name: 'Oliver', title: 'Oliver the Owl', desc: 'WISE & FOCUSED', icon: 'skillet', color: 'bg-card-purple' },
   { id: 'luna', name: 'Luna', title: 'Luna the Cat', desc: 'PLAYFUL & ALERT', icon: 'pets', color: 'bg-card-yellow' },
   { id: 'bolt', name: 'Bolt', title: 'Bolt the Robot', desc: 'LOGICAL & FAST', icon: 'smart_toy', color: 'bg-card-blue' },
+  // 你可以在这里加入新角色，例如：
+  // { id: 'dog', name: 'Buddy', title: 'Buddy the Dog', desc: 'LOYAL & ACTIVE', icon: 'potted_plant', color: 'bg-emerald-400' }
 ];
 
 const CompanionSelection: React.FC = () => {
   const navigate = useNavigate();
   const [selected, setSelected] = useState(companions[0]);
+
+  const handleContinue = () => {
+    // 1. 保存选中的角色到本地存储（模拟后端交互）
+    setSelectedCharacter(selected.id);
+    // 2. 进入下一环节
+    navigate('/notifications');
+  };
 
   return (
     <div className="flex flex-col h-screen bg-[#F9F9F9] font-display overflow-hidden">
@@ -55,7 +65,7 @@ const CompanionSelection: React.FC = () => {
             </div>
           </div>
           <button 
-            onClick={() => navigate('/notifications')}
+            onClick={handleContinue}
             className="w-full h-16 rounded-full bg-black text-white font-bold text-lg active:scale-95 transition-all shadow-xl"
           >
             Continue

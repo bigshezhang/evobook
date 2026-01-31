@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import GameHeader from '../../components/GameHeader';
 import BottomNav from '../../components/BottomNav';
 import Mascot from '../../components/Mascot';
+import { MascotAction } from '../../utils/mascotUtils';
 
 type TileType = 'gold' | 'xp' | 'roll' | 'normal' | 'star' | 'gift' | 'map';
 
@@ -21,14 +22,14 @@ const TravelBoard: React.FC = () => {
   const [isJumping, setIsJumping] = useState(false);
   const [eventModal, setEventModal] = useState<{ type: string; title: string; desc: string } | null>(null);
   
+  const [mascotAction, setMascotAction] = useState<MascotAction>('idle');
+  
   const [path, setPath] = useState<TileData[]>([]);
   const pathRef = useRef<TileData[]>([]);
 
   const TILE_H = 120; 
   const GAP = 80;    
   const STEP_UNIT = TILE_H + GAP; 
-
-  const MASCOT_SRC = "https://lh3.googleusercontent.com/aida-public/AB6AXuCnRMVMv3VQCalsOm2RCkci09ous1fHuESh9sMZOzls1ru6VuE5HAlxYcKU6AswyAOsq12l9kr0vdwHeD8hswbrsxz4xZRK5oDlUPQMkmsbBJks_RVJ7JpcWNSLbPi4ISfkMH__idCAOv8RTmRLMNFkIzfyPwb3vJzSQ628ux_fwHE7XdjKa0LbGIrGOhhEmLaWRqfg-nPFNVhkih46KYodq5ipAZkQGeaLwK99YG7Az-UcKbMDqfxhd6RQqOg4faz2K3kd90U7PsXV";
 
   useEffect(() => {
     generateMoreTiles(50);
@@ -37,7 +38,6 @@ const TravelBoard: React.FC = () => {
   const generateMoreTiles = (count: number) => {
     const types: TileType[] = ['normal', 'gold', 'map', 'gift', 'star', 'roll', 'xp', 'normal'];
     const icons = ['circle', 'monetization_on', 'map', 'featured_seasonal_and_gifts', 'star', 'casino', 'bolt', 'circle'];
-    // Purple accent for special tiles
     const colors = ['bg-white', 'clay-gold', 'clay-map', 'clay-pink', 'clay-blue', 'bg-secondary', 'clay-blue', 'bg-white'];
 
     const startId = pathRef.current.length;
@@ -74,8 +74,12 @@ const TravelBoard: React.FC = () => {
 
   const startTravel = async (steps: number) => {
     setIsMoving(true);
+    setMascotAction('run');
+
     for (let i = 0; i < steps; i++) {
       setIsJumping(true);
+      setMascotAction('jump');
+
       await new Promise(r => setTimeout(r, 250));
       setCurrentStep(prev => {
         const next = prev + 1;
@@ -88,11 +92,15 @@ const TravelBoard: React.FC = () => {
       setIsJumping(false);
       await new Promise(r => setTimeout(r, 150));
     }
+    
     setIsMoving(false);
+    setMascotAction('idle');
     
     const finalTile = pathRef.current[currentStep + steps];
     if (finalTile?.type === 'gold') {
+      setMascotAction('success');
       setEventModal({ type: 'gold', title: 'Coins Found!', desc: 'You gained +250 Gold' });
+      setTimeout(() => setMascotAction('idle'), 2000);
     }
   };
 
@@ -114,7 +122,6 @@ const TravelBoard: React.FC = () => {
           <div className="flex items-center gap-4">
             <div 
               onClick={handleRoll}
-              // Restored Purple Dice
               className={`w-16 h-16 bg-secondary rounded-[24px] flex items-center justify-center shadow-2xl transition-all ${isMoving || isRolling ? 'grayscale opacity-50' : 'active:scale-90 cursor-pointer'}`}
             >
               <div className="grid grid-cols-2 gap-2">
@@ -152,7 +159,6 @@ const TravelBoard: React.FC = () => {
               return (
                 <div 
                   key={tile.id}
-                  // Restored Purple Active Tile Style
                   className={`absolute w-80 h-[120px] rounded-[40px] flex items-center justify-center transition-all duration-300 border-t-2 border-white/50
                     ${isActive ? 'bg-secondary/10 ring-[6px] ring-secondary shadow-[0_30px_60px_rgba(124,58,237,0.4)]' : 'bg-white shadow-xl'}
                   `}
@@ -176,12 +182,13 @@ const TravelBoard: React.FC = () => {
 
         <div className="absolute left-1/2 -translate-x-1/2 top-[70%] z-[150] pointer-events-none flex flex-col items-center">
           <div className={`transition-all duration-[400ms] transform-gpu ${isJumping ? '-translate-y-40 scale-110' : '-translate-y-[85px] scale-100'}`}>
+            {/* 关键修改：在游戏主棋盘使用 view="back" (背影) */}
             <Mascot 
-              src={MASCOT_SRC}
+              action={mascotAction}
+              view="back"
               width="90" 
               className="drop-shadow-[0_20px_40px_rgba(0,0,0,0.25)]"
             />
-            {/* Purple mascot shadow */}
             <div className={`mt-1 bg-secondary/20 blur-2xl rounded-[100%] transition-all duration-400 mx-auto ${isJumping ? 'w-8 h-2 opacity-5 scale-50' : 'w-24 h-5 opacity-40 scale-100'}`}></div>
           </div>
         </div>
