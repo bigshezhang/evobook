@@ -1,16 +1,21 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import Header from '../../components/Header';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import ClarificationSection, { QAItem } from './ClarificationSection';
 import { 
   STORAGE_KEYS, 
   CourseMapGenerateResponse, 
-  DAGNode, 
   FinishData,
   getClarification,
+  getKnowledgeCard,
+  KnowledgeCardRequest,
   Language
 } from '../../utils/api';
+
+// Page break delimiter used in markdown from API
+const PAGE_BREAK_DELIMITER = '<EVOBK_PAGE_BREAK />';
 
 const KnowledgeCard: React.FC = () => {
   const navigate = useNavigate();
@@ -21,49 +26,128 @@ const KnowledgeCard: React.FC = () => {
   
   // Course metadata loaded from localStorage
   const [courseName, setCourseName] = useState('Loading...');
+  const [courseContext, setCourseContext] = useState('');
   const [moduleInfo, setModuleInfo] = useState('Module');
   const [nodeTitle, setNodeTitle] = useState('');
+  const [nodeDescription, setNodeDescription] = useState('');
   const [currentNodeId, setCurrentNodeId] = useState<number>(0);
   const [totalNodes, setTotalNodes] = useState<number>(20);
   const [completedNodes, setCompletedNodes] = useState<number>(12);
   
   // Internal card paging state
   const [currentPage, setCurrentPage] = useState(1);
-  const [totalPagesInCard, setTotalPagesInCard] = useState(5);
+  const [totalPagesInCard, setTotalPagesInCard] = useState(1);
+  
+  // Knowledge card content from API
+  const [markdownContent, setMarkdownContent] = useState<string>('');
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   
   // Language for API calls
   const language: Language = 'en';
+  
+  // Split markdown content into pages
+  const pages = useMemo(() => {
+    if (!markdownContent) return [];
+    return markdownContent.split(PAGE_BREAK_DELIMITER).map(page => page.trim()).filter(Boolean);
+  }, [markdownContent]);
+  
+  // Get current page content
+  const currentPageContent = useMemo(() => {
+    return pages[currentPage - 1] || '';
+  }, [pages, currentPage]);
+  
+  // Update total pages when pages array changes
+  useEffect(() => {
+    if (pages.length > 0) {
+      setTotalPagesInCard(pages.length);
+    }
+  }, [pages]);
 
-  // Load course data from localStorage
+  // Load course data from localStorage and fetch knowledge card from API
   useEffect(() => {
     const courseMapStr = localStorage.getItem(STORAGE_KEYS.COURSE_MAP);
     const currentNodeStr = localStorage.getItem(STORAGE_KEYS.CURRENT_NODE);
     const onboardingDataStr = localStorage.getItem(STORAGE_KEYS.ONBOARDING_DATA);
     
+    let courseMapData: CourseMapGenerateResponse | null = null;
+    let onboardingData: FinishData | null = null;
+    let currentNode: CourseMapGenerateResponse['nodes'][0] | null = null;
+    
     if (courseMapStr) {
-      const courseMap: CourseMapGenerateResponse = JSON.parse(courseMapStr);
-      setCourseName(courseMap.map_meta.course_name);
-      setTotalNodes(courseMap.nodes.length);
-      
-      // Find current node
-      if (currentNodeStr) {
-        const nodeId = parseInt(currentNodeStr, 10);
-        setCurrentNodeId(nodeId);
-        const node = courseMap.nodes.find(n => n.id === nodeId);
-        if (node) {
-          setNodeTitle(node.title);
-          setModuleInfo(`Module ${String(node.layer).padStart(2, '0')}`);
+      courseMapData = JSON.parse(courseMapStr);
+      setCourseName(courseMapData!.map_meta.course_name);
+      setCourseContext(courseMapData!.map_meta.strategy_rationale);
+      setTotalNodes(courseMapData!.nodes.length);
+    }
+    
+    // Parse current node from localStorage (stored as JSON object by KnowledgeTree)
+    if (currentNodeStr) {
+      try {
+        currentNode = JSON.parse(currentNodeStr);
+        if (currentNode) {
+          setCurrentNodeId(currentNode.id);
+          setNodeTitle(currentNode.title);
+          setNodeDescription(currentNode.description);
+          setModuleInfo(`Module ${String(currentNode.layer).padStart(2, '0')}`);
+          // Calculate completed nodes (nodes before current in the layer order)
+          if (courseMapData) {
+            const completedCount = courseMapData.nodes.filter(n => n.layer < (currentNode?.layer || 1)).length;
+            setCompletedNodes(completedCount);
+          }
         }
-        // Calculate completed nodes (nodes before current in the layer order)
-        const completedCount = courseMap.nodes.filter(n => n.layer < (node?.layer || 1)).length;
-        setCompletedNodes(completedCount);
+      } catch (e) {
+        console.error('Failed to parse current node:', e);
       }
     }
     
     if (onboardingDataStr) {
-      const onboardingData: FinishData = JSON.parse(onboardingDataStr);
-      // Can use topic if needed
+      onboardingData = JSON.parse(onboardingDataStr);
     }
+    
+    // Fetch knowledge card from API
+    const fetchKnowledgeCard = async () => {
+      if (!courseMapData || !currentNode || !onboardingData) {
+        setError('Missing course or node data. Please start from the course selection.');
+        setIsLoading(false);
+        return;
+      }
+      
+      try {
+        setIsLoading(true);
+        setError(null);
+        
+        const request: KnowledgeCardRequest = {
+          course: {
+            course_name: courseMapData.map_meta.course_name,
+            course_context: courseMapData.map_meta.strategy_rationale,
+            topic: onboardingData.topic,
+            level: onboardingData.level,
+            mode: courseMapData.map_meta.mode,
+          },
+          node: {
+            id: currentNode.id,
+            title: currentNode.title,
+            description: currentNode.description,
+            type: currentNode.type as 'learn' | 'boss',
+            estimated_minutes: currentNode.estimated_minutes,
+          },
+        };
+        
+        const response = await getKnowledgeCard(request);
+        
+        setMarkdownContent(response.markdown);
+        setTotalPagesInCard(response.totalPagesInCard || 1);
+        setCurrentPage(1);
+      } catch (err) {
+        console.error('Failed to fetch knowledge card:', err);
+        setError(err instanceof Error ? err.message : 'Failed to load content. Please try again.');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    fetchKnowledgeCard();
   }, []);
 
   // Animation trigger for content changes
@@ -113,8 +197,8 @@ const KnowledgeCard: React.FC = () => {
     
     // Call API to get clarification
     try {
-      // Use current page content as context (simplified - you may want to pass actual markdown)
-      const pageMarkdown = `${nodeTitle}: Current learning content about ${courseName}`;
+      // Use current page content as context
+      const pageMarkdown = currentPageContent || `${nodeTitle}: Learning content about ${courseName}`;
       
       const response = await getClarification({
         language,
@@ -155,9 +239,26 @@ const KnowledgeCard: React.FC = () => {
           <div className="flex items-center gap-2">
             <span className="text-[11px] font-bold text-primary/40 dark:text-white/40 uppercase tracking-widest">Progress</span>
             <div className="flex gap-1">
-              <div className="w-4 h-1.5 rounded-full bg-primary dark:bg-white"></div>
-              <div className="w-1.5 h-1.5 rounded-full bg-primary/10 dark:bg-white/10"></div>
-              <div className="w-1.5 h-1.5 rounded-full bg-primary/10 dark:bg-white/10"></div>
+              {/* Dynamic progress dots based on current page */}
+              {totalPagesInCard <= 5 ? (
+                // Show individual dots for 5 or fewer pages
+                [...Array(totalPagesInCard)].map((_, i) => (
+                  <div 
+                    key={i}
+                    className={`${i < currentPage ? 'w-4' : 'w-1.5'} h-1.5 rounded-full transition-all duration-300 ${i < currentPage ? 'bg-primary dark:bg-white' : 'bg-primary/10 dark:bg-white/10'}`}
+                  ></div>
+                ))
+              ) : (
+                // Show progress bar for more than 5 pages
+                <>
+                  <div className="w-16 h-1.5 rounded-full bg-primary/10 dark:bg-white/10 overflow-hidden">
+                    <div 
+                      className="h-full bg-primary dark:bg-white rounded-full transition-all duration-300"
+                      style={{ width: `${(currentPage / totalPagesInCard) * 100}%` }}
+                    ></div>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -177,89 +278,175 @@ const KnowledgeCard: React.FC = () => {
           </h1>
         </div>
 
-        <div className="prose prose-sm max-w-none text-primary/80 dark:text-white/80 space-y-4">
-          <p className="text-[15px] leading-relaxed">
-            Neural networks are the backbone of modern AI. They are composed of computational nodes that mimic the way biological neurons transmit signals.
-          </p>
-
-          {/* Key Structural Elements Box */}
-          <div className="bg-black/[0.02] dark:bg-white/[0.02] rounded-2xl p-5 border border-black/[0.03] dark:border-white/[0.03]">
-            <h3 className="text-[14px] font-bold text-primary dark:text-white mb-3 flex items-center gap-2">
-              <span className="w-1 h-4 bg-accent-purple rounded-full"></span>
-              Key Structural Elements
-            </h3>
-            <ul className="space-y-3 m-0 p-0 list-none">
-              <li className="flex gap-3 text-[14px] leading-snug m-0">
-                <span className="text-accent-purple font-bold">•</span>
-                <span><strong className="text-primary dark:text-white">Input Layer:</strong> Receives raw data like pixels or text embeddings.</span>
-              </li>
-              <li className="flex gap-3 text-[14px] leading-snug m-0">
-                <span className="text-accent-purple font-bold">•</span>
-                <span><strong className="text-primary dark:text-white">Hidden Layers:</strong> Perform non-linear transformations using activation functions.</span>
-              </li>
-              <li className="flex gap-3 text-[14px] leading-snug m-0">
-                <span className="text-accent-purple font-bold">•</span>
-                <span><strong className="text-primary dark:text-white">Output Layer:</strong> Produces the final prediction or classification.</span>
-              </li>
-            </ul>
+        {/* Loading State */}
+        {isLoading && (
+          <div className="space-y-4 animate-pulse">
+            <div className="h-4 bg-black/5 dark:bg-white/5 rounded-lg w-full"></div>
+            <div className="h-4 bg-black/5 dark:bg-white/5 rounded-lg w-5/6"></div>
+            <div className="h-4 bg-black/5 dark:bg-white/5 rounded-lg w-4/6"></div>
+            <div className="h-32 bg-black/5 dark:bg-white/5 rounded-2xl w-full mt-6"></div>
+            <div className="h-4 bg-black/5 dark:bg-white/5 rounded-lg w-full mt-6"></div>
+            <div className="h-4 bg-black/5 dark:bg-white/5 rounded-lg w-3/4"></div>
+            <div className="h-24 bg-black/5 dark:bg-white/5 rounded-2xl w-full mt-6"></div>
           </div>
-
-          <p className="text-[15px] leading-relaxed">
-            The efficiency of a network is often measured by its depth (number of layers) and its width (number of neurons per layer). Increasing these values allows for higher abstraction.
-          </p>
-
-          {/* Stylized Table from HTML */}
-          <div className="overflow-hidden rounded-2xl border border-black/[0.05] dark:border-white/[0.05] my-6">
-            <table className="w-full text-[13px] text-left border-collapse m-0">
-              <thead className="bg-black/[0.03] dark:bg-white/[0.05]">
-                <tr>
-                  <th className="px-4 py-2.5 font-bold text-primary/60 dark:text-white/60">Type</th>
-                  <th className="px-4 py-2.5 font-bold text-primary/60 dark:text-white/60">Best For</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-black/[0.03] dark:divide-white/[0.05]">
-                <tr>
-                  <td className="px-4 py-2.5 font-semibold text-primary dark:text-white">CNN</td>
-                  <td className="px-4 py-2.5 text-primary/60 dark:text-white/60">Image Recognition</td>
-                </tr>
-                <tr>
-                  <td className="px-4 py-2.5 font-semibold text-primary dark:text-white">RNN</td>
-                  <td className="px-4 py-2.5 text-primary/60 dark:text-white/60">Sequence Data</td>
-                </tr>
-                <tr>
-                  <td className="px-4 py-2.5 font-semibold text-primary dark:text-white">Transformer</td>
-                  <td className="px-4 py-2.5 text-primary/60 dark:text-white/60">NLP & Vision</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          {/* Expert Tip Box */}
-          <div className="relative bg-accent-blue/5 border border-accent-blue/20 rounded-2xl p-5 overflow-hidden">
-            <div className="absolute -right-4 -top-4 w-16 h-16 bg-accent-blue/10 blur-xl"></div>
-            <div className="flex items-center gap-2 mb-2 text-accent-blue">
-              <span className="material-symbols-rounded text-[18px]">info</span>
-              <span className="text-[12px] font-bold uppercase tracking-wider">Expert Tip</span>
+        )}
+        
+        {/* Error State */}
+        {error && !isLoading && (
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <div className="w-16 h-16 bg-red-100 dark:bg-red-900/20 rounded-2xl flex items-center justify-center mb-4">
+              <span className="material-symbols-rounded text-red-500 text-3xl">error</span>
             </div>
-            <p className="text-[14px] font-medium leading-normal italic m-0">
-              "Weight initialization is critical. Poor starting values can lead to vanishing gradients in deep architectures."
-            </p>
+            <h3 className="text-lg font-bold text-primary dark:text-white mb-2">Failed to Load Content</h3>
+            <p className="text-sm text-primary/60 dark:text-white/60 mb-4 max-w-[280px]">{error}</p>
+            <button 
+              onClick={() => window.location.reload()}
+              className="px-6 py-2.5 bg-primary dark:bg-white text-white dark:text-black rounded-full font-semibold text-sm active:scale-95 transition-transform"
+            >
+              Try Again
+            </button>
           </div>
-
-          <p className="text-[15px] leading-relaxed">
-            Finally, the optimization process involves backpropagation, where the error at the output is sent back through the network to adjust weights using gradient descent.
-          </p>
-
-          {/* Preserving ClarificationSection (User's Rich Text Block) */}
-          <div id="clarification-section">
-            <ClarificationSection 
-              pendingQuestions={dynamicQuestions}
-              initialQAList={qaList}
-              pageMarkdown={`${nodeTitle}: Learning content about ${courseName}`}
-              language={language}
-            />
+        )}
+        
+        {/* Markdown Content */}
+        {!isLoading && !error && (
+          <div className="prose prose-sm max-w-none text-primary/80 dark:text-white/80">
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={{
+                // Headings
+                h1: ({ children }) => (
+                  <h1 className="text-[22px] font-extrabold text-primary dark:text-white leading-tight mb-4 mt-6">
+                    {children}
+                  </h1>
+                ),
+                h2: ({ children }) => (
+                  <h2 className="text-[18px] font-bold text-primary dark:text-white leading-tight mb-3 mt-5">
+                    {children}
+                  </h2>
+                ),
+                h3: ({ children }) => (
+                  <h3 className="text-[16px] font-bold text-primary dark:text-white leading-tight mb-2 mt-4 flex items-center gap-2">
+                    <span className="w-1 h-4 bg-accent-purple rounded-full"></span>
+                    {children}
+                  </h3>
+                ),
+                h4: ({ children }) => (
+                  <h4 className="text-[14px] font-bold text-primary dark:text-white leading-tight mb-2 mt-3">
+                    {children}
+                  </h4>
+                ),
+                // Paragraphs
+                p: ({ children }) => (
+                  <p className="text-[15px] leading-relaxed mb-4">{children}</p>
+                ),
+                // Lists
+                ul: ({ children }) => (
+                  <ul className="space-y-2 my-4 pl-0 list-none">{children}</ul>
+                ),
+                ol: ({ children }) => (
+                  <ol className="space-y-2 my-4 pl-4 list-decimal">{children}</ol>
+                ),
+                li: ({ children }) => (
+                  <li className="flex gap-3 text-[14px] leading-snug">
+                    <span className="text-accent-purple font-bold shrink-0">•</span>
+                    <span>{children}</span>
+                  </li>
+                ),
+                // Strong/Bold
+                strong: ({ children }) => (
+                  <strong className="text-primary dark:text-white font-semibold">{children}</strong>
+                ),
+                // Emphasis/Italic
+                em: ({ children }) => (
+                  <em className="italic">{children}</em>
+                ),
+                // Code
+                code: ({ children, className }) => {
+                  const isInline = !className;
+                  if (isInline) {
+                    return (
+                      <code className="bg-black/5 dark:bg-white/10 px-1.5 py-0.5 rounded text-[13px] font-mono text-accent-purple">
+                        {children}
+                      </code>
+                    );
+                  }
+                  return (
+                    <code className="block bg-black/[0.03] dark:bg-white/[0.05] p-4 rounded-xl text-[13px] font-mono overflow-x-auto">
+                      {children}
+                    </code>
+                  );
+                },
+                pre: ({ children }) => (
+                  <pre className="bg-black/[0.03] dark:bg-white/[0.05] p-4 rounded-xl text-[13px] font-mono overflow-x-auto my-4">
+                    {children}
+                  </pre>
+                ),
+                // Tables
+                table: ({ children }) => (
+                  <div className="overflow-hidden rounded-2xl border border-black/[0.05] dark:border-white/[0.05] my-6">
+                    <table className="w-full text-[13px] text-left border-collapse m-0">
+                      {children}
+                    </table>
+                  </div>
+                ),
+                thead: ({ children }) => (
+                  <thead className="bg-black/[0.03] dark:bg-white/[0.05]">{children}</thead>
+                ),
+                tbody: ({ children }) => (
+                  <tbody className="divide-y divide-black/[0.03] dark:divide-white/[0.05]">{children}</tbody>
+                ),
+                tr: ({ children }) => <tr>{children}</tr>,
+                th: ({ children }) => (
+                  <th className="px-4 py-2.5 font-bold text-primary/60 dark:text-white/60">{children}</th>
+                ),
+                td: ({ children }) => (
+                  <td className="px-4 py-2.5 text-primary/80 dark:text-white/80">{children}</td>
+                ),
+                // Blockquotes - styled as tip boxes
+                blockquote: ({ children }) => (
+                  <div className="relative bg-accent-blue/5 border border-accent-blue/20 rounded-2xl p-5 overflow-hidden my-4">
+                    <div className="absolute -right-4 -top-4 w-16 h-16 bg-accent-blue/10 blur-xl"></div>
+                    <div className="flex items-center gap-2 mb-2 text-accent-blue">
+                      <span className="material-symbols-rounded text-[18px]">info</span>
+                      <span className="text-[12px] font-bold uppercase tracking-wider">Tip</span>
+                    </div>
+                    <div className="text-[14px] font-medium leading-normal [&>p]:m-0 [&>p]:italic">
+                      {children}
+                    </div>
+                  </div>
+                ),
+                // Horizontal rule
+                hr: () => (
+                  <hr className="border-0 h-px bg-black/10 dark:bg-white/10 my-6" />
+                ),
+                // Links
+                a: ({ href, children }) => (
+                  <a 
+                    href={href} 
+                    className="text-accent-blue hover:underline"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    {children}
+                  </a>
+                ),
+              }}
+            >
+              {currentPageContent}
+            </ReactMarkdown>
+            
+            {/* Clarification Section */}
+            <div id="clarification-section" className="mt-8">
+              <ClarificationSection 
+                pendingQuestions={dynamicQuestions}
+                initialQAList={qaList}
+                pageMarkdown={currentPageContent || `${nodeTitle}: Learning content about ${courseName}`}
+                language={language}
+              />
+            </div>
           </div>
-        </div>
+        )}
       </main>
 
       {/* High-fidelity Footer - Unified Colors for Back/Forward actions */}
