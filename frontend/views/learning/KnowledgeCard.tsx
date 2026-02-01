@@ -2,17 +2,69 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../../components/Header';
-import ClarificationSection from './ClarificationSection';
+import ClarificationSection, { QAItem } from './ClarificationSection';
+import { 
+  STORAGE_KEYS, 
+  CourseMapGenerateResponse, 
+  DAGNode, 
+  FinishData,
+  getClarification,
+  Language
+} from '../../utils/api';
 
 const KnowledgeCard: React.FC = () => {
   const navigate = useNavigate();
   const [showComplete, setShowComplete] = useState(false);
   const [inputValue, setInputValue] = useState('');
   const [dynamicQuestions, setDynamicQuestions] = useState<string[]>([]);
+  const [qaList, setQaList] = useState<QAItem[]>([]);
+  
+  // Course metadata loaded from localStorage
+  const [courseName, setCourseName] = useState('Loading...');
+  const [moduleInfo, setModuleInfo] = useState('Module');
+  const [nodeTitle, setNodeTitle] = useState('');
+  const [currentNodeId, setCurrentNodeId] = useState<number>(0);
+  const [totalNodes, setTotalNodes] = useState<number>(20);
+  const [completedNodes, setCompletedNodes] = useState<number>(12);
   
   // Internal card paging state
   const [currentPage, setCurrentPage] = useState(1);
-  const totalPagesInCard = 5; 
+  const [totalPagesInCard, setTotalPagesInCard] = useState(5);
+  
+  // Language for API calls
+  const language: Language = 'en';
+
+  // Load course data from localStorage
+  useEffect(() => {
+    const courseMapStr = localStorage.getItem(STORAGE_KEYS.COURSE_MAP);
+    const currentNodeStr = localStorage.getItem(STORAGE_KEYS.CURRENT_NODE);
+    const onboardingDataStr = localStorage.getItem(STORAGE_KEYS.ONBOARDING_DATA);
+    
+    if (courseMapStr) {
+      const courseMap: CourseMapGenerateResponse = JSON.parse(courseMapStr);
+      setCourseName(courseMap.map_meta.course_name);
+      setTotalNodes(courseMap.nodes.length);
+      
+      // Find current node
+      if (currentNodeStr) {
+        const nodeId = parseInt(currentNodeStr, 10);
+        setCurrentNodeId(nodeId);
+        const node = courseMap.nodes.find(n => n.id === nodeId);
+        if (node) {
+          setNodeTitle(node.title);
+          setModuleInfo(`Module ${String(node.layer).padStart(2, '0')}`);
+        }
+        // Calculate completed nodes (nodes before current in the layer order)
+        const completedCount = courseMap.nodes.filter(n => n.layer < (node?.layer || 1)).length;
+        setCompletedNodes(completedCount);
+      }
+    }
+    
+    if (onboardingDataStr) {
+      const onboardingData: FinishData = JSON.parse(onboardingDataStr);
+      // Can use topic if needed
+    }
+  }, []);
 
   // Animation trigger for content changes
   const [animate, setAnimate] = useState(true);
@@ -40,13 +92,15 @@ const KnowledgeCard: React.FC = () => {
     }
   };
 
-  const handleSendQuestion = () => {
+  const handleSendQuestion = async () => {
     if (!inputValue.trim()) return;
-    // 将新问题加入列表
-    setDynamicQuestions(prev => [...prev, inputValue.trim()]);
+    
+    const question = inputValue.trim();
+    // Add to pending questions for loading UI
+    setDynamicQuestions(prev => [...prev, question]);
     setInputValue('');
     
-    // 自动滚动到最下方：由于 DOM 更新是异步的，使用 setTimeout 确保计算最新的 scrollHeight
+    // Auto-scroll to bottom
     setTimeout(() => {
       const mainContainer = document.querySelector('main');
       if (mainContainer) {
@@ -56,6 +110,34 @@ const KnowledgeCard: React.FC = () => {
         });
       }
     }, 100);
+    
+    // Call API to get clarification
+    try {
+      // Use current page content as context (simplified - you may want to pass actual markdown)
+      const pageMarkdown = `${nodeTitle}: Current learning content about ${courseName}`;
+      
+      const response = await getClarification({
+        language,
+        user_question_raw: question,
+        page_markdown: pageMarkdown
+      });
+      
+      // Create new QA item
+      const newQA: QAItem = {
+        id: Date.now(),
+        question: response.corrected_title || question,
+        answer: response.short_answer,
+        detail: null  // Will be fetched when user clicks "Details"
+      };
+      
+      // Remove from pending and add to answered list
+      setDynamicQuestions(prev => prev.filter(q => q !== question));
+      setQaList(prev => [...prev, newQA]);
+    } catch (error) {
+      console.error('Failed to get clarification:', error);
+      // Remove from pending on error
+      setDynamicQuestions(prev => prev.filter(q => q !== question));
+    }
   };
 
   return (
@@ -80,7 +162,7 @@ const KnowledgeCard: React.FC = () => {
           </div>
         </div>
         <div className="bg-accent-blue/10 px-2.5 py-1 rounded-full border border-accent-blue/20">
-          <span className="text-[10px] font-extrabold text-accent-blue uppercase tracking-tight">12 / 20</span>
+          <span className="text-[10px] font-extrabold text-accent-blue uppercase tracking-tight">{completedNodes} / {totalNodes}</span>
         </div>
       </header>
 
@@ -88,10 +170,10 @@ const KnowledgeCard: React.FC = () => {
       <main className={`flex-1 overflow-y-auto no-scrollbar px-6 pt-6 pb-48 transition-all duration-300 ${animate ? 'opacity-0 translate-y-2' : 'opacity-100 translate-y-0'}`}>
         <div className="mb-6">
           <span className="text-[10px] font-extrabold uppercase tracking-[0.15em] text-accent-purple mb-1.5 block">
-            Module 03 • Deep Learning
+            {moduleInfo} • {courseName}
           </span>
           <h1 className="text-[26px] font-extrabold text-primary dark:text-white leading-tight">
-            Neural Networks Architecture
+            {nodeTitle || 'Neural Networks Architecture'}
           </h1>
         </div>
 
@@ -170,7 +252,12 @@ const KnowledgeCard: React.FC = () => {
 
           {/* Preserving ClarificationSection (User's Rich Text Block) */}
           <div id="clarification-section">
-            <ClarificationSection pendingQuestions={dynamicQuestions} />
+            <ClarificationSection 
+              pendingQuestions={dynamicQuestions}
+              initialQAList={qaList}
+              pageMarkdown={`${nodeTitle}: Learning content about ${courseName}`}
+              language={language}
+            />
           </div>
         </div>
       </main>

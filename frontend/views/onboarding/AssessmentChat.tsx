@@ -1,29 +1,209 @@
-
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { onboardingNext, isChatResponse, isFinishResponse, type OnboardingResponse } from '../../utils/api';
+import { STORAGE_KEY_SELECTED_TOPIC } from './InterestSelection';
+
+// Storage key for session data
+export const STORAGE_KEY_SESSION_ID = 'evo_assessment_session_id';
+
+interface Message {
+  role: 'user' | 'assistant';
+  content: string;
+}
 
 const AssessmentChat: React.FC = () => {
   const navigate = useNavigate();
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [options, setOptions] = useState<string[]>([]);
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+
+  // Selected topic from InterestSelection page
+  const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
+
+  // Check if this is onboarding or returning user
   const [isOnboarding, setIsOnboarding] = useState(true);
+
+  // Function to clear all session-related data
+  const clearSessionData = useCallback(() => {
+    localStorage.removeItem(STORAGE_KEY_SESSION_ID);
+    localStorage.removeItem(STORAGE_KEY_SELECTED_TOPIC);
+  }, []);
+
+  // Function to reset component state
+  const resetState = useCallback(() => {
+    setSessionId(null);
+    setMessages([]);
+    setOptions([]);
+    setInput('');
+    setLoading(false);
+    setError(null);
+    setSelectedTopic(null);
+  }, []);
+
+  // Handle back button click - clear data before navigating
+  const handleBackClick = useCallback(() => {
+    // Clear all session data
+    clearSessionData();
+    // Reset state to prevent flash on re-entry
+    resetState();
+    // Navigate back
+    navigate(-1);
+  }, [clearSessionData, resetState, navigate]);
 
   useEffect(() => {
     const completed = localStorage.getItem('evo_onboarding_completed') === 'true';
     setIsOnboarding(!completed);
+    
+    // Read selected topic from localStorage
+    const topic = localStorage.getItem(STORAGE_KEY_SELECTED_TOPIC);
+    if (topic) {
+      setSelectedTopic(topic);
+    }
   }, []);
 
-  const handleNext = () => {
-    if (isOnboarding) {
-      navigate('/companion');
-    } else {
-      navigate('/generating');
+  // Scroll to bottom when messages update
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  // Initialize session on mount - reset state first to prevent flash
+  useEffect(() => {
+    // CRITICAL: Reset all state immediately on mount to prevent flash of old content
+    setSessionId(null);
+    setMessages([]);
+    setOptions([]);
+    setInput('');
+    setError(null);
+    
+    // Flag to track if component is still mounted (using ref to survive StrictMode remounts)
+    const abortController = new AbortController();
+    
+    const initSession = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        // Read selected topic for initial context
+        const topic = localStorage.getItem(STORAGE_KEY_SELECTED_TOPIC);
+        
+        // Pass initial_topic to skip Phase 1 if topic is pre-selected
+        // Backend will start at calibration phase directly
+        const response = await onboardingNext({
+          initial_topic: topic || undefined,
+        });
+        
+        // Check if component was unmounted during the request
+        if (abortController.signal.aborted) return;
+        
+        handleResponse(response, true);
+      } catch (err) {
+        if (!abortController.signal.aborted) {
+          console.error('Failed to init session:', err);
+          setError('无法连接到服务器，请稍后重试');
+        }
+      } finally {
+        if (!abortController.signal.aborted) {
+          setLoading(false);
+        }
+      }
+    };
+    initSession();
+    
+    // Cleanup on unmount
+    return () => {
+      abortController.abort();
+    };
+  }, []);
+
+  const handleFinishResponse = (response: OnboardingResponse) => {
+    if (isFinishResponse(response)) {
+      // Add final message before navigation
+      setMessages(prev => [...prev, { 
+        role: 'assistant', 
+        content: '太棒了！我已经了解了你的学习目标。现在让我为你定制专属学习路径...' 
+      }]);
+      
+      // Save data and navigate after a brief delay
+      setTimeout(() => {
+        localStorage.setItem('evo_onboarding_data', JSON.stringify(response.data));
+        localStorage.setItem('evo_onboarding_completed', 'true');
+        // Clear the selected topic as it's no longer needed
+        localStorage.removeItem(STORAGE_KEY_SELECTED_TOPIC);
+        // Navigate directly to course generation (skip companion and notification steps)
+        navigate('/generating');
+      }, 1500);
+    }
+  };
+
+  const handleResponse = (response: OnboardingResponse, isInit = false) => {
+    if (isChatResponse(response)) {
+      setSessionId(response.session_id);
+      if (isInit) {
+        setMessages([{ role: 'assistant', content: response.message }]);
+      }
+      setOptions(response.options);
+    } else if (isFinishResponse(response)) {
+      handleFinishResponse(response);
+    }
+  };
+
+  const handleSend = async (userChoice?: string) => {
+    const messageContent = userChoice || input.trim();
+    if (!messageContent || loading) return;
+
+    setLoading(true);
+    setError(null);
+    setOptions([]); // Clear options while loading
+
+    // Add user message to chat
+    setMessages(prev => [...prev, { role: 'user', content: messageContent }]);
+    setInput('');
+
+    try {
+      const response = await onboardingNext({
+        session_id: sessionId,
+        user_message: userChoice ? null : messageContent,
+        user_choice: userChoice || null,
+      });
+
+      if (isChatResponse(response)) {
+        setMessages(prev => [...prev, { role: 'assistant', content: response.message }]);
+        setOptions(response.options);
+      } else if (isFinishResponse(response)) {
+        handleFinishResponse(response);
+      }
+    } catch (err) {
+      console.error('API error:', err);
+      setError('发送失败，请重试');
+      // Restore options if there were any
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleOptionClick = (option: string) => {
+    if (!loading) {
+      handleSend(option);
+    }
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
     }
   };
 
   return (
     <div className="flex flex-col h-screen bg-[#F8F9FD] font-display">
+      {/* Header */}
       <header className="sticky top-0 z-30 bg-background-light/80 backdrop-blur-md px-6 py-4 flex items-center justify-between border-b border-gray-100">
         <div className="flex items-center gap-3">
-          <button onClick={() => navigate(-1)} className="w-8 h-8 flex items-center justify-center">
+          <button onClick={handleBackClick} className="w-8 h-8 flex items-center justify-center">
             <span className="material-symbols-outlined text-slate-400">arrow_back_ios</span>
           </button>
           <div className="relative w-10 h-10 rounded-full bg-white shadow-soft flex items-center justify-center border-2 border-white overflow-hidden">
@@ -32,9 +212,9 @@ const AssessmentChat: React.FC = () => {
           <div>
             <h2 className="text-sm font-extrabold text-[#1a1b23]">Athena AI</h2>
             <div className="flex items-center gap-1">
-              <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse"></span>
+              <span className={`w-1.5 h-1.5 rounded-full ${loading ? 'bg-yellow-400' : 'bg-green-400'} animate-pulse`}></span>
               <span className="text-[10px] font-bold text-black/40 uppercase tracking-tight">
-                {isOnboarding ? 'Customizing your path' : 'Crafting new module'}
+                {loading ? 'Thinking...' : (isOnboarding ? 'Customizing your path' : 'Crafting new module')}
               </span>
             </div>
           </div>
@@ -44,54 +224,103 @@ const AssessmentChat: React.FC = () => {
         </button>
       </header>
 
-      <main className="flex-1 overflow-y-auto px-6 py-6 flex flex-col gap-6 no-scrollbar">
-        <div className="flex flex-col gap-2 max-w-[90%] self-start">
-          <div className="relative bg-white p-5 rounded-bubble rounded-tl-none shadow-soft border border-white/50">
-            <p className="text-[15px] font-semibold text-[#1a1b23]">
-              {isOnboarding 
-                ? "Hello! I'm Athena. To tailor your learning experience, I've prepared a quick assessment. Tell me about your preferences! 🦉"
-                : "Welcome back! Let's define the parameters for your next learning adventure. What's the focus today? 🚀"}
-            </p>
-            <div className="absolute -right-2 -top-2 w-6 h-6 rounded-full three-d-element opacity-80"></div>
+      {/* Messages Area */}
+      <main className="flex-1 overflow-y-auto px-6 py-6 flex flex-col gap-4 no-scrollbar">
+        {/* Error Banner */}
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm font-medium">
+            {error}
           </div>
-        </div>
+        )}
 
-        <div className="relative bg-white p-6 rounded-bubble shadow-soft flex flex-col gap-4 border border-white/50">
-          <div className="flex items-start justify-between">
-            <span className="text-[10px] font-black text-primary uppercase tracking-widest">Question 1/5</span>
-            <div className="w-6 h-6 rounded-full three-d-element"></div>
-          </div>
-          <p className="text-[15px] font-bold text-[#1a1b23]">What is your primary goal for this session?</p>
-          <div className="flex flex-wrap gap-2">
-            <button className="px-4 py-2 rounded-full bg-charcoal text-white text-xs font-bold">Deep Mastery</button>
-            <button className="px-4 py-2 rounded-full border border-gray-100 text-xs font-bold opacity-60">Quick Review</button>
-            <button className="px-4 py-2 rounded-full border border-gray-100 text-xs font-bold opacity-60">Exam Prep</button>
-          </div>
-        </div>
-
-        <div className="relative bg-white p-8 rounded-bubble shadow-soft text-center flex flex-col items-center gap-4 border border-white/50 mt-auto">
-          <div className="w-12 h-12 rounded-full three-d-element flex items-center justify-center mb-1">
-            <span className="material-symbols-outlined text-primary text-2xl">auto_awesome</span>
-          </div>
-          <button 
-            onClick={handleNext}
-            className="w-full bg-charcoal text-white rounded-full py-4 text-[15px] font-extrabold shadow-lg active:scale-95 transition-all"
+        {/* Messages */}
+        {messages.map((message, index) => (
+          <div
+            key={index}
+            className={`flex flex-col gap-2 max-w-[85%] ${
+              message.role === 'user' ? 'self-end' : 'self-start'
+            }`}
           >
-            {isOnboarding ? 'Start Crafting Course' : 'Generate New Path'}
-          </button>
-          <p className="text-[11px] font-medium text-black/40 px-4">
-            {isOnboarding 
-              ? "Or enter more information to customize your course further."
-              : "AI will use your previous performance data to balance the difficulty."}
-          </p>
-        </div>
+            <div
+              className={`relative p-4 rounded-bubble shadow-soft border border-white/50 ${
+                message.role === 'user'
+                  ? 'bg-charcoal text-white rounded-tr-none'
+                  : 'bg-white text-[#1a1b23] rounded-tl-none'
+              }`}
+            >
+              <p className="text-[15px] font-semibold whitespace-pre-wrap">{message.content}</p>
+              {message.role === 'assistant' && index === 0 && (
+                <div className="absolute -right-2 -top-2 w-6 h-6 rounded-full three-d-element opacity-80"></div>
+              )}
+            </div>
+          </div>
+        ))}
+
+        {/* Loading indicator */}
+        {loading && messages.length > 0 && (
+          <div className="flex flex-col gap-2 max-w-[85%] self-start">
+            <div className="relative bg-white p-4 rounded-bubble rounded-tl-none shadow-soft border border-white/50">
+              <div className="flex gap-1">
+                <span className="w-2 h-2 bg-gray-300 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
+                <span className="w-2 h-2 bg-gray-300 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
+                <span className="w-2 h-2 bg-gray-300 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Options */}
+        {options.length > 0 && !loading && (
+          <div className="relative bg-white p-5 rounded-bubble shadow-soft flex flex-col gap-3 border border-white/50 mt-2">
+            <span className="text-[10px] font-black text-primary uppercase tracking-widest">选择一个选项</span>
+            <div className="flex flex-wrap gap-2">
+              {options.map((option, index) => (
+                <button
+                  key={index}
+                  onClick={() => handleOptionClick(option)}
+                  disabled={loading}
+                  className={`px-4 py-2.5 rounded-full text-sm font-bold transition-all ${
+                    loading
+                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                      : 'bg-charcoal text-white hover:bg-charcoal/90 active:scale-95'
+                  }`}
+                >
+                  {option}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div ref={messagesEndRef} />
       </main>
 
+      {/* Input Area */}
       <div className="p-6 bg-background-light/95 backdrop-blur-xl border-t border-gray-100">
         <div className="relative flex items-center">
-          <input className="w-full bg-white h-[60px] pl-6 pr-16 rounded-input border-none shadow-soft text-[15px] placeholder:text-black/20 font-medium" placeholder="Ask AI anything..." type="text"/>
-          <button className="absolute right-2 w-11 h-11 bg-charcoal text-white rounded-full flex items-center justify-center active:scale-90 shadow-lg">
-            <span className="material-symbols-outlined font-bold text-xl">arrow_upward</span>
+          <input
+            className="w-full bg-white h-[60px] pl-6 pr-16 rounded-input border-none shadow-soft text-[15px] placeholder:text-black/20 font-medium disabled:opacity-50"
+            placeholder="输入你的回答..."
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyPress={handleKeyPress}
+            disabled={loading}
+          />
+          <button
+            onClick={() => handleSend()}
+            disabled={loading || !input.trim()}
+            className={`absolute right-2 w-11 h-11 rounded-full flex items-center justify-center shadow-lg transition-all ${
+              loading || !input.trim()
+                ? 'bg-gray-300 cursor-not-allowed'
+                : 'bg-charcoal text-white active:scale-90'
+            }`}
+          >
+            {loading ? (
+              <span className="material-symbols-outlined font-bold text-xl animate-spin">progress_activity</span>
+            ) : (
+              <span className="material-symbols-outlined font-bold text-xl">arrow_upward</span>
+            )}
           </button>
         </div>
       </div>

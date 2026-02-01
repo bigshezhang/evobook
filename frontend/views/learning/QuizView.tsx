@@ -1,90 +1,209 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../../components/Header';
 import RewardModal from '../../components/RewardModal';
 import Mascot from '../../components/Mascot';
+import { 
+  generateQuiz, 
+  STORAGE_KEYS, 
+  CourseMapGenerateResponse,
+  QuizGenerateResponse,
+  QuizQuestion
+} from '../../utils/api';
+
+interface UserAnswer {
+  questionIdx: number;
+  selected: string | string[] | boolean | null;
+}
 
 const QuizView: React.FC = () => {
   const navigate = useNavigate();
   const [showGreeting, setShowGreeting] = useState(true);
   const [submitted, setSubmitted] = useState(false);
   const [showReward, setShowReward] = useState(false);
-  const [quizStats, setQuizStats] = useState({ correct: 0, total: 3, gold: 0 });
-
-  // 模拟从学习轨迹中提取的知识点
-  const assessmentNodes = [
-    { label: 'DNA Architecture', icon: 'account_tree' },
-    { label: 'Nitrogenous Bases', icon: 'Science' },
-    { label: 'Replication Logic', icon: 'content_copy' }
-  ];
-
+  const [quizStats, setQuizStats] = useState({ correct: 0, total: 0, gold: 0 });
+  
+  // Loading and error states
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  
+  // Quiz data from API
+  const [quizData, setQuizData] = useState<QuizGenerateResponse | null>(null);
+  const [userAnswers, setUserAnswers] = useState<UserAnswer[]>([]);
+  
   const MASCOT_SRC = "https://lh3.googleusercontent.com/aida-public/AB6AXuCnRMVMv3VQCalsOm2RCkci09ous1fHuESh9sMZOzls1ru6VuE5HAlxYcKU6AswyAOsq12l9kr0vdwHeD8hswbrsxz4xZRK5oDlUPQMkmsbBJks_RVJ7JpcWNSLbPi4ISfkMH__idCAOv8RTmRLMNFkIzfyPwb3vJzSQ628ux_fwHE7XdjKa0LbGIrGOhhEmLaWRqfg-nPFNVhkih46KYodq5ipAZkQGeaLwK99YG7Az-UcKbMDqfxhd6RQqOg4faz2K3kd90U7PsXV";
 
-  // 答案状态管理
-  const [q1Selected, setQ1Selected] = useState<number | null>(null);
-  const [q2Selected, setQ2Selected] = useState<number[]>([]);
-  const [q3Selected, setQ3Selected] = useState<boolean | null>(null);
+  // Load quiz from API
+  useEffect(() => {
+    const loadQuiz = async () => {
+      setLoading(true);
+      setError(null);
+      
+      try {
+        // Get learned topics from localStorage
+        const learnedTopicsStr = localStorage.getItem(STORAGE_KEYS.LEARNED_TOPICS);
+        const courseMapStr = localStorage.getItem(STORAGE_KEYS.COURSE_MAP);
+        
+        if (!learnedTopicsStr || !courseMapStr) {
+          setError('没有找到学习记录，请先完成一些学习内容');
+          return;
+        }
+        
+        const learnedTopics = JSON.parse(learnedTopicsStr);
+        const courseMap: CourseMapGenerateResponse = JSON.parse(courseMapStr);
+        
+        if (learnedTopics.length === 0) {
+          setError('请先完成一些学习内容');
+          return;
+        }
+        
+        // Call API
+        const response = await generateQuiz({
+          language: 'zh',
+          mode: courseMap.map_meta.mode,
+          learned_topics: learnedTopics,
+        });
+        
+        setQuizData(response);
+        
+        // Initialize user answers
+        setUserAnswers(response.questions.map((_, idx) => ({
+          questionIdx: idx,
+          selected: null,
+        })));
+        
+      } catch (err) {
+        console.error('Failed to load quiz:', err);
+        setError(err instanceof Error ? err.message : '加载测验失败');
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    loadQuiz();
+  }, []);
 
-  // 正确答案定义
-  const q1Correct: number = 0;
-  const q2Correct: number[] = [0, 2, 3]; 
-  const q3Correct: boolean = false;
-
-  const handleQ2Toggle = (idx: number) => {
+  const handleSingleSelect = (questionIdx: number, optionIdx: number) => {
     if (submitted) return;
-    setQ2Selected(prev => 
-      prev.includes(idx) ? prev.filter(i => i !== idx) : [...prev, idx]
-    );
+    setUserAnswers(prev => prev.map(a => 
+      a.questionIdx === questionIdx 
+        ? { ...a, selected: quizData!.questions[questionIdx].options![optionIdx] }
+        : a
+    ));
+  };
+
+  const handleMultiSelect = (questionIdx: number, optionIdx: number) => {
+    if (submitted) return;
+    const option = quizData!.questions[questionIdx].options![optionIdx];
+    setUserAnswers(prev => prev.map(a => {
+      if (a.questionIdx !== questionIdx) return a;
+      const current = (a.selected as string[]) || [];
+      const newSelected = current.includes(option)
+        ? current.filter(o => o !== option)
+        : [...current, option];
+      return { ...a, selected: newSelected };
+    }));
+  };
+
+  const handleBooleanSelect = (questionIdx: number, value: boolean) => {
+    if (submitted) return;
+    setUserAnswers(prev => prev.map(a => 
+      a.questionIdx === questionIdx 
+        ? { ...a, selected: value }
+        : a
+    ));
   };
 
   const calculateScore = () => {
-    let score = 0;
-    if (q1Selected === q1Correct) score++;
-    const isQ2Correct = q2Selected.length === q2Correct.length && 
-                        q2Selected.every(val => q2Correct.includes(val));
-    if (isQ2Correct) score++;
-    if (q3Selected === q3Correct) score++;
-
-    const gold = score * 100;
-    setQuizStats({ correct: score, total: 3, gold: gold });
+    if (!quizData) return;
+    
+    let correct = 0;
+    quizData.questions.forEach((q, idx) => {
+      const userAnswer = userAnswers[idx].selected;
+      
+      if (q.qtype === 'single') {
+        if (userAnswer === q.answer) correct++;
+      } else if (q.qtype === 'multi') {
+        const correctAnswers = q.answers || [];
+        const userAnswersArr = (userAnswer as string[]) || [];
+        const isCorrect = correctAnswers.length === userAnswersArr.length &&
+          correctAnswers.every(a => userAnswersArr.includes(a));
+        if (isCorrect) correct++;
+      } else if (q.qtype === 'boolean') {
+        const correctBool = q.answer?.toLowerCase() === 'true';
+        if (userAnswer === correctBool) correct++;
+      }
+    });
+    
+    const gold = correct * 100;
+    setQuizStats({ correct, total: quizData.questions.length, gold });
   };
 
-  const getOptionClasses = (type: 'q1' | 'q2', idx: number) => {
-    const isSelected = type === 'q1' ? q1Selected === idx : q2Selected.includes(idx);
-    const isCorrect = type === 'q1' ? idx === q1Correct : q2Correct.includes(idx);
+  const getOptionClasses = (question: QuizQuestion, questionIdx: number, optionIdx: number) => {
+    const option = question.options![optionIdx];
+    const userAnswer = userAnswers[questionIdx]?.selected;
+    const isSelected = question.qtype === 'multi'
+      ? ((userAnswer as string[]) || []).includes(option)
+      : userAnswer === option;
+    
     let baseStyles = "border-2 transition-all duration-200 cursor-pointer";
 
     if (!submitted) {
       return `${baseStyles} ${isSelected ? "border-[#0d7ff2] bg-[#e7f3ff]/40" : "border-slate-100"}`;
     }
 
+    const isCorrect = question.qtype === 'multi'
+      ? (question.answers || []).includes(option)
+      : question.answer === option;
+    
     let stateStyles = "";
     if (isCorrect) stateStyles = "border-emerald-500 bg-emerald-50/50";
     else if (isSelected && !isCorrect) stateStyles = "border-rose-500 bg-rose-50/50";
     else stateStyles = "border-slate-100 opacity-60";
 
-    const userChoiceHighlight = (type === 'q2' && isSelected) ? "ring-2 ring-inset ring-black/80" : "";
-    return `${baseStyles} ${stateStyles} ${userChoiceHighlight}`;
+    return `${baseStyles} ${stateStyles}`;
   };
 
-  const getIconClasses = (type: 'q1' | 'q2', idx: number) => {
-    const isSelected = type === 'q1' ? q1Selected === idx : q2Selected.includes(idx);
-    const isCorrect = type === 'q1' ? idx === q1Correct : q2Correct.includes(idx);
-    if (!submitted) return isSelected ? "border-[#0d7ff2]" : "border-slate-300";
-    if (isCorrect) return "border-emerald-500 bg-emerald-500";
-    if (isSelected && !isCorrect) return "border-rose-500 bg-rose-500";
-    return "border-slate-300";
-  };
-
-  const getTFClasses = (value: boolean) => {
-    const isSelected = q3Selected === value;
-    const isCorrect = value === q3Correct;
+  const getTFClasses = (questionIdx: number, value: boolean) => {
+    const userAnswer = userAnswers[questionIdx]?.selected;
+    const isSelected = userAnswer === value;
+    const question = quizData!.questions[questionIdx];
+    const correctBool = question.answer?.toLowerCase() === 'true';
+    const isCorrect = value === correctBool;
+    
     if (!submitted) return isSelected ? "border-[#0d7ff2] bg-[#e7f3ff]/50 translate-y-0.5" : "border-slate-100 bg-white";
     if (isCorrect) return "border-emerald-500 bg-emerald-50/50 translate-y-0.5";
     if (isSelected && !isCorrect) return "border-rose-500 bg-rose-50/50 translate-y-0.5";
     return "border-slate-100 opacity-60";
   };
+
+  // Loading state
+  if (loading) {
+    return (
+      <div className="flex flex-col h-screen bg-white items-center justify-center">
+        <div className="animate-spin w-12 h-12 border-4 border-secondary border-t-transparent rounded-full"></div>
+        <p className="mt-4 text-slate-500 font-medium">AI 正在生成测验...</p>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error || !quizData) {
+    return (
+      <div className="flex flex-col h-screen bg-white items-center justify-center px-6">
+        <span className="material-symbols-rounded text-rose-500 text-5xl mb-4">error</span>
+        <p className="text-rose-600 font-bold text-lg mb-2">加载失败</p>
+        <p className="text-slate-500 text-center mb-6">{error || '未知错误'}</p>
+        <button 
+          onClick={() => navigate('/knowledge-tree')}
+          className="px-6 py-3 bg-secondary text-white rounded-full font-bold"
+        >
+          返回课程
+        </button>
+      </div>
+    );
+  }
 
   if (showGreeting) {
     return (
@@ -104,17 +223,17 @@ const QuizView: React.FC = () => {
             Time to test <br /> your progress!
           </h1>
           <p className="text-slate-500 text-[14px] font-medium leading-relaxed mb-8">
-            Based on your recent study of <span className="text-slate-900 font-bold">Molecular Biology</span>, I've curated a quick check-in to reinforce your memory.
+            {quizData.greeting.message}
           </p>
 
           <div className="w-full space-y-3 mb-12">
             <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400 text-left pl-2">Topics Included:</h4>
-            {assessmentNodes.map((node, i) => (
+            {quizData.greeting.topics_included.map((topic, i) => (
               <div key={i} className="flex items-center gap-4 bg-slate-50 p-4 rounded-3xl border border-slate-100 shadow-sm animate-in fade-in slide-in-from-left-4" style={{ animationDelay: `${i * 150}ms` }}>
                 <div className="w-10 h-10 bg-white rounded-2xl flex items-center justify-center shadow-sm">
-                  <span className="material-symbols-rounded text-secondary text-xl">{node.icon}</span>
+                  <span className="material-symbols-rounded text-secondary text-xl">school</span>
                 </div>
-                <span className="text-[13px] font-bold text-slate-800 tracking-tight">{node.label}</span>
+                <span className="text-[13px] font-bold text-slate-800 tracking-tight">{topic}</span>
               </div>
             ))}
           </div>
@@ -135,120 +254,62 @@ const QuizView: React.FC = () => {
     <div className="relative flex flex-col h-screen bg-white font-display overflow-hidden">
       <Header 
         onBack={() => navigate('/knowledge-tree')}
-        progress={{ current: 12, total: 20 }}
+        progress={{ current: 1, total: quizData.questions.length }}
       />
 
       <main className="flex-1 overflow-y-auto no-scrollbar px-5 pt-8 pb-32 space-y-8 animate-in fade-in duration-500">
-        <section className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-          <div className="flex items-start gap-3">
-            <div className="size-8 rounded-xl bg-[#e7f3ff] shadow-sm flex items-center justify-center flex-shrink-0 mt-0.5">
-              <span className="material-symbols-rounded text-[#0d7ff2] text-xl" style={{ fontVariationSettings: "'FILL' 1" }}>radio_button_checked</span>
-            </div>
-            <div className="flex-1">
-              <p className="text-[14px] font-bold mb-3 leading-snug text-slate-900">
-                What is the primary function of DNA in living organisms?
-              </p>
-              <div className="flex flex-col gap-2">
-                {[
-                  "Long-term storage of genetic information",
-                  "Catalyzing chemical reactions",
-                  "Providing structural support to cells"
-                ].map((option, idx) => (
-                  <div 
-                    key={idx} 
-                    onClick={() => !submitted && setQ1Selected(idx)}
-                    className={`flex items-center gap-3 rounded-xl px-4 py-3 ${getOptionClasses('q1', idx)}`}
-                  >
-                    <div className={`size-4 rounded-full border-2 flex items-center justify-center transition-colors ${getIconClasses('q1', idx)}`}>
-                      <div className={`size-2 rounded-full transition-opacity ${
-                        submitted ? 'bg-white' : 'bg-[#0d7ff2]'
-                      } ${q1Selected === idx || (submitted && idx === q1Correct) ? 'opacity-100' : 'opacity-0'}`}></div>
-                    </div>
-                    <span className={`text-sm font-semibold ${submitted && idx === q1Correct ? 'text-emerald-700' : 'text-slate-700'}`}>{option}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <div className="h-px bg-slate-100 mx-2"></div>
-
-        <section className="animate-in fade-in slide-in-from-bottom-4 duration-500 delay-100">
-          <div className="flex items-start gap-3">
-            <div className="size-8 rounded-xl bg-[#e7f3ff] shadow-sm flex items-center justify-center flex-shrink-0 mt-0.5">
-              <span className="material-symbols-rounded text-[#0d7ff2] text-xl" style={{ fontVariationSettings: "'FILL' 1" }}>checklist</span>
-            </div>
-            <div className="flex-1">
-              <p className="text-[14px] font-bold mb-3 leading-snug text-slate-900">
-                Which of the following are nitrogenous bases found in DNA?
-              </p>
-              <div className="grid grid-cols-2 gap-2">
-                {["Adenine", "Uracil", "Guanine", "Cytosine"].map((base, idx) => (
-                  <div 
-                    key={idx} 
-                    onClick={() => handleQ2Toggle(idx)}
-                    className={`flex items-center justify-between rounded-xl px-4 py-3 ${getOptionClasses('q2', idx)}`}
-                  >
-                    <span className={`text-sm font-semibold ${submitted && q2Correct.includes(idx) ? 'text-emerald-700' : 'text-slate-700'}`}>{base}</span>
-                    <div className={`size-4 rounded-md border-2 flex items-center justify-center transition-all ${getIconClasses('q2', idx)}`}>
-                      <span className="material-symbols-rounded text-white text-[12px] font-bold">
-                        { (q2Selected.includes(idx) || (submitted && q2Correct.includes(idx))) ? 'check' : '' }
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <div className="h-px bg-slate-100 mx-2"></div>
-
-        <section className="animate-in fade-in slide-in-from-bottom-4 duration-500 delay-200 pb-10">
-          <div className="flex items-start gap-3">
-            <div className="size-8 rounded-xl bg-[#e7f3ff] shadow-sm flex items-center justify-center flex-shrink-0 mt-0.5">
-              <span className="material-symbols-rounded text-[#0d7ff2] text-xl" style={{ fontVariationSettings: "'FILL' 1" }}>bolt</span>
-            </div>
-            <div className="flex-1">
-              <p className="text-[14px] font-bold mb-3 leading-snug text-slate-900">
-                DNA replication occurs in a conservative manner where the original helix remains intact.
-              </p>
-              <div className="grid grid-cols-2 gap-2">
-                <div 
-                  onClick={() => !submitted && setQ3Selected(true)}
-                  className={`h-14 rounded-xl border-2 flex items-center justify-center gap-2 shadow-sm transition-all duration-300 cursor-pointer ${getTFClasses(true)}`}
-                >
-                  <div className={`size-6 rounded-full flex items-center justify-center ${
-                    submitted && q3Correct ? 'bg-emerald-100' : 'bg-[#e7f3ff]'
-                  }`}>
-                    <span className={`material-symbols-rounded text-sm font-bold ${
-                      submitted && q3Correct ? 'text-emerald-600' : 'text-[#0d7ff2]'
-                    }`}>{ (q3Selected === true || (submitted && q3Correct)) ? 'done' : '' }</span>
-                  </div>
-                  <span className={`font-bold text-[10px] tracking-wider ${
-                    submitted && q3Correct ? 'text-emerald-700' : 'text-[#0d7ff2]'
-                  }`}>TRUE</span>
+        {quizData.questions.map((question, qIdx) => (
+          <React.Fragment key={qIdx}>
+            {qIdx > 0 && <div className="h-px bg-slate-100 mx-2"></div>}
+            
+            <section className="animate-in fade-in slide-in-from-bottom-4 duration-500" style={{ animationDelay: `${qIdx * 100}ms` }}>
+              <div className="flex items-start gap-3">
+                <div className="size-8 rounded-xl bg-[#e7f3ff] shadow-sm flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <span className="material-symbols-rounded text-[#0d7ff2] text-xl" style={{ fontVariationSettings: "'FILL' 1" }}>
+                    {question.qtype === 'single' ? 'radio_button_checked' : 
+                     question.qtype === 'multi' ? 'checklist' : 'bolt'}
+                  </span>
                 </div>
-                <div 
-                  onClick={() => !submitted && setQ3Selected(false)}
-                  className={`h-14 rounded-xl border-2 flex items-center justify-center gap-2 shadow-sm transition-all duration-300 cursor-pointer ${getTFClasses(false)}`}
-                >
-                  <div className={`size-6 rounded-full flex items-center justify-center ${
-                    submitted && !q3Correct ? 'bg-emerald-100' : 'bg-[#e7f3ff]'
-                  }`}>
-                    <span className={`material-symbols-rounded text-sm font-bold ${
-                      submitted && !q3Correct ? 'text-emerald-600' : 'text-[#0d7ff2]'
-                    }`}>{ (q3Selected === false || (submitted && !q3Correct)) ? 'done' : '' }</span>
-                  </div>
-                  <span className={`font-bold text-[10px] tracking-wider ${
-                    submitted && !q3Correct ? 'text-emerald-700' : 'text-[#0d7ff2]'
-                  }`}>FALSE</span>
+                <div className="flex-1">
+                  <p className="text-[14px] font-bold mb-3 leading-snug text-slate-900">
+                    {question.prompt}
+                  </p>
+                  
+                  {question.qtype === 'boolean' ? (
+                    <div className="grid grid-cols-2 gap-2">
+                      {[true, false].map((value) => (
+                        <div 
+                          key={String(value)}
+                          onClick={() => handleBooleanSelect(qIdx, value)}
+                          className={`h-14 rounded-xl border-2 flex items-center justify-center gap-2 shadow-sm transition-all duration-300 cursor-pointer ${getTFClasses(qIdx, value)}`}
+                        >
+                          <span className={`font-bold text-[10px] tracking-wider text-[#0d7ff2]`}>
+                            {value ? 'TRUE' : 'FALSE'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className={question.qtype === 'multi' ? 'grid grid-cols-2 gap-2' : 'flex flex-col gap-2'}>
+                      {question.options?.map((option, optIdx) => (
+                        <div 
+                          key={optIdx}
+                          onClick={() => question.qtype === 'single' 
+                            ? handleSingleSelect(qIdx, optIdx) 
+                            : handleMultiSelect(qIdx, optIdx)
+                          }
+                          className={`flex items-center gap-3 rounded-xl px-4 py-3 ${getOptionClasses(question, qIdx, optIdx)}`}
+                        >
+                          <span className="text-sm font-semibold text-slate-700">{option}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
-            </div>
-          </div>
-        </section>
+            </section>
+          </React.Fragment>
+        ))}
       </main>
 
       <div className="absolute bottom-6 left-0 right-0 px-6 z-40 pointer-events-none">
@@ -260,26 +321,17 @@ const QuizView: React.FC = () => {
                 setShowReward(true);
               } else {
                 setSubmitted(true);
+                calculateScore();
               }
             }}
             className="flex-1 h-12 bg-black text-white rounded-full flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-all"
           >
             <span className="text-[14px] font-extrabold tracking-tight">
-              {submitted ? 'Submit' : 'Submit Answers'}
+              {submitted ? '查看结果' : '提交答案'}
             </span>
             <span className="material-symbols-rounded text-[18px]">
               {submitted ? 'arrow_forward' : 'send'}
             </span>
-          </button>
-          
-          <button 
-            className="w-12 h-12 bg-white rounded-full shadow-sm border border-black/5 flex items-center justify-center active:scale-90 transition-all group relative overflow-visible"
-          >
-            <div className="absolute inset-0 bg-blue-50 opacity-0 group-hover:opacity-100 transition-opacity rounded-full"></div>
-            <span className="material-symbols-rounded text-slate-900 text-[22px] relative z-10">refresh</span>
-            <div className="absolute -top-3 -right-3 px-2 py-0.5 bg-amber-400 text-black text-[9px] font-black rounded-full border-2 border-white shadow-sm whitespace-nowrap z-20">
-              -50G
-            </div>
           </button>
         </div>
       </div>

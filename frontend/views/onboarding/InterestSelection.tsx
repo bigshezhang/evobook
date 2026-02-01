@@ -2,6 +2,11 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+// Storage key for selected topic
+export const STORAGE_KEY_SELECTED_TOPIC = 'evo_selected_topic';
+// Storage key for session (imported from AssessmentChat for consistency)
+const STORAGE_KEY_SESSION_ID = 'evo_assessment_session_id';
+
 const interests = [
   { id: 'ai', label: 'AI', icon: 'smart_toy', color: 'bg-violet-200' },
   { id: 'design', label: 'Design', icon: 'palette', color: 'bg-blue-200' },
@@ -16,10 +21,64 @@ const interests = [
 
 const InterestSelection: React.FC = () => {
   const navigate = useNavigate();
-  const [selected, setSelected] = useState<string[]>([]);
+  // Single selection mode: only one interest can be selected at a time
+  const [selected, setSelected] = useState<string | null>(null);
+  const [topicInput, setTopicInput] = useState('');
 
-  const toggle = (id: string) => {
-    setSelected(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+  // Mutual exclusion logic:
+  // - If topic input has text, interest buttons are disabled
+  // - If an interest is selected, input is disabled and cleared
+  const hasTopicInput = topicInput.trim().length > 0;
+  const hasSelectedInterest = selected !== null;
+
+  const handleInterestClick = (id: string) => {
+    // If input has text, buttons are disabled - shouldn't reach here
+    if (hasTopicInput) return;
+
+    // Toggle selection: click selected interest to deselect
+    if (selected === id) {
+      setSelected(null);
+    } else {
+      // Select new interest, clear any input
+      setSelected(id);
+      setTopicInput('');
+    }
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // If an interest is selected, input is disabled - shouldn't reach here
+    if (hasSelectedInterest) return;
+
+    setTopicInput(e.target.value);
+  };
+
+  // Determine the topic to save
+  const getSelectedTopic = (): string | null => {
+    if (hasSelectedInterest) {
+      const interest = interests.find(i => i.id === selected);
+      return interest?.label || null;
+    }
+    if (hasTopicInput) {
+      return topicInput.trim();
+    }
+    return null;
+  };
+
+  const canProceed = hasSelectedInterest || hasTopicInput;
+
+  const handleNextStep = () => {
+    const topic = getSelectedTopic();
+    if (!topic) return;
+
+    // CRITICAL: Clear any existing session data before starting a new assessment
+    // This ensures a fresh start and prevents flash of old content
+    localStorage.removeItem(STORAGE_KEY_SESSION_ID);
+    
+    // Save selected topic to localStorage for AssessmentChat to read
+    localStorage.setItem(STORAGE_KEY_SELECTED_TOPIC, topic);
+
+    // Navigate to AssessmentChat
+    navigate('/assessment');
   };
 
   return (
@@ -29,28 +88,50 @@ const InterestSelection: React.FC = () => {
           Which world <br /> do you want to <br /> explore?
         </h1>
         <div className="relative">
-          <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">search</span>
+          <span className={`material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 ${hasSelectedInterest ? 'text-gray-300' : 'text-gray-400'}`}>edit</span>
           <input 
             type="text" 
-            placeholder="Search interests..." 
-            className="w-full pl-12 pr-4 py-4 bg-white border-none rounded-2xl shadow-sm text-lg focus:ring-1 focus:ring-black/10"
+            value={topicInput}
+            onChange={handleInputChange}
+            disabled={hasSelectedInterest}
+            placeholder={hasSelectedInterest ? `Selected: ${interests.find(i => i.id === selected)?.label}` : "Enter your learning topic (e.g., Python, Machine Learning)..."} 
+            className={`w-full pl-12 pr-4 py-4 bg-white border-none rounded-2xl shadow-sm text-lg focus:ring-2 focus:ring-black/20 transition-all ${
+              hasSelectedInterest ? 'opacity-50 cursor-not-allowed' : ''
+            }`}
           />
         </div>
       </header>
 
       <main className="flex-1 overflow-y-auto px-8 no-scrollbar pb-32">
         <div className="grid grid-cols-3 gap-3">
-          {interests.map(item => (
-            <button 
-              key={item.id}
-              onClick={() => toggle(item.id)}
-              className={`h-24 rounded-2xl flex flex-col items-center justify-center transition-all ${item.color} ${selected.includes(item.id) ? 'ring-2 ring-black' : 'opacity-90'}`}
-            >
-              <span className="material-symbols-outlined text-3xl mb-1">{item.icon}</span>
-              <span className="font-bold text-sm">{item.label}</span>
-            </button>
-          ))}
-          <button className="h-24 rounded-2xl bg-white border-2 border-dashed border-gray-200 flex flex-col items-center justify-center opacity-60">
+          {interests.map(item => {
+            const isSelected = selected === item.id;
+            const isDisabled = hasTopicInput;
+            
+            return (
+              <button 
+                key={item.id}
+                onClick={() => handleInterestClick(item.id)}
+                disabled={isDisabled}
+                className={`h-24 rounded-2xl flex flex-col items-center justify-center transition-all ${item.color} ${
+                  isSelected 
+                    ? 'ring-2 ring-black scale-105' 
+                    : isDisabled 
+                      ? 'opacity-40 cursor-not-allowed grayscale' 
+                      : 'opacity-90 hover:opacity-100'
+                }`}
+              >
+                <span className="material-symbols-outlined text-3xl mb-1">{item.icon}</span>
+                <span className="font-bold text-sm">{item.label}</span>
+              </button>
+            );
+          })}
+          <button 
+            disabled={hasTopicInput}
+            className={`h-24 rounded-2xl bg-white border-2 border-dashed border-gray-200 flex flex-col items-center justify-center transition-all ${
+              hasTopicInput ? 'opacity-30 cursor-not-allowed' : 'opacity-60'
+            }`}
+          >
             <span className="material-symbols-outlined text-3xl mb-1">add</span>
             <span className="font-bold text-sm">Custom</span>
           </button>
@@ -59,14 +140,17 @@ const InterestSelection: React.FC = () => {
 
       <footer className="absolute bottom-0 left-0 right-0 p-8 bg-white/80 backdrop-blur-md flex flex-col gap-6">
         <div className="flex items-center gap-4">
-          <span className="text-xs font-bold text-gray-400">1 / 3</span>
+          <span className="text-xs font-bold text-gray-400">1 / 2</span>
           <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
-            <div className="h-full bg-black rounded-full" style={{ width: '33.3%' }}></div>
+            <div className="h-full bg-black rounded-full" style={{ width: '50%' }}></div>
           </div>
         </div>
         <button 
-          onClick={() => navigate('/assessment')}
-          className="w-full h-16 rounded-full bg-black text-white font-black text-xl shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2"
+          onClick={handleNextStep}
+          disabled={!canProceed}
+          className={`w-full h-16 rounded-full text-white font-black text-xl shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2 ${
+            canProceed ? 'bg-black' : 'bg-gray-300 cursor-not-allowed'
+          }`}
         >
           Next Step
           <span className="material-symbols-outlined">arrow_forward</span>

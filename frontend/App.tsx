@@ -1,6 +1,19 @@
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
+
+// Reset localStorage when ?reset=1 is in URL
+const useResetOnParam = () => {
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('reset') === '1') {
+      localStorage.clear();
+      // Remove the reset param and reload
+      window.history.replaceState({}, '', window.location.pathname + window.location.hash);
+      window.location.reload();
+    }
+  }, []);
+};
 
 // Views
 import WelcomeView from './views/onboarding/WelcomeView';
@@ -23,6 +36,14 @@ import TravelBoard from './views/game/TravelBoard';
 import OutfitView from './views/game/OutfitView';
 import HomeShop from './views/game/HomeShop';
 
+// Wrapper component to force AssessmentChat remount on every navigation
+// This prevents flash of old content when re-entering the page
+const AssessmentChatWithKey: React.FC = () => {
+  const location = useLocation();
+  // Using location.key ensures component remounts on each navigation
+  return <AssessmentChat key={location.key} />;
+};
+
 // 简单的路由包装器，用于展示 QA 详情
 const QADetailRouteView: React.FC = () => {
   const navigate = useNavigate();
@@ -33,6 +54,8 @@ const QADetailRouteView: React.FC = () => {
 };
 
 const App: React.FC = () => {
+  useResetOnParam();
+  
   return (
     <HashRouter>
       <div className="max-w-md mx-auto min-h-screen bg-white shadow-xl relative overflow-x-hidden">
@@ -40,7 +63,7 @@ const App: React.FC = () => {
           {/* Onboarding Flow */}
           <Route path="/" element={<WelcomeView />} />
           <Route path="/interests" element={<InterestSelection />} />
-          <Route path="/assessment" element={<AssessmentChat />} />
+          <Route path="/assessment" element={<AssessmentChatWithKey />} />
           <Route path="/companion" element={<CompanionSelection />} />
           <Route path="/notifications" element={<NotificationPermission />} />
           <Route path="/generating" element={<GeneratingCourse />} />

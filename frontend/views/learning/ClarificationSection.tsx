@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import QADetailModal from './QADetailModal';
 import DeleteConfirmationModal from '../../components/DeleteConfirmationModal';
+import { getClarification, getQADetail, Language } from '../../utils/api';
 
 // 骨架屏动画组件：更精致的 Shimmer 效果
 const SkeletonLoader: React.FC = () => (
@@ -24,42 +25,73 @@ const SkeletonLoader: React.FC = () => (
   </div>
 );
 
-interface ClarificationSectionProps {
-  pendingQuestions?: string[];
+// QA item type definition
+export interface QAItem {
+  id: number;
+  question: string;
+  answer: string;
+  detail: {
+    title: string;
+    content: string[];
+    visualLabel: string;
+  } | null;
 }
 
-const ClarificationSection: React.FC<ClarificationSectionProps> = ({ pendingQuestions = [] }) => {
+interface ClarificationSectionProps {
+  pendingQuestions?: string[];
+  initialQAList?: QAItem[];
+  pageMarkdown?: string;
+  language?: Language;
+  onNewQA?: (qa: QAItem) => void;
+}
+
+const ClarificationSection: React.FC<ClarificationSectionProps> = ({ 
+  pendingQuestions = [], 
+  initialQAList = [],
+  pageMarkdown = '',
+  language = 'en',
+  onNewQA
+}) => {
   const [selectedQA, setSelectedQA] = useState<any>(null);
-  const [qaList, setQaList] = useState([
-    {
-      id: 1,
-      question: "What is an activation function?",
-      answer: "It's a mathematical gate that decides if a neuron should \"fire\" or not. By adding non-linearity, it allows the network to learn complex relationships beyond simple straight lines.",
-      detail: {
-        title: "Deep Dive: Activation Functions",
-        content: [
-          "Activation functions are the mathematical \"gatekeepers\" of a neural network.",
-          "Popular functions include ReLU (Rectified Linear Unit), which outputs the input directly if it's positive, and Sigmoid, which squashes values between 0 and 1."
-        ],
-        visualLabel: "Non-Linear Transformation"
-      }
-    },
-    {
-      id: 2,
-      question: "How many layers are optimal?",
-      answer: "There's no fixed rule, but typically more layers allow for more abstraction. The \"optimal\" count is found through hyperparameter tuning and cross-validation.",
-      detail: {
-        title: "Deep Dive: Network Depth",
-        content: [
-          "Network depth refers to the number of hidden layers between input and output.",
-          "Too many layers can lead to 'vanishing gradients', where the signal becomes too weak."
-        ],
-        visualLabel: "Hierarchical Abstraction"
-      }
-    }
-  ]);
+  const [qaList, setQaList] = useState<QAItem[]>(initialQAList);
+  const [loadingDetail, setLoadingDetail] = useState<number | null>(null);
 
   const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null);
+
+  // Handle clicking "Details" button - fetch detail from API if not cached
+  const handleShowDetail = async (item: QAItem) => {
+    if (item.detail) {
+      setSelectedQA(item.detail);
+      return;
+    }
+    
+    // Fetch detail from API
+    setLoadingDetail(item.id);
+    try {
+      const response = await getQADetail({
+        language,
+        qa_title: item.question,
+        qa_short_answer: item.answer
+      });
+      
+      const detail = {
+        title: response.title,
+        content: response.body_markdown.split('\n\n').filter(p => p.trim()),
+        visualLabel: response.image?.placeholder || 'Detailed Explanation'
+      };
+      
+      // Update qaList with fetched detail
+      setQaList(prev => prev.map(q => 
+        q.id === item.id ? { ...q, detail } : q
+      ));
+      
+      setSelectedQA(detail);
+    } catch (error) {
+      console.error('Failed to fetch QA detail:', error);
+    } finally {
+      setLoadingDetail(null);
+    }
+  };
 
   const handleDeleteConfirm = () => {
     if (deleteTargetId !== null) {
@@ -67,6 +99,18 @@ const ClarificationSection: React.FC<ClarificationSectionProps> = ({ pendingQues
       setDeleteTargetId(null);
     }
   };
+  
+  // Add new QA from parent component (e.g., when user asks a question)
+  const addQA = (qa: QAItem) => {
+    setQaList(prev => [...prev, qa]);
+  };
+  
+  // Expose addQA method via ref or callback
+  React.useEffect(() => {
+    if (initialQAList.length > 0 && qaList.length === 0) {
+      setQaList(initialQAList);
+    }
+  }, [initialQAList]);
 
   return (
     <div className="mt-2 pt-2 border-t border-black/[0.03] dark:border-white/[0.05]">
@@ -80,10 +124,13 @@ const ClarificationSection: React.FC<ClarificationSectionProps> = ({ pendingQues
               </h4>
               <div className="flex items-center gap-2 flex-shrink-0">
                 <button 
-                  onClick={() => setSelectedQA(item.detail)}
-                  className="px-3 h-7 flex items-center justify-center rounded-full bg-[#1A1B23] text-white active:scale-95 transition-all shadow-sm cursor-pointer"
+                  onClick={() => handleShowDetail(item)}
+                  disabled={loadingDetail === item.id}
+                  className="px-3 h-7 flex items-center justify-center rounded-full bg-[#1A1B23] text-white active:scale-95 transition-all shadow-sm cursor-pointer disabled:opacity-50"
                 >
-                  <span className="text-[9px] font-black uppercase tracking-wider">Details</span>
+                  <span className="text-[9px] font-black uppercase tracking-wider">
+                    {loadingDetail === item.id ? 'Loading...' : 'Details'}
+                  </span>
                 </button>
                 <button 
                   onClick={() => setDeleteTargetId(item.id)}

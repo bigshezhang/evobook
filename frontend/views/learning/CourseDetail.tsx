@@ -1,22 +1,49 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../../components/Header';
 import SuccessFeedbackPill from '../../components/SuccessFeedbackPill';
+import { STORAGE_KEYS, CourseMapGenerateResponse, FinishData } from '../../utils/api';
 
 const CourseDetail: React.FC = () => {
   const navigate = useNavigate();
   
-  const [commitment, setCommitment] = useState<'Deep' | 'Fast' | 'Lite'>('Deep');
+  const [commitment, setCommitment] = useState<'Deep' | 'Fast' | 'Light'>('Fast');
   const [velocity, setVelocity] = useState<'15m' | '30m' | '45m' | '1h'>('30m');
   const [formats, setFormats] = useState<string[]>(['Video', 'Lab', 'Read']);
   const [showSuccess, setShowSuccess] = useState(false);
   const [isMainCourse, setIsMainCourse] = useState(false);
+  
+  // Course data from localStorage
+  const [courseName, setCourseName] = useState('Loading...');
+  const [topic, setTopic] = useState('');
+  const [knowledgeTags, setKnowledgeTags] = useState<string[]>([]);
+  
+  useEffect(() => {
+    // Load course data from localStorage
+    const courseMapStr = localStorage.getItem(STORAGE_KEYS.COURSE_MAP);
+    const onboardingDataStr = localStorage.getItem(STORAGE_KEYS.ONBOARDING_DATA);
+    
+    if (courseMapStr) {
+      const courseMap: CourseMapGenerateResponse = JSON.parse(courseMapStr);
+      setCourseName(courseMap.map_meta.course_name);
+      setCommitment(courseMap.map_meta.mode);
+      
+      // Extract knowledge tags from node titles
+      const tags = courseMap.nodes.slice(0, 6).map(n => n.title);
+      setKnowledgeTags(tags);
+    }
+    
+    if (onboardingDataStr) {
+      const onboardingData: FinishData = JSON.parse(onboardingDataStr);
+      setTopic(onboardingData.topic);
+    }
+  }, []);
 
   const commitmentTimes = {
     Deep: '20H',
     Fast: '10H',
-    Lite: '2H'
+    Light: '2H'
   };
 
   const toggleFormat = (format: string) => {
@@ -67,14 +94,14 @@ const CourseDetail: React.FC = () => {
               <div className="h-2 w-10 bg-white/30 rounded-full"></div>
             </div>
           </div>
-          <h2 className="text-[28px] font-black tracking-tight text-center leading-none text-charcoal">Neural Networks</h2>
-          <p className="mt-2 text-[10px] font-black text-slate-300 uppercase tracking-[0.2em] text-center">Mastering Intelligence</p>
+          <h2 className="text-[28px] font-black tracking-tight text-center leading-none text-charcoal">{courseName}</h2>
+          <p className="mt-2 text-[10px] font-black text-slate-300 uppercase tracking-[0.2em] text-center">{topic}</p>
         </section>
 
         <section className="mt-5">
           <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-4">Knowledge Graph</h3>
           <div className="flex flex-wrap gap-2.5">
-            {['Neurons', 'Backprop', 'Gradients', 'Weights', 'Biases', 'Layers'].map(tag => (
+            {knowledgeTags.map(tag => (
               <span key={tag} className="bg-[#F0EFFF] text-charcoal px-4 py-2 rounded-full text-[13px] font-bold border border-black/5">
                 {tag}
               </span>
@@ -88,7 +115,7 @@ const CourseDetail: React.FC = () => {
             <span className="text-[13px] font-black text-charcoal">{commitmentTimes[commitment]}</span>
           </div>
           <div className="bg-[#F3F4F6] p-1.5 rounded-2xl flex">
-            {(['Deep', 'Fast', 'Lite'] as const).map(item => (
+            {(['Deep', 'Fast', 'Light'] as const).map(item => (
               <button 
                 key={item}
                 onClick={() => setCommitment(item)}
