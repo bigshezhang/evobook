@@ -44,6 +44,13 @@ const AssessmentChatWithKey: React.FC = () => {
   return <AssessmentChat key={location.key} />;
 };
 
+// Wrapper component to force KnowledgeCard remount on every navigation
+// This prevents flash of old content when re-entering the page
+const KnowledgeCardWithKey: React.FC = () => {
+  const location = useLocation();
+  return <KnowledgeCard key={location.key} />;
+};
+
 // 简单的路由包装器，用于展示 QA 详情
 const QADetailRouteView: React.FC = () => {
   const navigate = useNavigate();
@@ -71,7 +78,7 @@ const App: React.FC = () => {
           {/* Main Learning Flow */}
           <Route path="/course-detail" element={<CourseDetail />} />
           <Route path="/knowledge-tree" element={<KnowledgeTree />} />
-          <Route path="/knowledge-card" element={<KnowledgeCard />} />
+          <Route path="/knowledge-card" element={<KnowledgeCardWithKey />} />
           <Route path="/quiz" element={<QuizView />} />
           <Route path="/qa-detail" element={<QADetailRouteView />} />
           

@@ -17,6 +17,320 @@ import {
 // Page break delimiter used in markdown from API
 const PAGE_BREAK_DELIMITER = '<EVOBK_PAGE_BREAK />';
 
+// ============================================================================
+// DSL Types and Interfaces
+// ============================================================================
+
+interface KeyItem {
+  title: string;
+  content: string;
+}
+
+interface KeyElementsData {
+  title: string;
+  items: KeyItem[];
+}
+
+interface ExpertTipData {
+  title: string;
+  content: string;
+}
+
+type ContentSegment = 
+  | { type: 'markdown'; content: string }
+  | { type: 'key_elements'; data: KeyElementsData }
+  | { type: 'expert_tip'; data: ExpertTipData };
+
+// ============================================================================
+// DSL Parser Functions
+// ============================================================================
+
+/**
+ * Parse DSL tags from markdown content and return structured segments
+ */
+function parseDSLContent(markdown: string): ContentSegment[] {
+  const segments: ContentSegment[] = [];
+  
+  // Combined regex to match all DSL tags
+  const dslPattern = /(<EVOBK_KEY_ELEMENTS\s+title="([^"]*)">([\s\S]*?)<\/EVOBK_KEY_ELEMENTS>)|(<EVOBK_EXPERT_TIP\s+title="([^"]*)">([\s\S]*?)<\/EVOBK_EXPERT_TIP>)/g;
+  
+  let lastIndex = 0;
+  let match;
+  
+  while ((match = dslPattern.exec(markdown)) !== null) {
+    // Add any markdown content before this DSL block
+    if (match.index > lastIndex) {
+      const mdContent = markdown.slice(lastIndex, match.index).trim();
+      if (mdContent) {
+        segments.push({ type: 'markdown', content: mdContent });
+      }
+    }
+    
+    if (match[1]) {
+      // KEY_ELEMENTS block
+      const title = match[2];
+      const innerContent = match[3];
+      const items = parseKeyItems(innerContent);
+      segments.push({
+        type: 'key_elements',
+        data: { title, items }
+      });
+    } else if (match[4]) {
+      // EXPERT_TIP block
+      const title = match[5];
+      const content = match[6].trim();
+      segments.push({
+        type: 'expert_tip',
+        data: { title, content }
+      });
+    }
+    
+    lastIndex = match.index + match[0].length;
+  }
+  
+  // Add any remaining markdown content after the last DSL block
+  if (lastIndex < markdown.length) {
+    const mdContent = markdown.slice(lastIndex).trim();
+    if (mdContent) {
+      segments.push({ type: 'markdown', content: mdContent });
+    }
+  }
+  
+  // If no DSL tags found, return the entire content as markdown
+  if (segments.length === 0 && markdown.trim()) {
+    segments.push({ type: 'markdown', content: markdown });
+  }
+  
+  return segments;
+}
+
+/**
+ * Parse EVOBK_KEY items from within a KEY_ELEMENTS block
+ */
+function parseKeyItems(content: string): KeyItem[] {
+  const items: KeyItem[] = [];
+  const keyPattern = /<EVOBK_KEY\s+title="([^"]*)">([\s\S]*?)<\/EVOBK_KEY>/g;
+  
+  let match;
+  while ((match = keyPattern.exec(content)) !== null) {
+    items.push({
+      title: match[1],
+      content: match[2].trim()
+    });
+  }
+  
+  return items;
+}
+
+// ============================================================================
+// DSL Components
+// ============================================================================
+
+/**
+ * Key Elements Block Component
+ */
+const KeyElementsBlock: React.FC<{ data: KeyElementsData }> = ({ data }) => {
+  return (
+    <div className="bg-black/[0.02] dark:bg-white/[0.02] rounded-2xl p-5 border border-black/[0.03] dark:border-white/[0.03] my-6">
+      <h3 className="text-[14px] font-bold text-primary dark:text-white mb-3 flex items-center gap-2">
+        <span className="w-1 h-4 bg-accent-purple rounded-full"></span>
+        {data.title}
+      </h3>
+      <ul className="space-y-3 m-0 p-0 list-none">
+        {data.items.map((item, index) => (
+          <li key={index} className="flex gap-3 text-[14px] leading-snug m-0">
+            <span className="text-accent-purple font-bold shrink-0">•</span>
+            <span>
+              <strong className="text-primary dark:text-white">{item.title}:</strong>{' '}
+              <span className="text-primary/80 dark:text-white/80">{item.content}</span>
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+};
+
+/**
+ * Expert Tip Block Component
+ */
+const ExpertTipBlock: React.FC<{ data: ExpertTipData }> = ({ data }) => {
+  return (
+    <div className="relative bg-accent-blue/5 border border-accent-blue/20 rounded-2xl p-5 overflow-hidden my-6">
+      <div className="absolute -right-4 -top-4 w-16 h-16 bg-accent-blue/10 blur-xl"></div>
+      <div className="flex items-center gap-2 mb-2 text-accent-blue">
+        <span className="material-symbols-rounded text-[18px]">info</span>
+        <span className="text-[12px] font-bold uppercase tracking-wider">{data.title}</span>
+      </div>
+      <p className="text-[14px] font-medium leading-normal italic m-0 text-primary/80 dark:text-white/80">
+        {data.content}
+      </p>
+    </div>
+  );
+};
+
+/**
+ * Markdown components configuration for ReactMarkdown
+ */
+const markdownComponents = {
+  // Headings
+  h1: ({ children }: { children?: React.ReactNode }) => (
+    <h1 className="text-[22px] font-extrabold text-primary dark:text-white leading-tight mb-4 mt-6">
+      {children}
+    </h1>
+  ),
+  h2: ({ children }: { children?: React.ReactNode }) => (
+    <h2 className="text-[18px] font-bold text-primary dark:text-white leading-tight mb-3 mt-5">
+      {children}
+    </h2>
+  ),
+  h3: ({ children }: { children?: React.ReactNode }) => (
+    <h3 className="text-[16px] font-bold text-primary dark:text-white leading-tight mb-2 mt-4 flex items-center gap-2">
+      <span className="w-1 h-4 bg-accent-purple rounded-full"></span>
+      {children}
+    </h3>
+  ),
+  h4: ({ children }: { children?: React.ReactNode }) => (
+    <h4 className="text-[14px] font-bold text-primary dark:text-white leading-tight mb-2 mt-3">
+      {children}
+    </h4>
+  ),
+  // Paragraphs
+  p: ({ children }: { children?: React.ReactNode }) => (
+    <p className="text-[15px] leading-relaxed mb-4">{children}</p>
+  ),
+  // Lists
+  ul: ({ children }: { children?: React.ReactNode }) => (
+    <ul className="space-y-2 my-4 pl-0 list-none">{children}</ul>
+  ),
+  ol: ({ children }: { children?: React.ReactNode }) => (
+    <ol className="space-y-2 my-4 pl-4 list-decimal">{children}</ol>
+  ),
+  li: ({ children }: { children?: React.ReactNode }) => (
+    <li className="flex gap-3 text-[14px] leading-snug">
+      <span className="text-accent-purple font-bold shrink-0">•</span>
+      <span>{children}</span>
+    </li>
+  ),
+  // Strong/Bold
+  strong: ({ children }: { children?: React.ReactNode }) => (
+    <strong className="text-primary dark:text-white font-semibold">{children}</strong>
+  ),
+  // Emphasis/Italic
+  em: ({ children }: { children?: React.ReactNode }) => (
+    <em className="italic">{children}</em>
+  ),
+  // Code
+  code: ({ children, className }: { children?: React.ReactNode; className?: string }) => {
+    const isInline = !className;
+    if (isInline) {
+      return (
+        <code className="bg-black/5 dark:bg-white/10 px-1.5 py-0.5 rounded text-[13px] font-mono text-accent-purple">
+          {children}
+        </code>
+      );
+    }
+    return (
+      <code className="block bg-black/[0.03] dark:bg-white/[0.05] p-4 rounded-xl text-[13px] font-mono overflow-x-auto">
+        {children}
+      </code>
+    );
+  },
+  pre: ({ children }: { children?: React.ReactNode }) => (
+    <pre className="bg-black/[0.03] dark:bg-white/[0.05] p-4 rounded-xl text-[13px] font-mono overflow-x-auto my-4">
+      {children}
+    </pre>
+  ),
+  // Tables
+  table: ({ children }: { children?: React.ReactNode }) => (
+    <div className="overflow-hidden rounded-2xl border border-black/[0.05] dark:border-white/[0.05] my-6">
+      <table className="w-full text-[13px] text-left border-collapse m-0">
+        {children}
+      </table>
+    </div>
+  ),
+  thead: ({ children }: { children?: React.ReactNode }) => (
+    <thead className="bg-black/[0.03] dark:bg-white/[0.05]">{children}</thead>
+  ),
+  tbody: ({ children }: { children?: React.ReactNode }) => (
+    <tbody className="divide-y divide-black/[0.03] dark:divide-white/[0.05]">{children}</tbody>
+  ),
+  tr: ({ children }: { children?: React.ReactNode }) => <tr>{children}</tr>,
+  th: ({ children }: { children?: React.ReactNode }) => (
+    <th className="px-4 py-2.5 font-bold text-primary/60 dark:text-white/60">{children}</th>
+  ),
+  td: ({ children }: { children?: React.ReactNode }) => (
+    <td className="px-4 py-2.5 text-primary/80 dark:text-white/80">{children}</td>
+  ),
+  // Blockquotes - styled as tip boxes
+  blockquote: ({ children }: { children?: React.ReactNode }) => (
+    <div className="relative bg-accent-blue/5 border border-accent-blue/20 rounded-2xl p-5 overflow-hidden my-4">
+      <div className="absolute -right-4 -top-4 w-16 h-16 bg-accent-blue/10 blur-xl"></div>
+      <div className="flex items-center gap-2 mb-2 text-accent-blue">
+        <span className="material-symbols-rounded text-[18px]">info</span>
+        <span className="text-[12px] font-bold uppercase tracking-wider">Tip</span>
+      </div>
+      <div className="text-[14px] font-medium leading-normal [&>p]:m-0 [&>p]:italic">
+        {children}
+      </div>
+    </div>
+  ),
+  // Horizontal rule
+  hr: () => (
+    <hr className="border-0 h-px bg-black/10 dark:bg-white/10 my-6" />
+  ),
+  // Links
+  a: ({ href, children }: { href?: string; children?: React.ReactNode }) => (
+    <a 
+      href={href} 
+      className="text-accent-blue hover:underline"
+      target="_blank"
+      rel="noopener noreferrer"
+    >
+      {children}
+    </a>
+  ),
+};
+
+/**
+ * Renders a single content segment (markdown or DSL block)
+ */
+const ContentSegmentRenderer: React.FC<{ segment: ContentSegment; index: number }> = ({ segment, index }) => {
+  switch (segment.type) {
+    case 'markdown':
+      return (
+        <ReactMarkdown
+          key={`md-${index}`}
+          remarkPlugins={[remarkGfm]}
+          components={markdownComponents}
+        >
+          {segment.content}
+        </ReactMarkdown>
+      );
+    case 'key_elements':
+      return <KeyElementsBlock key={`ke-${index}`} data={segment.data} />;
+    case 'expert_tip':
+      return <ExpertTipBlock key={`et-${index}`} data={segment.data} />;
+    default:
+      return null;
+  }
+};
+
+/**
+ * Renders parsed content with DSL blocks
+ */
+const ParsedContentRenderer: React.FC<{ content: string }> = ({ content }) => {
+  const segments = useMemo(() => parseDSLContent(content), [content]);
+  
+  return (
+    <>
+      {segments.map((segment, index) => (
+        <ContentSegmentRenderer key={index} segment={segment} index={index} />
+      ))}
+    </>
+  );
+};
+
 const KnowledgeCard: React.FC = () => {
   const navigate = useNavigate();
   const [showComplete, setShowComplete] = useState(false);
@@ -308,133 +622,10 @@ const KnowledgeCard: React.FC = () => {
           </div>
         )}
         
-        {/* Markdown Content */}
+        {/* Markdown Content with DSL Parsing */}
         {!isLoading && !error && (
           <div className="prose prose-sm max-w-none text-primary/80 dark:text-white/80">
-            <ReactMarkdown
-              remarkPlugins={[remarkGfm]}
-              components={{
-                // Headings
-                h1: ({ children }) => (
-                  <h1 className="text-[22px] font-extrabold text-primary dark:text-white leading-tight mb-4 mt-6">
-                    {children}
-                  </h1>
-                ),
-                h2: ({ children }) => (
-                  <h2 className="text-[18px] font-bold text-primary dark:text-white leading-tight mb-3 mt-5">
-                    {children}
-                  </h2>
-                ),
-                h3: ({ children }) => (
-                  <h3 className="text-[16px] font-bold text-primary dark:text-white leading-tight mb-2 mt-4 flex items-center gap-2">
-                    <span className="w-1 h-4 bg-accent-purple rounded-full"></span>
-                    {children}
-                  </h3>
-                ),
-                h4: ({ children }) => (
-                  <h4 className="text-[14px] font-bold text-primary dark:text-white leading-tight mb-2 mt-3">
-                    {children}
-                  </h4>
-                ),
-                // Paragraphs
-                p: ({ children }) => (
-                  <p className="text-[15px] leading-relaxed mb-4">{children}</p>
-                ),
-                // Lists
-                ul: ({ children }) => (
-                  <ul className="space-y-2 my-4 pl-0 list-none">{children}</ul>
-                ),
-                ol: ({ children }) => (
-                  <ol className="space-y-2 my-4 pl-4 list-decimal">{children}</ol>
-                ),
-                li: ({ children }) => (
-                  <li className="flex gap-3 text-[14px] leading-snug">
-                    <span className="text-accent-purple font-bold shrink-0">•</span>
-                    <span>{children}</span>
-                  </li>
-                ),
-                // Strong/Bold
-                strong: ({ children }) => (
-                  <strong className="text-primary dark:text-white font-semibold">{children}</strong>
-                ),
-                // Emphasis/Italic
-                em: ({ children }) => (
-                  <em className="italic">{children}</em>
-                ),
-                // Code
-                code: ({ children, className }) => {
-                  const isInline = !className;
-                  if (isInline) {
-                    return (
-                      <code className="bg-black/5 dark:bg-white/10 px-1.5 py-0.5 rounded text-[13px] font-mono text-accent-purple">
-                        {children}
-                      </code>
-                    );
-                  }
-                  return (
-                    <code className="block bg-black/[0.03] dark:bg-white/[0.05] p-4 rounded-xl text-[13px] font-mono overflow-x-auto">
-                      {children}
-                    </code>
-                  );
-                },
-                pre: ({ children }) => (
-                  <pre className="bg-black/[0.03] dark:bg-white/[0.05] p-4 rounded-xl text-[13px] font-mono overflow-x-auto my-4">
-                    {children}
-                  </pre>
-                ),
-                // Tables
-                table: ({ children }) => (
-                  <div className="overflow-hidden rounded-2xl border border-black/[0.05] dark:border-white/[0.05] my-6">
-                    <table className="w-full text-[13px] text-left border-collapse m-0">
-                      {children}
-                    </table>
-                  </div>
-                ),
-                thead: ({ children }) => (
-                  <thead className="bg-black/[0.03] dark:bg-white/[0.05]">{children}</thead>
-                ),
-                tbody: ({ children }) => (
-                  <tbody className="divide-y divide-black/[0.03] dark:divide-white/[0.05]">{children}</tbody>
-                ),
-                tr: ({ children }) => <tr>{children}</tr>,
-                th: ({ children }) => (
-                  <th className="px-4 py-2.5 font-bold text-primary/60 dark:text-white/60">{children}</th>
-                ),
-                td: ({ children }) => (
-                  <td className="px-4 py-2.5 text-primary/80 dark:text-white/80">{children}</td>
-                ),
-                // Blockquotes - styled as tip boxes
-                blockquote: ({ children }) => (
-                  <div className="relative bg-accent-blue/5 border border-accent-blue/20 rounded-2xl p-5 overflow-hidden my-4">
-                    <div className="absolute -right-4 -top-4 w-16 h-16 bg-accent-blue/10 blur-xl"></div>
-                    <div className="flex items-center gap-2 mb-2 text-accent-blue">
-                      <span className="material-symbols-rounded text-[18px]">info</span>
-                      <span className="text-[12px] font-bold uppercase tracking-wider">Tip</span>
-                    </div>
-                    <div className="text-[14px] font-medium leading-normal [&>p]:m-0 [&>p]:italic">
-                      {children}
-                    </div>
-                  </div>
-                ),
-                // Horizontal rule
-                hr: () => (
-                  <hr className="border-0 h-px bg-black/10 dark:bg-white/10 my-6" />
-                ),
-                // Links
-                a: ({ href, children }) => (
-                  <a 
-                    href={href} 
-                    className="text-accent-blue hover:underline"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    {children}
-                  </a>
-                ),
-              }}
-            >
-              {currentPageContent}
-            </ReactMarkdown>
+            <ParsedContentRenderer content={currentPageContent} />
             
             {/* Clarification Section */}
             <div id="clarification-section" className="mt-8">
