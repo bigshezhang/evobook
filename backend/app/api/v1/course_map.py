@@ -17,6 +17,7 @@ from app.core.exceptions import AppException, NotFoundError
 from app.core.logging import get_logger
 from app.domain.models.course_map import CourseMap
 from app.domain.services.course_map_service import CourseMapService
+from app.domain.services.profile_service import ProfileService
 from app.infrastructure.database import get_db_session
 from app.llm.client import LLMClient
 
@@ -118,6 +119,28 @@ async def generate_course_map(
         total_commitment_minutes=request.total_commitment_minutes,
         user_id=user_id,
     )
+
+    # 自动设置新生成的课程为活跃课程
+    if user_id:
+        try:
+            course_map_id = result["course_map_id"]
+            await ProfileService.set_active_course_map(
+                user_id=user_id,
+                course_map_id=course_map_id,
+                db=db,
+            )
+            logger.info(
+                "Auto-set new course as active",
+                user_id=str(user_id),
+                course_map_id=str(course_map_id),
+            )
+        except Exception as e:
+            # 不阻塞主流程，记录错误即可
+            logger.warning(
+                "Failed to auto-set active course",
+                user_id=str(user_id),
+                error=str(e),
+            )
 
     return result
 
@@ -248,6 +271,22 @@ async def get_course_map(
 
         if row is None:
             raise NotFoundError(resource="CourseMap", identifier=str(course_map_id))
+
+        # 自动更新最后访问记录
+        try:
+            await ProfileService.update_last_accessed_course(
+                user_id=user_id,
+                course_map_id=course_map_id,
+                db=db,
+            )
+        except Exception as e:
+            # 不阻塞主流程，记录错误即可
+            logger.warning(
+                "Failed to update last accessed course",
+                user_id=str(user_id),
+                course_map_id=str(course_map_id),
+                error=str(e),
+            )
 
         logger.info(
             "Fetched course map",

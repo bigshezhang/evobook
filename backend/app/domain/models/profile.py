@@ -3,7 +3,7 @@
 from datetime import datetime, timezone
 from uuid import UUID
 
-from sqlalchemy import Boolean, DateTime, Text, text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Text, text
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -40,6 +40,26 @@ class Profile(Base):
         server_default=text("false"),
         comment="Whether user has completed onboarding",
     )
+    
+    # 活跃课程相关字段
+    active_course_map_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("course_maps.id", ondelete="SET NULL"),
+        nullable=True,
+        comment="User-set active course for home page",
+    )
+    last_accessed_course_map_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("course_maps.id", ondelete="SET NULL"),
+        nullable=True,
+        comment="Last accessed course map",
+    )
+    last_accessed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="Timestamp of last course access",
+    )
+    
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

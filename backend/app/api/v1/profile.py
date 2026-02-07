@@ -44,6 +44,21 @@ class ProfileUpdateRequest(BaseModel):
     )
 
 
+class ActiveCourseResponse(BaseModel):
+    """Response for active course endpoint."""
+
+    course_map_id: str | None = Field(
+        default=None,
+        description="Active course map UUID, null if no courses exist",
+    )
+
+
+class SetActiveCourseRequest(BaseModel):
+    """Request body for setting active course."""
+
+    course_map_id: str = Field(..., description="Course map UUID to set as active")
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
@@ -102,6 +117,80 @@ async def update_profile(
             user_id=user_id,
             updates=updates,
             db=db,
+        )
+    except AppException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail={"code": "INTERNAL_ERROR", "message": str(e)},
+        )
+
+
+@router.get("/active-course", response_model=ActiveCourseResponse)
+async def get_active_course(
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
+    db: Annotated[AsyncSession, Depends(get_db_session)],
+) -> dict:
+    """Get the active course map ID for the authenticated user.
+
+    Returns the course map ID based on priority:
+    1. User-set active course
+    2. Last accessed course
+    3. Most recently created course
+
+    Args:
+        user_id: Authenticated user ID from JWT.
+        db: Database session.
+
+    Returns:
+        Active course map ID or null if no courses exist.
+    """
+    try:
+        course_map_id = await ProfileService.get_active_course_map_id(
+            user_id=user_id,
+            db=db,
+        )
+        
+        return {
+            "course_map_id": str(course_map_id) if course_map_id else None,
+        }
+    except AppException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail={"code": "INTERNAL_ERROR", "message": str(e)},
+        )
+
+
+@router.put("/active-course", status_code=204)
+async def set_active_course(
+    request: SetActiveCourseRequest,
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
+    db: Annotated[AsyncSession, Depends(get_db_session)],
+) -> None:
+    """Set the active course map for the authenticated user.
+
+    Args:
+        request: Request containing the course map UUID to set as active.
+        user_id: Authenticated user ID from JWT.
+        db: Database session.
+
+    Returns:
+        204 No Content on success.
+    """
+    try:
+        course_map_id = UUID(request.course_map_id)
+        await ProfileService.set_active_course_map(
+            user_id=user_id,
+            course_map_id=course_map_id,
+            db=db,
+        )
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "INVALID_UUID", "message": "Invalid course map UUID"},
         )
     except AppException:
         raise
