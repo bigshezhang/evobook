@@ -172,7 +172,7 @@ class TestOnboardingAPI:
 
         # Simulate topic change by checking the state machine behavior
         # When a user explicitly changes topic, the service should reset
-        
+
         # Verify session still exists and is in a valid state
         stmt = select(OnboardingSession).where(
             OnboardingSession.id == session_id
@@ -250,7 +250,7 @@ class TestOnboardingService:
     async def test_service_creates_new_state(self, db_session: AsyncSession):
         """Test that service creates new state for None session_id."""
         from app.config import get_settings
-        
+
         llm_client = LLMClient(get_settings())
         service = OnboardingService(llm_client=llm_client, db_session=db_session)
 
@@ -268,7 +268,7 @@ class TestOnboardingService:
         """Test that service loads existing session from database."""
         from uuid import uuid4
         from app.config import get_settings
-        
+
         # Create a session in DB first
         session_id = uuid4()
         session = OnboardingSession(

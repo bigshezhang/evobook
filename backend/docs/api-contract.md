@@ -1,6 +1,6 @@
 # EvoBook Backend API Contract
 
-> 说明：后端稳定前缀为 `/api/v1`。  
+> 说明：后端稳定前缀为 `/api/v1`。
 > 前端可直接依据 FastAPI 的 OpenAPI 文档对齐：`/docs`（Swagger UI）与 `/openapi.json`。
 
 ## Base

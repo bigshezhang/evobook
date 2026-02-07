@@ -20,7 +20,7 @@ logger = get_logger(__name__)
 @dataclass
 class LLMResponse:
     """Response from LLM completion."""
-    
+
     request_id: str
     prompt_name: str
     prompt_hash: str
@@ -34,15 +34,15 @@ class LLMResponse:
 
 class LLMClient:
     """Client for LLM completions with retry and validation."""
-    
+
     def __init__(self, settings: Settings | None = None) -> None:
         """Initialize LLM client.
-        
+
         Args:
             settings: Application settings. Uses get_settings() if None.
         """
         self._settings = settings or get_settings()
-    
+
     async def complete(
         self,
         prompt_name: str,
@@ -52,36 +52,36 @@ class LLMClient:
         system_message: str | None = None,
     ) -> LLMResponse:
         """Call LLM and return validated result.
-        
+
         Args:
             prompt_name: Name of the prompt (for logging/tracing).
             prompt_text: The prompt template text.
             variables: Variables to substitute in prompt_text (using .format()).
             output_format: Expected output format for validation.
             system_message: Optional system message.
-            
+
         Returns:
             LLMResponse with parsed data.
-            
+
         Raises:
             LLMValidationError: If output validation fails after retries.
             LLMError: If LLM call fails after retries.
         """
         request_id = str(uuid4())
         prompt_hash = self._calculate_prompt_hash(prompt_text)
-        
+
         # Substitute variables if provided
         if variables:
             prompt_text = prompt_text.format(**variables)
-        
+
         start_time = time.monotonic()
         retries = 0
         last_error: Exception | None = None
         raw_text = ""
-        
+
         # Try up to max_retries + 1 times (initial + retries)
         max_attempts = self._settings.llm_max_retries + 1
-        
+
         for attempt in range(max_attempts):
             try:
                 if self._settings.mock_llm:
@@ -90,12 +90,12 @@ class LLMClient:
                     raw_text = self._get_mock_response(prompt_name, output_format, session_id)
                 else:
                     raw_text = await self._call_llm(prompt_text, system_message)
-                
+
                 # Validate output
                 parsed_data = self._validate_output(raw_text, output_format)
-                
+
                 latency_ms = int((time.monotonic() - start_time) * 1000)
-                
+
                 response = LLMResponse(
                     request_id=request_id,
                     prompt_name=prompt_name,
@@ -107,10 +107,10 @@ class LLMClient:
                     latency_ms=latency_ms,
                     model=self._settings.litellm_model,
                 )
-                
+
                 self._log_completion(response)
                 return response
-                
+
             except LLMValidationError as e:
                 last_error = e
                 retries = attempt + 1
@@ -125,7 +125,7 @@ class LLMClient:
                         error=str(e),
                     )
                     await asyncio.sleep(delay)
-                    
+
             except Exception as e:
                 last_error = e
                 retries = attempt + 1
@@ -140,10 +140,10 @@ class LLMClient:
                         error=str(e),
                     )
                     await asyncio.sleep(delay)
-        
+
         # All retries exhausted
         latency_ms = int((time.monotonic() - start_time) * 1000)
-        
+
         response = LLMResponse(
             request_id=request_id,
             prompt_name=prompt_name,
@@ -155,61 +155,61 @@ class LLMClient:
             latency_ms=latency_ms,
             model=self._settings.litellm_model,
         )
-        
+
         self._log_completion(response)
-        
+
         if isinstance(last_error, LLMValidationError):
             raise last_error
         raise LLMError(
             message=f"LLM call failed after {retries} retries: {last_error}",
             details={"request_id": request_id, "prompt_name": prompt_name},
         )
-    
+
     def _calculate_prompt_hash(self, text: str) -> str:
         """Calculate SHA256 hash of prompt text.
-        
+
         Args:
             text: Prompt text to hash.
-            
+
         Returns:
             Hex-encoded SHA256 hash.
         """
         return hashlib.sha256(text.encode("utf-8")).hexdigest()
-    
+
     def _extract_session_id_from_prompt(self, prompt_text: str) -> str | None:
         """Extract conversation turn count from prompt text for mock responses.
-        
+
         The onboarding prompt includes context with conversation history.
         This method counts user turns to determine which phase of mock response to return.
-        
+
         Args:
             prompt_text: The full prompt text with context.
-            
+
         Returns:
             String representation of turn count, or None for first turn.
         """
         import re
-        
+
         # Look for conversation history entries which indicate an existing session
         # The history format includes "user:" and "assistant:" entries
         user_turns = len(re.findall(r'\buser:', prompt_text, re.IGNORECASE))
-        
+
         # Return the turn count as a string, this will be used as mock phase index
         if user_turns > 0:
             return str(user_turns)
-        
+
         return None
-    
+
     async def _call_llm(self, prompt_text: str, system_message: str | None) -> str:
         """Make actual LLM API call.
-        
+
         Args:
             prompt_text: User prompt text.
             system_message: Optional system message.
-            
+
         Returns:
             Raw response text.
-            
+
         Raises:
             LLMError: If API call fails.
         """
@@ -217,7 +217,7 @@ class LLMClient:
         if system_message:
             messages.append({"role": "system", "content": system_message})
         messages.append({"role": "user", "content": prompt_text})
-        
+
         try:
             response = await litellm.acompletion(
                 model=self._settings.litellm_model,
@@ -226,7 +226,7 @@ class LLMClient:
                 api_key=self._settings.litellm_api_key,
                 timeout=self._settings.llm_timeout,
             )
-            
+
             content = response.choices[0].message.content
             if content is None:
                 raise LLMError(
@@ -234,7 +234,7 @@ class LLMClient:
                     details=None,
                 )
             return content
-            
+
         except litellm.exceptions.Timeout as e:
             raise LLMError(
                 message=f"LLM request timed out after {self._settings.llm_timeout}s",
@@ -247,42 +247,42 @@ class LLMClient:
                 message=f"LLM API call failed: {e}",
                 details=None,
             ) from e
-    
+
     def _get_mock_response(self, prompt_name: str, output_format: OutputFormat, session_id: str | None = None) -> str:
         """Generate mock response for testing.
-        
+
         Args:
             prompt_name: Name of the prompt.
             output_format: Expected output format.
             session_id: Optional session ID for stateful mock responses.
-            
+
         Returns:
             Mock response text.
         """
         # Handle onboarding with phase-aware mock responses
         if prompt_name == "onboarding":
             return self._get_onboarding_mock_response(session_id)
-        
+
         # Handle DAG generation with valid structure
         if prompt_name == "dag":
             return self._get_dag_mock_response()
-        
+
         # Handle knowledge card generation
         if prompt_name == "knowledge_card":
             return self._get_knowledge_card_mock_response()
-        
+
         # Handle clarification generation
         if prompt_name == "clarification":
             return self._get_clarification_mock_response()
-        
+
         # Handle QA detail generation
         if prompt_name == "qa_detail":
             return self._get_qa_detail_mock_response()
-        
+
         # Handle quiz generation
         if prompt_name == "quiz":
             return self._get_quiz_mock_response()
-        
+
         if output_format == OutputFormat.JSON:
             return f'{{"mock": true, "type": "{prompt_name}"}}'
         elif output_format == OutputFormat.YAML:
@@ -291,21 +291,21 @@ class LLMClient:
             return f"# Mock Response\n\nThis is a mock response for {prompt_name}."
         else:
             return f"Mock response for {prompt_name}"
-    
+
     def _get_onboarding_mock_response(self, turn_count_str: str | None = None) -> str:
         """Generate mock response for onboarding based on conversation turn count.
-        
+
         This uses the turn count from the conversation history to determine
         which phase of onboarding to return.
-        
+
         Args:
             turn_count_str: String representation of user turn count from prompt.
-        
+
         Returns:
             JSON string with mock onboarding response.
         """
         import json
-        
+
         # Parse turn count - if None or empty, this is the first call (turn 0)
         if turn_count_str is None or turn_count_str == "":
             counter = 0
@@ -314,7 +314,7 @@ class LLMClient:
                 counter = int(turn_count_str)
             except ValueError:
                 counter = 0
-        
+
         # Phase 1: Exploration (first call)
         if counter == 0:
             return json.dumps({
@@ -322,7 +322,7 @@ class LLMClient:
                 "message": "你好！我是你的学习向导。你想学习什么呢？",
                 "options": ["Python 编程", "机器学习", "Web 开发"]
             })
-        
+
         # Phase 2: Calibration R1 (second call)
         elif counter == 1:
             return json.dumps({
@@ -330,7 +330,7 @@ class LLMClient:
                 "message": "太棒了！让我了解一下你的基础。你对「装饰器」这个概念熟悉吗？",
                 "options": ["完全没听过", "听说过，大概知道原理", "熟练掌握"]
             })
-        
+
         # Phase 3: Calibration R2 (third call)
         elif counter == 2:
             return json.dumps({
@@ -338,7 +338,7 @@ class LLMClient:
                 "message": "明白了！那你之前有接触过编程吗？",
                 "options": ["完全零基础", "看过一些入门文章", "以前学过一点"]
             })
-        
+
         # Phase 4: Focus (fourth call)
         elif counter == 3:
             return json.dumps({
@@ -346,7 +346,7 @@ class LLMClient:
                 "message": "了解了！如果给你 2-4 周，你最想达成什么目标？",
                 "options": ["能独立写小程序", "理解核心概念", "做出实际项目"]
             })
-        
+
         # Phase 5: Source (fifth call)
         elif counter == 4:
             return json.dumps({
@@ -354,7 +354,7 @@ class LLMClient:
                 "message": "最后一个问题：你是从哪里了解到我们的？",
                 "options": ["朋友推荐", "社交媒体", "搜索引擎"]
             })
-        
+
         # Phase 6: Handoff (sixth call and beyond)
         else:
             return json.dumps({
@@ -370,49 +370,49 @@ class LLMClient:
                     "intent": "add_info"
                 }
             })
-    
+
     @classmethod
     def reset_mock_counter(cls) -> None:
         """Reset mock state for testing.
-        
+
         This is now a no-op since mock responses are based on conversation
         turn count extracted from the prompt, not a global counter.
         Kept for backward compatibility with existing tests.
         """
         pass
-    
+
     # Class-level variable to configure mock DAG response
     _mock_dag_total_minutes: int = 120
     _mock_dag_mode: str = "Fast"
-    
+
     @classmethod
     def set_mock_dag_context(cls, total_minutes: int, mode: str) -> None:
         """Set context for mock DAG generation.
-        
+
         Args:
             total_minutes: Total commitment minutes for the mock DAG.
             mode: Learning mode (Deep|Fast|Light).
         """
         cls._mock_dag_total_minutes = total_minutes
         cls._mock_dag_mode = mode
-    
+
     def _get_dag_mock_response(self) -> str:
         """Generate mock DAG response for testing.
-        
+
         Returns a valid DAG structure with:
         - Proper branch structure (layer 2 with 2 parallel nodes)
         - A merge node (node with 2+ prerequisites)
         - Time sum equal to _mock_dag_total_minutes
         - No boss nodes if mode != Deep
-        
+
         Returns:
             JSON string with mock DAG response.
         """
         import json
-        
+
         total_minutes = LLMClient._mock_dag_total_minutes
         mode = LLMClient._mock_dag_mode
-        
+
         # Distribute time across nodes (5 nodes for Fast/Light, 7 for Deep)
         if mode == "Deep":
             # Deep mode: 7 nodes with boss
@@ -431,7 +431,7 @@ class LLMClient:
             t6 = total_minutes * 16 // 100  # merge
             # Adjust last node to ensure exact sum
             t7 = total_minutes - t1 - t2 - t3 - t4 - t5 - t6
-            
+
             nodes = [
                 {"id": 1, "title": "基础入门", "description": "掌握核心概念基础", "type": "learn", "layer": 1, "pre_requisites": [], "estimated_minutes": t1},
                 {"id": 2, "title": "分支路径 A", "description": "深入学习路径 A", "type": "learn", "layer": 2, "pre_requisites": [1], "estimated_minutes": t2},
@@ -443,7 +443,7 @@ class LLMClient:
             ]
         else:
             # Fast/Light mode: 5 nodes without boss
-            # Layer 1: 1 node (root) - 20% 
+            # Layer 1: 1 node (root) - 20%
             # Layer 2: 2 nodes (branch) - 25% each
             # Layer 3: 1 node (merge) - 15%
             # Layer 4: 1 node (final) - 15%
@@ -453,7 +453,7 @@ class LLMClient:
             t3 = total_minutes * 15 // 100
             # Adjust last node to ensure exact sum
             t4 = total_minutes - t1 - t2 - t2 - t3
-            
+
             nodes = [
                 {"id": 1, "title": "基础入门", "description": "掌握核心概念基础", "type": "learn", "layer": 1, "pre_requisites": [], "estimated_minutes": t1},
                 {"id": 2, "title": "分支路径 A", "description": "深入学习路径 A", "type": "learn", "layer": 2, "pre_requisites": [1], "estimated_minutes": t2},
@@ -461,9 +461,9 @@ class LLMClient:
                 {"id": 4, "title": "知识汇合", "description": "整合所有知识点", "type": "quiz", "layer": 3, "pre_requisites": [2, 3], "estimated_minutes": t3},
                 {"id": 5, "title": "实战演练", "description": "应用所学知识", "type": "learn", "layer": 4, "pre_requisites": [4], "estimated_minutes": t4},
             ]
-        
+
         time_sum = sum(n["estimated_minutes"] for n in nodes)
-        
+
         return json.dumps({
             "map_meta": {
                 "course_name": "Python 编程入门之旅",
@@ -475,15 +475,15 @@ class LLMClient:
             },
             "nodes": nodes,
         }, ensure_ascii=False)
-    
+
     def _get_knowledge_card_mock_response(self) -> str:
         """Generate mock knowledge card response for testing.
-        
+
         Returns:
             JSON string with mock knowledge card response.
         """
         import json
-        
+
         markdown = """## Introduction to Python Variables
 
 Variables are containers for storing data values. In Python, you don't need to declare a variable before using it.
@@ -519,15 +519,15 @@ You can check a variable's type using the `type()` function."""
             "markdown": markdown,
             "yaml": "type: knowledge_card\nnode_id: 1\ntotalPagesInCard: 2",
         }, ensure_ascii=False)
-    
+
     def _get_clarification_mock_response(self) -> str:
         """Generate mock clarification response for testing.
-        
+
         Returns:
             JSON string with mock clarification response.
         """
         import json
-        
+
         return json.dumps({
             "type": "clarification",
             "corrected_title": "What is variable assignment in Python?",
@@ -536,15 +536,15 @@ You can check a variable's type using the `type()` function."""
                            "Just write: my_variable = value. Python will automatically "
                            "determine the type based on the value you assign.",
         }, ensure_ascii=False)
-    
+
     def _get_qa_detail_mock_response(self) -> str:
         """Generate mock QA detail response for testing.
-        
+
         Returns:
             JSON string with mock QA detail response.
         """
         import json
-        
+
         return json.dumps({
             "type": "qa_detail",
             "title": "Understanding Variable Assignment in Python",
@@ -570,15 +570,15 @@ You can check a variable's type using the `type()` function."""
                          "blue and white colors.",
             },
         }, ensure_ascii=False)
-    
+
     def _get_quiz_mock_response(self) -> str:
         """Generate mock quiz response for testing.
-        
+
         Returns:
             JSON string with mock quiz response.
         """
         import json
-        
+
         return json.dumps({
             "type": "quiz",
             "title": "Python Variables Quiz",
@@ -617,19 +617,19 @@ You can check a variable's type using the `type()` function."""
                 },
             ],
         }, ensure_ascii=False)
-    
+
     def _validate_output(
         self, text: str, output_format: OutputFormat
     ) -> dict | str | None:
         """Validate and parse output based on format.
-        
+
         Args:
             text: Raw response text.
             output_format: Expected format.
-            
+
         Returns:
             Parsed data (dict for JSON/YAML, str for markdown/text).
-            
+
         Raises:
             LLMValidationError: If validation fails.
         """
@@ -641,10 +641,10 @@ You can check a variable's type using the `type()` function."""
             return validate_markdown(text)
         else:
             return text
-    
+
     def _log_completion(self, response: LLMResponse) -> None:
         """Log LLM completion details.
-        
+
         Args:
             response: The LLM response to log.
         """

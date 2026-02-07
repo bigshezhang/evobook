@@ -35,11 +35,11 @@ TIMEOUT = 120.0  # Longer timeout for LLM calls
 
 def save_output(name: str, data: dict[str, Any]) -> Path:
     """Save response data to .out/ directory.
-    
+
     Args:
         name: Output filename (without extension).
         data: Response data to save.
-        
+
     Returns:
         Path to the saved file.
     """
@@ -52,16 +52,16 @@ def save_output(name: str, data: dict[str, Any]) -> Path:
 
 def run_onboarding(client: httpx.Client) -> dict[str, Any]:
     """Run onboarding flow until finish.
-    
+
     Simulates a user going through the onboarding conversation by
     selecting predefined choices for each step.
-    
+
     Args:
         client: HTTP client instance.
-        
+
     Returns:
         Final onboarding result with user profile data.
-        
+
     Raises:
         RuntimeError: If onboarding fails or times out.
     """
@@ -74,15 +74,15 @@ def run_onboarding(client: httpx.Client) -> dict[str, Any]:
         "能独立写小程序",  # Focus
         "朋友推荐",  # Source
     ]
-    
+
     session_id = None
     result = None
-    
+
     for i, choice in enumerate(choices):
         payload: dict[str, Any] = {"session_id": session_id}
         if choice:
             payload["user_choice"] = choice
-        
+
         response = client.post(
             f"{BASE_URL}/api/v1/onboarding/next",
             json=payload,
@@ -90,14 +90,14 @@ def run_onboarding(client: httpx.Client) -> dict[str, Any]:
         )
         response.raise_for_status()
         result = response.json()
-        
+
         session_id = result.get("session_id")
-        
+
         print(f"    Step {i + 1}: {result.get('type')} - {result.get('message', '')[:50]}...")
-        
+
         if result.get("type") == "finish":
             return result
-    
+
     # If we didn't get finish, try one more request
     response = client.post(
         f"{BASE_URL}/api/v1/onboarding/next",
@@ -106,20 +106,20 @@ def run_onboarding(client: httpx.Client) -> dict[str, Any]:
     )
     response.raise_for_status()
     result = response.json()
-    
+
     if result.get("type") == "finish":
         return result
-    
+
     raise RuntimeError(f"Onboarding did not finish after {len(choices) + 1} steps")
 
 
 def run_course_map(client: httpx.Client, onboarding_data: dict[str, Any]) -> dict[str, Any]:
     """Generate course map from onboarding data.
-    
+
     Args:
         client: HTTP client instance.
         onboarding_data: User profile from onboarding (the 'data' field).
-        
+
     Returns:
         Course map with map_meta and nodes.
     """
@@ -131,7 +131,7 @@ def run_course_map(client: httpx.Client, onboarding_data: dict[str, Any]) -> dic
         "mode": "Fast",  # Use Fast mode for testing
         "total_commitment_minutes": 120,
     }
-    
+
     response = client.post(
         f"{BASE_URL}/api/v1/course-map/generate",
         json=payload,
@@ -143,11 +143,11 @@ def run_course_map(client: httpx.Client, onboarding_data: dict[str, Any]) -> dic
 
 def run_knowledge_card(client: httpx.Client, course_map: dict[str, Any]) -> dict[str, Any]:
     """Generate knowledge card for the first learn node.
-    
+
     Args:
         client: HTTP client instance.
         course_map: Course map with nodes.
-        
+
     Returns:
         Knowledge card response with markdown and yaml.
     """
@@ -155,10 +155,10 @@ def run_knowledge_card(client: httpx.Client, course_map: dict[str, Any]) -> dict
     learn_nodes = [n for n in course_map["nodes"] if n["type"] == "learn"]
     if not learn_nodes:
         raise RuntimeError("No learn nodes found in course map")
-    
+
     first_node = learn_nodes[0]
     map_meta = course_map["map_meta"]
-    
+
     payload = {
         "course": {
             "course_name": map_meta["course_name"],
@@ -175,7 +175,7 @@ def run_knowledge_card(client: httpx.Client, course_map: dict[str, Any]) -> dict
             "estimated_minutes": first_node["estimated_minutes"],
         },
     }
-    
+
     response = client.post(
         f"{BASE_URL}/api/v1/node-content/knowledge-card",
         json=payload,
@@ -187,11 +187,11 @@ def run_knowledge_card(client: httpx.Client, course_map: dict[str, Any]) -> dict
 
 def run_quiz(client: httpx.Client, knowledge_card: dict[str, Any]) -> dict[str, Any]:
     """Generate quiz from learned content.
-    
+
     Args:
         client: HTTP client instance.
         knowledge_card: Knowledge card with markdown content.
-        
+
     Returns:
         Quiz response with questions.
     """
@@ -205,7 +205,7 @@ def run_quiz(client: httpx.Client, knowledge_card: dict[str, Any]) -> dict[str, 
             }
         ],
     }
-    
+
     response = client.post(
         f"{BASE_URL}/api/v1/quiz/generate",
         json=payload,
@@ -217,10 +217,10 @@ def run_quiz(client: httpx.Client, knowledge_card: dict[str, Any]) -> dict[str, 
 
 def check_health(client: httpx.Client) -> bool:
     """Check if the API server is healthy.
-    
+
     Args:
         client: HTTP client instance.
-        
+
     Returns:
         True if healthy, False otherwise.
     """
@@ -233,14 +233,14 @@ def check_health(client: httpx.Client) -> bool:
 
 def print_summary(results: dict[str, Any]) -> None:
     """Print execution summary.
-    
+
     Args:
         results: Dictionary with all step results.
     """
     print("\n" + "=" * 60)
     print("SUMMARY")
     print("=" * 60)
-    
+
     # Onboarding
     onboarding = results.get("onboarding", {})
     onboarding_data = onboarding.get("data", {})
@@ -248,7 +248,7 @@ def print_summary(results: dict[str, Any]) -> None:
     print(f"   Topic: {onboarding_data.get('topic', 'N/A')}")
     print(f"   Level: {onboarding_data.get('level', 'N/A')}")
     print(f"   Focus: {onboarding_data.get('focus', 'N/A')}")
-    
+
     # Course Map
     course_map = results.get("course_map", {})
     map_meta = course_map.get("map_meta", {})
@@ -258,13 +258,13 @@ def print_summary(results: dict[str, Any]) -> None:
     print(f"   Nodes: {len(nodes)}")
     print(f"   Total Time: {map_meta.get('time_sum_minutes', 0)} min")
     print(f"   Node Types: {', '.join(set(n.get('type', '') for n in nodes))}")
-    
+
     # Knowledge Card
     knowledge_card = results.get("knowledge_card", {})
     print(f"\n📄 Knowledge Card:")
     print(f"   Pages: {knowledge_card.get('totalPagesInCard', 0)}")
     print(f"   Markdown Length: {len(knowledge_card.get('markdown', ''))} chars")
-    
+
     # Quiz
     quiz = results.get("quiz", {})
     questions = quiz.get("questions", [])
@@ -278,21 +278,21 @@ def print_summary(results: dict[str, Any]) -> None:
 
 def main() -> int:
     """Run the complete e2e flow.
-    
+
     Returns:
         Exit code (0 for success, 1 for failure).
     """
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    
+
     print("=" * 60)
     print("EvoBook E2E Test")
     print("=" * 60)
     print(f"  Timestamp: {timestamp}")
     print(f"  API Base URL: {BASE_URL}")
     print(f"  Output Dir: {OUT_DIR.absolute()}")
-    
+
     results: dict[str, Any] = {}
-    
+
     with httpx.Client() as client:
         # Health check
         print("\n[0/4] Checking API health...")
@@ -301,7 +301,7 @@ def main() -> int:
             print(f"    uv run uvicorn app.main:app --reload --port 8000")
             return 1
         print("  ✓ API is healthy")
-        
+
         try:
             # Step 1: Onboarding
             print("\n[1/4] Running onboarding...")
@@ -309,28 +309,28 @@ def main() -> int:
             save_output("1_onboarding", onboarding_result)
             results["onboarding"] = onboarding_result
             print(f"  ✓ Onboarding complete: topic={onboarding_result['data']['topic']}")
-            
+
             # Step 2: Course Map (DAG)
             print("\n[2/4] Generating course map...")
             course_map = run_course_map(client, onboarding_result["data"])
             save_output("2_course_map", course_map)
             results["course_map"] = course_map
             print(f"  ✓ Course map: {len(course_map['nodes'])} nodes, {course_map['map_meta']['time_sum_minutes']} minutes")
-            
+
             # Step 3: Knowledge Card
             print("\n[3/4] Generating knowledge card...")
             knowledge_card = run_knowledge_card(client, course_map)
             save_output("3_knowledge_card", knowledge_card)
             results["knowledge_card"] = knowledge_card
             print(f"  ✓ Knowledge card: {knowledge_card['totalPagesInCard']} pages")
-            
+
             # Step 4: Quiz
             print("\n[4/4] Generating quiz...")
             quiz = run_quiz(client, knowledge_card)
             save_output("4_quiz", quiz)
             results["quiz"] = quiz
             print(f"  ✓ Quiz: {len(quiz['questions'])} questions")
-            
+
         except httpx.HTTPStatusError as e:
             print(f"\n  ✗ HTTP Error: {e.response.status_code}")
             print(f"    Response: {e.response.text}")
@@ -338,10 +338,10 @@ def main() -> int:
         except Exception as e:
             print(f"\n  ✗ Error: {e}")
             return 1
-    
+
     # Print summary
     print_summary(results)
-    
+
     # Save combined results
     save_output("e2e_results", {
         "timestamp": timestamp,
@@ -349,12 +349,12 @@ def main() -> int:
         "success": True,
         "results": results,
     })
-    
+
     print("\n" + "=" * 60)
     print("E2E Test Complete!")
     print(f"Results saved to: {OUT_DIR.absolute()}")
     print("=" * 60)
-    
+
     return 0
 
 

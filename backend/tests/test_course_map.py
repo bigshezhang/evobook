@@ -30,7 +30,7 @@ class TestCourseMapAPI:
     async def test_generate_course_map_success(self, client: AsyncClient):
         """Test successful course map generation with valid request."""
         LLMClient.set_mock_dag_context(total_minutes=120, mode="Fast")
-        
+
         response = await client.post(
             "/api/v1/course-map/generate",
             json={
@@ -45,7 +45,7 @@ class TestCourseMapAPI:
 
         assert response.status_code == 200
         data = response.json()
-        
+
         # Verify map_meta structure
         assert "map_meta" in data
         assert data["map_meta"]["mode"] == "Fast"
@@ -53,11 +53,11 @@ class TestCourseMapAPI:
         assert data["map_meta"]["time_sum_minutes"] == 120
         assert "course_name" in data["map_meta"]
         assert "strategy_rationale" in data["map_meta"]
-        
+
         # Verify nodes structure
         assert "nodes" in data
         assert len(data["nodes"]) > 0
-        
+
         # Verify each node has required fields
         for node in data["nodes"]:
             assert "id" in node
@@ -75,7 +75,7 @@ class TestCourseMapAPI:
     ):
         """Test that generated course map is persisted to database."""
         LLMClient.set_mock_dag_context(total_minutes=90, mode="Light")
-        
+
         response = await client.post(
             "/api/v1/course-map/generate",
             json={
@@ -89,7 +89,7 @@ class TestCourseMapAPI:
         )
 
         assert response.status_code == 200
-        
+
         # Verify course map exists in database
         stmt = select(CourseMap).where(CourseMap.topic == "机器学习基础")
         result = await db_session.execute(stmt)
@@ -106,7 +106,7 @@ class TestCourseMapAPI:
     async def test_time_sum_equals_commitment_minutes(self, client: AsyncClient):
         """Test that sum of node times equals total_commitment_minutes."""
         LLMClient.set_mock_dag_context(total_minutes=150, mode="Fast")
-        
+
         response = await client.post(
             "/api/v1/course-map/generate",
             json={
@@ -121,10 +121,10 @@ class TestCourseMapAPI:
 
         assert response.status_code == 200
         data = response.json()
-        
+
         # Calculate actual time sum
         time_sum = sum(node["estimated_minutes"] for node in data["nodes"])
-        
+
         assert time_sum == 150
         assert data["map_meta"]["time_sum_minutes"] == 150
         assert data["map_meta"]["time_delta_minutes"] == 0
@@ -133,7 +133,7 @@ class TestCourseMapAPI:
     async def test_dag_has_branch_and_merge(self, client: AsyncClient):
         """Test that generated DAG has proper branch and merge structure."""
         LLMClient.set_mock_dag_context(total_minutes=120, mode="Fast")
-        
+
         response = await client.post(
             "/api/v1/course-map/generate",
             json={
@@ -149,7 +149,7 @@ class TestCourseMapAPI:
         assert response.status_code == 200
         data = response.json()
         nodes = data["nodes"]
-        
+
         # Group nodes by layer
         layers: dict[int, list] = {}
         for node in nodes:
@@ -157,11 +157,11 @@ class TestCourseMapAPI:
             if layer not in layers:
                 layers[layer] = []
             layers[layer].append(node)
-        
+
         # Verify at least one layer has 2+ nodes (branch)
         has_branch = any(len(layer_nodes) >= 2 for layer_nodes in layers.values())
         assert has_branch, "DAG must have at least one branching layer"
-        
+
         # Verify at least one node has 2+ prerequisites (merge)
         has_merge = any(
             len(node["pre_requisites"]) >= 2
@@ -174,7 +174,7 @@ class TestCourseMapAPI:
         """Test that non-Deep modes do not have boss nodes."""
         for mode in ["Fast", "Light"]:
             LLMClient.set_mock_dag_context(total_minutes=120, mode=mode)
-            
+
             response = await client.post(
                 "/api/v1/course-map/generate",
                 json={
@@ -189,7 +189,7 @@ class TestCourseMapAPI:
 
             assert response.status_code == 200
             data = response.json()
-            
+
             # Check no boss nodes in non-Deep modes
             boss_nodes = [n for n in data["nodes"] if n["type"] == "boss"]
             assert len(boss_nodes) == 0, f"Mode '{mode}' should not have boss nodes"
@@ -198,7 +198,7 @@ class TestCourseMapAPI:
     async def test_deep_mode_allows_boss_nodes(self, client: AsyncClient):
         """Test that Deep mode can have boss nodes."""
         LLMClient.set_mock_dag_context(total_minutes=120, mode="Deep")
-        
+
         response = await client.post(
             "/api/v1/course-map/generate",
             json={
@@ -213,7 +213,7 @@ class TestCourseMapAPI:
 
         assert response.status_code == 200
         data = response.json()
-        
+
         # Deep mode should have boss nodes in the mock response
         boss_nodes = [n for n in data["nodes"] if n["type"] == "boss"]
         assert len(boss_nodes) > 0, "Deep mode should have boss nodes"
@@ -292,33 +292,33 @@ class TestCourseMapService:
     def test_validate_branches_with_linear_dag_fails(self):
         """Test that linear DAG (no branches) fails validation."""
         from app.config import get_settings
-        
+
         service = CourseMapService(
             llm_client=LLMClient(get_settings()),
             db_session=None,  # Not needed for validation tests
         )
-        
+
         # Linear DAG with no parallel nodes
         linear_nodes = [
             {"id": 1, "layer": 1, "pre_requisites": [], "estimated_minutes": 40},
             {"id": 2, "layer": 2, "pre_requisites": [1], "estimated_minutes": 40},
             {"id": 3, "layer": 3, "pre_requisites": [2], "estimated_minutes": 40},
         ]
-        
+
         with pytest.raises(DAGValidationError) as exc_info:
             service._validate_branches_and_merges(linear_nodes)
-        
+
         assert "branching layer" in str(exc_info.value.message)
 
     def test_validate_branches_without_merge_fails(self):
         """Test that DAG without merge node fails validation."""
         from app.config import get_settings
-        
+
         service = CourseMapService(
             llm_client=LLMClient(get_settings()),
             db_session=None,
         )
-        
+
         # DAG with branch but no merge (each path ends separately)
         no_merge_nodes = [
             {"id": 1, "layer": 1, "pre_requisites": [], "estimated_minutes": 30},
@@ -327,21 +327,21 @@ class TestCourseMapService:
             {"id": 4, "layer": 3, "pre_requisites": [2], "estimated_minutes": 15},
             {"id": 5, "layer": 3, "pre_requisites": [3], "estimated_minutes": 15},
         ]
-        
+
         with pytest.raises(DAGValidationError) as exc_info:
             service._validate_branches_and_merges(no_merge_nodes)
-        
+
         assert "merge node" in str(exc_info.value.message)
 
     def test_validate_dag_time_mismatch_fails(self):
         """Test that time sum mismatch fails validation."""
         from app.config import get_settings
-        
+
         service = CourseMapService(
             llm_client=LLMClient(get_settings()),
             db_session=None,
         )
-        
+
         # DAG data with incorrect time sum
         dag_data = {
             "map_meta": {},
@@ -352,22 +352,22 @@ class TestCourseMapService:
                 {"id": 4, "layer": 3, "pre_requisites": [2, 3], "estimated_minutes": 20, "type": "quiz"},
             ],
         }
-        
+
         # Total is 110, but we expect 120
         with pytest.raises(DAGValidationError) as exc_info:
             service._validate_dag_structure(dag_data, mode="Fast", total_commitment_minutes=120)
-        
+
         assert "Time sum mismatch" in str(exc_info.value.message)
 
     def test_validate_dag_boss_in_fast_mode_fails(self):
         """Test that boss nodes in Fast mode fails validation."""
         from app.config import get_settings
-        
+
         service = CourseMapService(
             llm_client=LLMClient(get_settings()),
             db_session=None,
         )
-        
+
         # DAG data with boss node in Fast mode
         dag_data = {
             "map_meta": {},
@@ -378,8 +378,8 @@ class TestCourseMapService:
                 {"id": 4, "layer": 3, "pre_requisites": [2, 3], "estimated_minutes": 30, "type": "boss"},  # Boss!
             ],
         }
-        
+
         with pytest.raises(DAGValidationError) as exc_info:
             service._validate_dag_structure(dag_data, mode="Fast", total_commitment_minutes=120)
-        
+
         assert "must not have boss nodes" in str(exc_info.value.message)

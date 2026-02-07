@@ -19,7 +19,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Startup
     settings = get_settings()
     setup_logging(settings.log_level)
-    
+
     # Import here to avoid circular imports and ensure settings are loaded
     from app.core.logging import get_logger
     logger = get_logger(__name__)
@@ -28,9 +28,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         model=settings.litellm_model,
         log_level=settings.log_level,
     )
-    
+
     yield
-    
+
     # Shutdown
     logger.info("Application shutting down")
 
@@ -39,14 +39,14 @@ def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
     # Validate settings early (will exit if missing required vars)
     get_settings()
-    
+
     app = FastAPI(
         title="EvoBook Backend",
         description="EvoBook learning platform backend API",
         version="0.1.0",
         lifespan=lifespan,
     )
-    
+
     # Add CORS middleware (must be added before other middleware)
     app.add_middleware(
         CORSMiddleware,
@@ -59,19 +59,19 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    
+
     # Add request logging middleware
     app.add_middleware(RequestLoggingMiddleware)
-    
+
     # Setup exception handlers
     setup_exception_handlers(app)
-    
+
     # Include routers
     # Health at root level (no /api/v1 prefix)
     app.include_router(health_router, tags=["health"])
     # API v1 routes
     app.include_router(v1_router)
-    
+
     return app
 
 

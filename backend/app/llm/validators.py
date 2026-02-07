@@ -10,7 +10,7 @@ from app.core.exceptions import LLMValidationError
 
 class OutputFormat(str, Enum):
     """Supported output formats for LLM responses."""
-    
+
     JSON = "json"
     YAML = "yaml"
     MARKDOWN = "markdown"
@@ -19,13 +19,13 @@ class OutputFormat(str, Enum):
 
 def validate_json(text: str) -> dict:
     """Parse and validate JSON from LLM response.
-    
+
     Args:
         text: Raw text that should contain JSON.
-        
+
     Returns:
         Parsed JSON as dict.
-        
+
     Raises:
         LLMValidationError: If text is not valid JSON or not a dict.
     """
@@ -48,13 +48,13 @@ def validate_json(text: str) -> dict:
 
 def validate_yaml(text: str) -> dict:
     """Parse and validate YAML from LLM response.
-    
+
     Args:
         text: Raw text that should contain YAML.
-        
+
     Returns:
         Parsed YAML as dict.
-        
+
     Raises:
         LLMValidationError: If text is not valid YAML or not a dict.
     """
@@ -82,14 +82,14 @@ def validate_yaml(text: str) -> dict:
 
 def validate_markdown(text: str, min_length: int = 10) -> str:
     """Validate markdown from LLM response.
-    
+
     Args:
         text: Raw text that should be markdown.
         min_length: Minimum required length (default 10).
-        
+
     Returns:
         Validated markdown text (stripped).
-        
+
     Raises:
         LLMValidationError: If text is empty or too short.
     """
@@ -98,37 +98,37 @@ def validate_markdown(text: str, min_length: int = 10) -> str:
             message="Markdown response is empty",
             details=None,
         )
-    
+
     stripped = text.strip()
     if len(stripped) < min_length:
         raise LLMValidationError(
             message=f"Markdown too short: {len(stripped)} chars (min {min_length})",
             details={"length": len(stripped), "min_length": min_length},
         )
-    
+
     return stripped
 
 
 def _strip_code_blocks(text: str, lang: str) -> str:
     """Strip markdown code block wrappers if present.
-    
+
     Args:
         text: Text potentially wrapped in code blocks.
         lang: Expected language tag (json, yaml).
-        
+
     Returns:
         Text with code blocks stripped.
     """
     stripped = text.strip()
-    
+
     # Check for ```json or ```yaml at start
     for prefix in [f"```{lang}", "```"]:
         if stripped.startswith(prefix):
             stripped = stripped[len(prefix):]
             break
-    
+
     # Check for ``` at end
     if stripped.endswith("```"):
         stripped = stripped[:-3]
-    
+
     return stripped.strip()

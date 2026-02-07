@@ -27,7 +27,7 @@ router = APIRouter(prefix="/course-map", tags=["course-map"])
 
 class CourseMapGenerateRequest(BaseModel):
     """Request body for course-map/generate endpoint."""
-    
+
     topic: str = Field(..., description="Learning topic from onboarding")
     level: Literal["Novice", "Beginner", "Intermediate", "Advanced"] = Field(
         ..., description="User's skill level"
@@ -42,7 +42,7 @@ class CourseMapGenerateRequest(BaseModel):
 
 class MapMeta(BaseModel):
     """Course map metadata."""
-    
+
     course_name: str
     strategy_rationale: str
     mode: Literal["Deep", "Fast", "Light"]
@@ -53,7 +53,7 @@ class MapMeta(BaseModel):
 
 class DAGNode(BaseModel):
     """Single node in the DAG."""
-    
+
     id: int
     title: str
     description: str
@@ -65,7 +65,7 @@ class DAGNode(BaseModel):
 
 class CourseMapGenerateResponse(BaseModel):
     """Response body for course-map/generate endpoint."""
-    
+
     course_map_id: UUID
     map_meta: MapMeta
     nodes: list[DAGNode]
@@ -73,7 +73,7 @@ class CourseMapGenerateResponse(BaseModel):
 
 def get_llm_client() -> LLMClient:
     """Dependency for getting LLM client.
-    
+
     Returns:
         Configured LLMClient instance.
     """
@@ -88,27 +88,27 @@ async def generate_course_map(
     user_id: UUID | None = Depends(get_optional_user_id),
 ) -> dict[str, Any]:
     """Generate a course map (DAG) for a learning path.
-    
+
     This endpoint generates a DAG-structured learning path based on the user's
     profile and preferences. The DAG must have branches and merges, and the
     total time must equal the requested commitment minutes.
-    
+
     Hard constraints:
     - DAG must have branches and merges (no linear paths)
     - sum(nodes[].estimated_minutes) == total_commitment_minutes
     - mode != Deep => no boss nodes allowed
-    
+
     Args:
         request: Course map generation request with user profile.
         db: Database session.
         llm_client: LLM client for generating the DAG.
         user_id: Optional authenticated user ID from JWT.
-        
+
     Returns:
         CourseMapGenerateResponse with course_map_id, map_meta, and nodes.
     """
     service = CourseMapService(llm_client=llm_client, db_session=db)
-    
+
     result = await service.generate_course_map(
         topic=request.topic,
         level=request.level,
@@ -118,7 +118,7 @@ async def generate_course_map(
         total_commitment_minutes=request.total_commitment_minutes,
         user_id=user_id,
     )
-    
+
     return result
 
 

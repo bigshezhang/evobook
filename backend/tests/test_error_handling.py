@@ -8,7 +8,7 @@ from httpx import AsyncClient
 async def test_404_returns_json_error(client_no_db: AsyncClient) -> None:
     """Test 404 errors return JSON format."""
     response = await client_no_db.get("/nonexistent/endpoint")
-    
+
     assert response.status_code == 404
     # FastAPI returns its own 404 format, but we verify it's JSON
     assert response.headers["content-type"].startswith("application/json")
@@ -22,7 +22,7 @@ async def test_validation_error_returns_json(client_no_db: AsyncClient) -> None:
         "/api/v1/not-implemented/endpoint",
         json={"invalid": "data"},
     )
-    
+
     # Should return 404 as JSON
     assert response.status_code == 404
     assert response.headers["content-type"].startswith("application/json")

@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, Text, text
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, Text, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -37,6 +37,13 @@ class NodeContent(Base):
         nullable=False,
         comment="knowledge_card | clarification | qa_detail",
     )
+    question_key: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+        comment="Hash key to distinguish different questions for same node. "
+        "NULL for knowledge_card (one per node), "
+        "sha256[:16] of question text for clarification/qa_detail.",
+    )
     content_json: Mapped[dict[str, Any]] = mapped_column(
         JSONB,
         nullable=False,
@@ -53,6 +60,14 @@ class NodeContent(Base):
         Index("idx_node_contents_course_map_id", "course_map_id"),
         Index("idx_node_contents_course_node", "course_map_id", "node_id"),
         Index("idx_node_contents_type", "content_type"),
+        # Unique constraint for cache lookup — prevents duplicate rows
+        UniqueConstraint(
+            "course_map_id",
+            "node_id",
+            "content_type",
+            "question_key",
+            name="uq_node_contents_cache_key",
+        ),
     )
 
     def __repr__(self) -> str:

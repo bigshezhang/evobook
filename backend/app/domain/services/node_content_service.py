@@ -4,11 +4,13 @@ This module implements content generation for Knowledge Cards, Clarifications,
 and QA Details using LLM, with optional caching via the node_contents table.
 """
 
+import hashlib
 import json
 from typing import Any
 from uuid import UUID
 
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import LLMValidationError
@@ -270,10 +272,15 @@ class NodeContentService:
         Raises:
             LLMValidationError: If LLM response parsing fails.
         """
+        # Compute a per-question cache key so different questions on the
+        # same node each get their own cached entry.
+        question_key = self._compute_question_key(user_question_raw)
+
         logger.info(
             "Generating clarification",
             language=language,
             question_length=len(user_question_raw),
+            question_key=question_key,
             course_map_id=str(course_map_id) if course_map_id else None,
             node_id=node_id,
         )
@@ -284,11 +291,13 @@ class NodeContentService:
                 course_map_id=course_map_id,
                 node_id=node_id,
                 content_type="clarification",
+                question_key=question_key,
             )
             if cached is not None:
                 logger.info(
                     "Returning cached clarification",
                     node_id=node_id,
+                    question_key=question_key,
                     course_map_id=str(course_map_id),
                 )
                 return cached
@@ -344,6 +353,7 @@ class NodeContentService:
                 node_id=node_id,
                 content_type="clarification",
                 content_json=response_data,
+                question_key=question_key,
             )
         
         return response_data
@@ -375,10 +385,15 @@ class NodeContentService:
         Raises:
             LLMValidationError: If LLM response parsing fails.
         """
+        # Compute a per-question cache key so different QA expansions on the
+        # same node each get their own cached entry.
+        question_key = self._compute_question_key(qa_title)
+
         logger.info(
             "Generating QA detail",
             language=language,
             qa_title=qa_title[:50],
+            question_key=question_key,
             course_map_id=str(course_map_id) if course_map_id else None,
             node_id=node_id,
         )
@@ -389,11 +404,13 @@ class NodeContentService:
                 course_map_id=course_map_id,
                 node_id=node_id,
                 content_type="qa_detail",
+                question_key=question_key,
             )
             if cached is not None:
                 logger.info(
                     "Returning cached QA detail",
                     node_id=node_id,
+                    question_key=question_key,
                     course_map_id=str(course_map_id),
                 )
                 return cached
@@ -461,6 +478,7 @@ class NodeContentService:
                 node_id=node_id,
                 content_type="qa_detail",
                 content_json=response_data,
+                question_key=question_key,
             )
         
         return response_data
@@ -469,11 +487,27 @@ class NodeContentService:
     # Cache helpers
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _compute_question_key(text: str) -> str:
+        """Compute a short hash key from a question/title string.
+        
+        The text is stripped, lowercased, and SHA-256 hashed.
+        Only the first 16 hex characters are returned.
+        
+        Args:
+            text: Raw question or title text.
+            
+        Returns:
+            16-character hex digest string.
+        """
+        return hashlib.sha256(text.strip().lower().encode()).hexdigest()[:16]
+
     async def _get_cached_content(
         self,
         course_map_id: UUID | None,
         node_id: int,
         content_type: str,
+        question_key: str | None = None,
     ) -> dict[str, Any] | None:
         """Look up a cached content row in node_contents.
         
@@ -484,6 +518,8 @@ class NodeContentService:
             course_map_id: Course map identifier.
             node_id: Node identifier within the course map.
             content_type: Content type discriminator (e.g. "knowledge_card").
+            question_key: Optional hash key to distinguish different questions
+                for the same node.  NULL for knowledge cards.
             
         Returns:
             Cached content dict or None.
@@ -497,6 +533,7 @@ class NodeContentService:
                     NodeContent.course_map_id == course_map_id,
                     NodeContent.node_id == node_id,
                     NodeContent.content_type == content_type,
+                    NodeContent.question_key == question_key,
                 )
             )
             cached = result.scalar_one_or_none()
@@ -506,6 +543,7 @@ class NodeContentService:
                     course_map_id=str(course_map_id),
                     node_id=node_id,
                     content_type=content_type,
+                    question_key=question_key,
                 )
                 return cached.content_json  # type: ignore[return-value]
         except Exception:
@@ -515,6 +553,7 @@ class NodeContentService:
                 course_map_id=str(course_map_id),
                 node_id=node_id,
                 content_type=content_type,
+                question_key=question_key,
                 exc_info=True,
             )
         return None
@@ -525,6 +564,7 @@ class NodeContentService:
         node_id: int,
         content_type: str,
         content_json: dict[str, Any],
+        question_key: str | None = None,
     ) -> None:
         """Persist generated content to node_contents for future cache hits.
         
@@ -536,24 +576,37 @@ class NodeContentService:
             node_id: Node identifier within the course map.
             content_type: Content type discriminator (e.g. "knowledge_card").
             content_json: Full response dict to cache.
+            question_key: Optional hash key to distinguish different questions
+                for the same node.  NULL for knowledge cards.
         """
         if course_map_id is None or self.db is None:
             return
         
         try:
-            node_content = NodeContent(
-                course_map_id=course_map_id,
-                node_id=node_id,
-                content_type=content_type,
-                content_json=content_json,
+            # Use ON CONFLICT DO NOTHING to safely handle duplicate inserts.
+            # If a row with the same (course_map_id, node_id, content_type, question_key)
+            # already exists, the insert is silently skipped.
+            stmt = (
+                pg_insert(NodeContent)
+                .values(
+                    course_map_id=course_map_id,
+                    node_id=node_id,
+                    content_type=content_type,
+                    question_key=question_key,
+                    content_json=content_json,
+                )
+                .on_conflict_do_nothing(
+                    constraint="uq_node_contents_cache_key",
+                )
             )
-            self.db.add(node_content)
+            await self.db.execute(stmt)
             await self.db.commit()
             logger.info(
                 "Cached node content",
                 course_map_id=str(course_map_id),
                 node_id=node_id,
                 content_type=content_type,
+                question_key=question_key,
             )
         except Exception:
             # Best-effort caching — rollback and continue
@@ -563,5 +616,6 @@ class NodeContentService:
                 course_map_id=str(course_map_id),
                 node_id=node_id,
                 content_type=content_type,
+                question_key=question_key,
                 exc_info=True,
             )
