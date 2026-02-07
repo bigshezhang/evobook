@@ -8,6 +8,7 @@ from app.domain.models.onboarding import OnboardingSession
 from app.domain.models.profile import Profile
 from app.domain.models.prompt_run import PromptRun
 from app.domain.models.quiz_attempt import QuizAttempt
+from app.domain.models.user_stats import UserStats
 
 __all__ = [
     "CourseMap",
@@ -18,4 +19,5 @@ __all__ = [
     "Profile",
     "PromptRun",
     "QuizAttempt",
+    "UserStats",
 ]

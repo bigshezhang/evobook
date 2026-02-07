@@ -15,7 +15,10 @@ from app.core.auth import get_current_user_id
 from app.core.exceptions import AppException
 from app.domain.services.activity_service import ActivityService
 from app.domain.services.profile_service import ProfileService
+from app.domain.services.ranking_service import RankingService
+from app.domain.models.user_stats import UserStats
 from app.infrastructure.database import get_db_session
+from sqlalchemy import select
 
 router = APIRouter(prefix="/profile", tags=["profile"])
 
@@ -76,6 +79,18 @@ class LearningActivitiesResponse(BaseModel):
 
     activities: list[LearningActivityItem]
     total: int
+
+
+class ProfileStatsResponse(BaseModel):
+    """用户学习统计响应。"""
+
+    total_study_hours: int = Field(..., description="总学习时长（小时，向上取整）")
+    total_study_seconds: int = Field(..., description="总学习时长（秒）")
+    completed_courses_count: int = Field(..., description="已完成课程数（100% 完成的课程数量）")
+    mastered_nodes_count: int = Field(..., description="已掌握节点数（保留字段，暂未使用）")
+    global_rank: int | None = Field(..., description="全局排名（从 1 开始），如果无数据则为 None")
+    rank_percentile: int | None = Field(..., description="百分位（0-100），如果无数据则为 None")
+    total_users: int = Field(..., description="系统中有学习时长统计的总用户数")
 
 
 # ---------------------------------------------------------------------------
@@ -263,6 +278,72 @@ async def get_learning_activities(
             status_code=400,
             detail={"code": "INVALID_PARAMETER", "message": str(e)},
         )
+    except AppException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail={"code": "INTERNAL_ERROR", "message": str(e)},
+        )
+
+
+@router.get("/stats", response_model=ProfileStatsResponse)
+async def get_profile_stats(
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
+    db: Annotated[AsyncSession, Depends(get_db_session)],
+) -> dict:
+    """获取用户学习统计数据。
+    
+    包括：
+    - 总学习时长（小时和秒）
+    - 已完成课程数
+    - 已掌握节点数
+    - 全局排名和百分位
+    
+    Args:
+        user_id: 认证用户 ID（从 JWT 提取）
+        db: 数据库会话
+    
+    Returns:
+        ProfileStatsResponse: 用户学习统计数据
+    
+    Raises:
+        401: 未认证
+        500: 内部错误
+    """
+    try:
+        # 1. 获取用户统计数据
+        stats_stmt = select(UserStats).where(UserStats.user_id == user_id)
+        stats_result = await db.execute(stats_stmt)
+        stats = stats_result.scalar_one_or_none()
+        
+        # 2. 获取排名数据
+        ranking = await RankingService.get_user_rank(user_id=user_id, db=db)
+        
+        # 3. 构建响应
+        if stats:
+            total_study_seconds = stats.total_study_seconds
+            completed_courses_count = stats.completed_courses_count
+            mastered_nodes_count = stats.mastered_nodes_count
+        else:
+            total_study_seconds = 0
+            completed_courses_count = 0
+            mastered_nodes_count = 0
+        
+        # 向上取整计算小时数
+        import math
+        total_study_hours = math.ceil(total_study_seconds / 3600)
+        
+        return {
+            "total_study_hours": total_study_hours,
+            "total_study_seconds": total_study_seconds,
+            "completed_courses_count": completed_courses_count,
+            "mastered_nodes_count": mastered_nodes_count,
+            "global_rank": ranking["global_rank"],
+            "rank_percentile": ranking["rank_percentile"],
+            "total_users": ranking["total_users"],
+        }
+    
     except AppException:
         raise
     except Exception as e:
