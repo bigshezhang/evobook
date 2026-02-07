@@ -142,6 +142,7 @@ async def generate_knowledge_card(
     request: KnowledgeCardRequest,
     db: Annotated[AsyncSession, Depends(get_db_session)],
     llm_client: Annotated[LLMClient, Depends(get_llm_client)],
+    user_id: UUID | None = Depends(get_optional_user_id),
 ) -> dict[str, Any]:
     """Generate a knowledge card for a node.
     

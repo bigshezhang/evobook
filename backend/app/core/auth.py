@@ -11,8 +11,15 @@ import jwt
 from jwt import PyJWKClient
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
+from app.core.logging import get_logger
+from app.infrastructure.database import get_db_session
+
+logger = get_logger(__name__)
 
 # HTTPBearer extracts "Bearer <token>" from Authorization header
 _bearer_scheme = HTTPBearer(auto_error=False)
@@ -83,10 +90,76 @@ def _decode_supabase_token(token: str) -> dict:
         )
 
 
+async def _ensure_profile_exists(user_id: UUID, db: AsyncSession) -> None:
+    """Create a profiles row if it doesn't exist yet.
+
+    Called automatically when a user_id is extracted from a JWT.
+    This bridges the gap between Supabase auth.users (managed by Supabase)
+    and our local profiles table.
+
+    Args:
+        user_id: The Supabase user UUID.
+        db: Active database session.
+
+    Raises:
+        HTTPException: If database operation fails.
+    """
+    from app.domain.models.profile import Profile
+
+    result = await db.execute(select(Profile).where(Profile.id == user_id))
+    if result.scalar_one_or_none() is not None:
+        return  # Profile already exists
+
+    profile = Profile(id=user_id)
+    db.add(profile)
+    
+    try:
+        await db.commit()
+        logger.info("Auto-created profile for new user", user_id=str(user_id))
+    except IntegrityError as err:
+        # Profile was created concurrently by another request
+        await db.rollback()
+        # Verify it exists now (race condition resolved)
+        result = await db.execute(select(Profile).where(Profile.id == user_id))
+        if result.scalar_one_or_none() is None:
+            # Still doesn't exist after rollback - log error
+            logger.error(
+                "Failed to create profile due to integrity constraint",
+                user_id=str(user_id),
+                exc_info=True,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail={
+                    "code": "PROFILE_CREATION_FAILED",
+                    "message": "Failed to create user profile",
+                },
+            )
+        # Profile exists now, continue normally
+        logger.debug("Profile created concurrently by another request", user_id=str(user_id))
+    except Exception as err:
+        await db.rollback()
+        logger.error(
+            "Failed to create profile",
+            user_id=str(user_id),
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "code": "PROFILE_CREATION_FAILED",
+                "message": "Failed to create user profile",
+            },
+        )
+
+
 async def get_current_user_id(
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_scheme),
+    db: AsyncSession = Depends(get_db_session),
 ) -> UUID:
     """FastAPI dependency: extract and validate user_id from Supabase JWT.
+
+    Automatically creates a profiles row on first login.
 
     Usage:
         @router.post("/some-endpoint")
@@ -115,21 +188,26 @@ async def get_current_user_id(
         )
 
     try:
-        return UUID(sub)
+        user_id = UUID(sub)
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={"code": "INVALID_TOKEN", "message": "Token 'sub' is not a valid UUID"},
         )
 
+    await _ensure_profile_exists(user_id, db)
+    return user_id
+
 
 async def get_optional_user_id(
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_scheme),
+    db: AsyncSession = Depends(get_db_session),
 ) -> UUID | None:
     """FastAPI dependency: optionally extract user_id from JWT.
 
     Returns None if no token is provided (for backward-compatible endpoints).
     Still validates the token if one is present.
+    Automatically creates a profiles row on first login.
 
     Returns:
         The authenticated user's UUID, or None if no token.
@@ -144,6 +222,9 @@ async def get_optional_user_id(
         return None
 
     try:
-        return UUID(sub)
+        user_id = UUID(sub)
     except ValueError:
         return None
+
+    await _ensure_profile_exists(user_id, db)
+    return user_id
