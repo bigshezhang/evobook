@@ -123,10 +123,30 @@ const KnowledgeTree: React.FC = () => {
     return 'play_circle';
   };
 
+  const getNodeStyle = (state: string): React.CSSProperties => {
+    if (state === 'completed') return {
+      backgroundColor: '#FFB938',
+      boxShadow: '0 6px 0 #D99A20',
+      color: '#1A1A1A',
+    };
+    if (state === 'current') return {
+      backgroundColor: '#1A1A1A',
+      boxShadow: '0 6px 0 #000000',
+      color: '#FFFFFF',
+    };
+    return {
+      backgroundColor: '#EAEAEA',
+      border: '1px solid #E5E7EB',
+      boxShadow: '0 4px 0 #D1D5DB',
+      color: '#9CA3AF',
+    };
+  };
+
   const getNodeClasses = (state: string) => {
-    if (state === 'completed') return 'node-3d node-completed';
-    if (state === 'current') return 'node-3d node-current ring-8 ring-secondary/10';
-    return 'node-3d node-locked cursor-not-allowed';
+    const base = 'transition-all duration-100 relative active:translate-y-1 active:shadow-none';
+    if (state === 'completed') return base;
+    if (state === 'current') return `${base} ring-8 ring-secondary/10`;
+    return `${base} cursor-not-allowed`;
   };
 
   return (
@@ -188,7 +208,8 @@ const KnowledgeTree: React.FC = () => {
                     <button
                       key={node.id}
                       onClick={() => handleNodeClick(node)}
-                      className={`${nodeClasses} ${widthClass} py-4 rounded-xl flex items-center justify-center gap-2 border border-white/20`}
+                      className={`${nodeClasses} ${widthClass} py-4 rounded-xl flex items-center justify-center gap-2`}
+                      style={getNodeStyle(state)}
                     >
                       <span 
                         className="material-symbols-outlined text-[18px] font-bold"

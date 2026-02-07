@@ -126,15 +126,6 @@ const InterestSelection: React.FC = () => {
               </button>
             );
           })}
-          <button 
-            disabled={hasTopicInput}
-            className={`h-24 rounded-2xl bg-white border-2 border-dashed border-gray-200 flex flex-col items-center justify-center transition-all ${
-              hasTopicInput ? 'opacity-30 cursor-not-allowed' : 'opacity-60'
-            }`}
-          >
-            <span className="material-symbols-outlined text-3xl mb-1">add</span>
-            <span className="font-bold text-sm">Custom</span>
-          </button>
         </div>
       </main>
 

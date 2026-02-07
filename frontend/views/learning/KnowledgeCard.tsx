@@ -432,6 +432,7 @@ const KnowledgeCard: React.FC = () => {
         setError(null);
         
         const request: KnowledgeCardRequest = {
+          course_map_id: courseMapData.course_map_id,
           course: {
             course_name: courseMapData.map_meta.course_name,
             course_context: courseMapData.map_meta.strategy_rationale,
@@ -708,6 +709,12 @@ const KnowledgeCard: React.FC = () => {
             >
               Go to Travel
               <span className="material-symbols-rounded text-[18px]">sports_esports</span>
+            </button>
+            <button 
+              onClick={() => navigate('/learning')}
+              className="w-full py-3 mt-3 bg-transparent text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 rounded-full font-semibold text-[14px] active:scale-95 transition-all"
+            >
+              Back to learn
             </button>
           </div>
         </div>

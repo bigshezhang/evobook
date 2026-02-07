@@ -75,6 +75,7 @@ export interface DAGNode {
 }
 
 export interface CourseMapGenerateResponse {
+  course_map_id: string;  // UUID of the saved course map
   map_meta: MapMeta;
   nodes: DAGNode[];
 }
@@ -98,6 +99,7 @@ export interface NodeInfo {
 }
 
 export interface KnowledgeCardRequest {
+  course_map_id: string;  // Course map UUID
   course: CourseInfo;
   node: NodeInfo;
 }
