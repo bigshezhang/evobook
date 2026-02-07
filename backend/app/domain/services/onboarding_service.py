@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logging import get_logger
 from app.domain.models.onboarding import OnboardingSession
+from app.domain.models.profile import Profile
 from app.llm.client import LLMClient
 from app.llm.validators import OutputFormat
 from app.prompts.registry import PromptName, PromptRegistry
@@ -151,6 +152,7 @@ class OnboardingService:
         user_message: str | None,
         user_choice: str | None,
         initial_topic: str | None = None,
+        user_id: UUID | None = None,
     ) -> dict[str, Any]:
         """Process user input and return next response.
 
@@ -159,12 +161,13 @@ class OnboardingService:
             user_message: Free-form user message.
             user_choice: Selected option from previous response.
             initial_topic: Pre-selected topic to skip Phase 1 (Exploration).
+            user_id: Optional authenticated user ID to associate with the session.
 
         Returns:
             Chat response dict with type "chat" or "finish".
         """
         # 1. Load or create session
-        state = await self._load_or_create_state(session_id)
+        state = await self._load_or_create_state(session_id, user_id=user_id)
 
         # 1.5. If initial_topic provided for new session, skip to calibration phase
         if initial_topic and state.phase == OnboardingPhase.EXPLORATION and not state.topic:
@@ -223,7 +226,11 @@ class OnboardingService:
         # 9. Save state to DB
         await self._save_state(state)
 
-        # 10. Return appropriate response
+        # 10. Mark profile onboarding_completed if finished and user is authenticated
+        if response_data.get("type") == "finish" and user_id:
+            await self._mark_onboarding_completed(user_id)
+
+        # 11. Return appropriate response
         if response_data.get("type") == "finish":
             return {
                 "type": "finish",
@@ -238,17 +245,23 @@ class OnboardingService:
                 "session_id": state.session_id,
             }
 
-    async def _load_or_create_state(self, session_id: UUID | None) -> OnboardingState:
+    async def _load_or_create_state(
+        self, session_id: UUID | None, user_id: UUID | None = None
+    ) -> OnboardingState:
         """Load existing session or create new one.
 
         Args:
             session_id: Session ID to load, or None for new session.
+            user_id: Optional user ID to associate with the session.
 
         Returns:
             OnboardingState loaded or newly created.
         """
         if session_id is None:
-            return OnboardingState.new()
+            state = OnboardingState.new()
+            # Store user_id for later persistence
+            self._pending_user_id = user_id
+            return state
 
         # Try to load from database
         stmt = select(OnboardingSession).where(OnboardingSession.id == session_id)
@@ -260,7 +273,18 @@ class OnboardingService:
                 "Session not found, creating new",
                 requested_session_id=str(session_id),
             )
+            self._pending_user_id = user_id
             return OnboardingState.new()
+
+        # If session has no user_id but caller is authenticated, backfill it
+        if session.user_id is None and user_id is not None:
+            session.user_id = user_id
+            logger.info(
+                "Backfilling user_id on existing session",
+                session_id=str(session_id),
+                user_id=str(user_id),
+            )
+        self._pending_user_id = user_id
 
         # Reconstruct state from DB
         state_data = session.state_json or {}
@@ -288,9 +312,10 @@ class OnboardingService:
         session = result.scalar_one_or_none()
 
         if session is None:
-            # Create new session
+            # Create new session with optional user_id
             session = OnboardingSession(
                 id=state.session_id,
+                user_id=getattr(self, "_pending_user_id", None),
                 phase=state.phase.value,
                 topic=state.topic,
                 level=state.level,
@@ -454,3 +479,28 @@ class OnboardingService:
         state.intent = None
         # Keep history for context, but clear profile data
         return state
+
+    async def _mark_onboarding_completed(self, user_id: UUID) -> None:
+        """Set onboarding_completed=True on the user's profile.
+
+        Args:
+            user_id: The authenticated user's UUID.
+        """
+        stmt = select(Profile).where(Profile.id == user_id)
+        result = await self.db.execute(stmt)
+        profile = result.scalar_one_or_none()
+
+        if profile is None:
+            logger.warning(
+                "Profile not found when marking onboarding completed",
+                user_id=str(user_id),
+            )
+            return
+
+        profile.onboarding_completed = True
+        await self.db.commit()
+
+        logger.info(
+            "Profile onboarding_completed set to True",
+            user_id=str(user_id),
+        )

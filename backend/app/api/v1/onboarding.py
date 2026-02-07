@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
+from app.core.auth import get_optional_user_id
 from app.domain.services.onboarding_service import OnboardingService
 from app.infrastructure.database import get_db_session
 from app.llm.client import LLMClient
@@ -69,6 +70,7 @@ async def onboarding_next(
     request: OnboardingNextRequest,
     db: Annotated[AsyncSession, Depends(get_db_session)],
     llm_client: Annotated[LLMClient, Depends(get_llm_client)],
+    user_id: UUID | None = Depends(get_optional_user_id),
 ) -> ChatResponse | FinishResponse:
     """Process onboarding conversation step.
 
@@ -80,6 +82,7 @@ async def onboarding_next(
         request: Onboarding request with session_id and user input.
         db: Database session.
         llm_client: LLM client for generating responses.
+        user_id: Optional authenticated user ID from JWT.
 
     Returns:
         ChatResponse with next message/options, or FinishResponse with profile.
@@ -91,6 +94,7 @@ async def onboarding_next(
         user_message=request.user_message,
         user_choice=request.user_choice,
         initial_topic=request.initial_topic,
+        user_id=user_id,
     )
 
     if result["type"] == "finish":

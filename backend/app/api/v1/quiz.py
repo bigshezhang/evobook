@@ -4,11 +4,13 @@ This module provides API endpoints for quiz generation.
 """
 
 from typing import Annotated, Any, Literal
+from uuid import UUID
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 from app.config import get_settings
+from app.core.auth import get_optional_user_id
 from app.domain.services.quiz_service import QuizService
 from app.llm.client import LLMClient
 
@@ -79,6 +81,7 @@ def get_llm_client() -> LLMClient:
 async def generate_quiz(
     request: QuizGenerateRequest,
     llm_client: Annotated[LLMClient, Depends(get_llm_client)],
+    user_id: UUID | None = Depends(get_optional_user_id),
 ) -> dict[str, Any]:
     """Generate a quiz from learned topics.
     
@@ -95,6 +98,7 @@ async def generate_quiz(
     Args:
         request: Quiz generation request with language, mode, and learned topics.
         llm_client: LLM client for generating the quiz.
+        user_id: Optional authenticated user ID from JWT.
         
     Returns:
         QuizGenerateResponse with type, title, greeting, questions.
@@ -111,6 +115,7 @@ async def generate_quiz(
         language=request.language,
         mode=request.mode,
         learned_topics=learned_topics_dicts,
+        user_id=user_id,
     )
     
     return result

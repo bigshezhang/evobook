@@ -1,14 +1,19 @@
 """Node content generation services.
 
 This module implements content generation for Knowledge Cards, Clarifications,
-and QA Details using LLM.
+and QA Details using LLM, with optional caching via the node_contents table.
 """
 
 import json
 from typing import Any
+from uuid import UUID
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import LLMValidationError
 from app.core.logging import get_logger
+from app.domain.models.node_content import NodeContent
 from app.llm.client import LLMClient
 from app.llm.validators import OutputFormat
 from app.prompts.registry import PromptName, PromptRegistry
@@ -23,15 +28,24 @@ class NodeContentService:
     1. Knowledge Card generation (paginated markdown content)
     2. Clarification generation (quick answer to user questions)
     3. QA Detail generation (expanded explanation with image spec)
+    
+    When a db_session and course_map_id are provided, generated content
+    is cached in the node_contents table and returned on subsequent requests.
     """
     
-    def __init__(self, llm_client: LLMClient) -> None:
+    def __init__(
+        self,
+        llm_client: LLMClient,
+        db_session: AsyncSession | None = None,
+    ) -> None:
         """Initialize node content service.
         
         Args:
             llm_client: LLM client for generating content.
+            db_session: Optional database session for caching.
         """
         self.llm = llm_client
+        self.db = db_session
     
     async def generate_knowledge_card(
         self,
@@ -45,8 +59,14 @@ class NodeContentService:
         node_description: str,
         node_type: str,
         estimated_minutes: int,
+        course_map_id: UUID | None = None,
+        user_id: UUID | None = None,
     ) -> dict[str, Any]:
         """Generate a knowledge card for a node.
+        
+        If course_map_id is provided and a cached entry exists in node_contents,
+        the cached content is returned without calling LLM. After a successful
+        LLM generation the result is persisted for future cache hits.
         
         Args:
             course_name: Name of the course.
@@ -59,6 +79,8 @@ class NodeContentService:
             node_description: Description of the node.
             node_type: Node type (learn|boss).
             estimated_minutes: Estimated learning time.
+            course_map_id: Optional course map ID for caching.
+            user_id: Optional authenticated user ID (reserved for future use).
             
         Returns:
             Dict containing type, node_id, totalPagesInCard, markdown, yaml.
@@ -72,7 +94,22 @@ class NodeContentService:
             node_title=node_title,
             mode=mode,
             estimated_minutes=estimated_minutes,
+            course_map_id=str(course_map_id) if course_map_id else None,
         )
+        
+        # Check cache before calling LLM
+        cached = await self._get_cached_content(
+            course_map_id=course_map_id,
+            node_id=node_id,
+            content_type="knowledge_card",
+        )
+        if cached is not None:
+            logger.info(
+                "Returning cached knowledge card",
+                node_id=node_id,
+                course_map_id=str(course_map_id),
+            )
+            return cached
         
         # Build prompt context
         prompt_text = PromptRegistry.get_prompt(PromptName.KNOWLEDGE_CARD)
@@ -115,13 +152,23 @@ class NodeContentService:
         )
         
         # Always use the request's node_id, not the LLM response
-        return {
+        response_data: dict[str, Any] = {
             "type": "knowledge_card",
             "node_id": node_id,
             "totalPagesInCard": data.get("totalPagesInCard", 2),
             "markdown": data.get("markdown", ""),
             "yaml": data.get("yaml", ""),
         }
+        
+        # Cache the result (best-effort)
+        await self._save_cached_content(
+            course_map_id=course_map_id,
+            node_id=node_id,
+            content_type="knowledge_card",
+            content_json=response_data,
+        )
+        
+        return response_data
     
     def _build_knowledge_card_context(
         self,
@@ -201,13 +248,21 @@ class NodeContentService:
         language: str,
         user_question_raw: str,
         page_markdown: str,
+        course_map_id: UUID | None = None,
+        node_id: int | None = None,
+        user_id: UUID | None = None,
     ) -> dict[str, Any]:
         """Generate a clarification answer for a user question.
+        
+        If course_map_id and node_id are provided the result is cached.
         
         Args:
             language: Response language (en|zh).
             user_question_raw: User's raw question text.
             page_markdown: Current page markdown content for context.
+            course_map_id: Optional course map ID for caching.
+            node_id: Optional node ID for caching.
+            user_id: Optional authenticated user ID (reserved for future use).
             
         Returns:
             Dict containing type, corrected_title, short_answer.
@@ -219,7 +274,24 @@ class NodeContentService:
             "Generating clarification",
             language=language,
             question_length=len(user_question_raw),
+            course_map_id=str(course_map_id) if course_map_id else None,
+            node_id=node_id,
         )
+        
+        # Check cache before calling LLM
+        if node_id is not None:
+            cached = await self._get_cached_content(
+                course_map_id=course_map_id,
+                node_id=node_id,
+                content_type="clarification",
+            )
+            if cached is not None:
+                logger.info(
+                    "Returning cached clarification",
+                    node_id=node_id,
+                    course_map_id=str(course_map_id),
+                )
+                return cached
         
         # Build prompt context
         prompt_text = PromptRegistry.get_prompt(PromptName.CLARIFICATION)
@@ -259,24 +331,43 @@ class NodeContentService:
             corrected_title=data.get("corrected_title", "")[:50],
         )
         
-        return {
+        response_data: dict[str, Any] = {
             "type": "clarification",
             "corrected_title": data.get("corrected_title", ""),
             "short_answer": data.get("short_answer", ""),
         }
+        
+        # Cache the result (best-effort)
+        if node_id is not None:
+            await self._save_cached_content(
+                course_map_id=course_map_id,
+                node_id=node_id,
+                content_type="clarification",
+                content_json=response_data,
+            )
+        
+        return response_data
     
     async def generate_qa_detail(
         self,
         language: str,
         qa_title: str,
         qa_short_answer: str,
+        course_map_id: UUID | None = None,
+        node_id: int | None = None,
+        user_id: UUID | None = None,
     ) -> dict[str, Any]:
         """Generate a detailed QA explanation with image spec.
+        
+        If course_map_id and node_id are provided the result is cached.
         
         Args:
             language: Response language (en|zh).
             qa_title: Title of the QA.
             qa_short_answer: Short answer to expand upon.
+            course_map_id: Optional course map ID for caching.
+            node_id: Optional node ID for caching.
+            user_id: Optional authenticated user ID (reserved for future use).
             
         Returns:
             Dict containing type, title, body_markdown, image.
@@ -288,7 +379,24 @@ class NodeContentService:
             "Generating QA detail",
             language=language,
             qa_title=qa_title[:50],
+            course_map_id=str(course_map_id) if course_map_id else None,
+            node_id=node_id,
         )
+        
+        # Check cache before calling LLM
+        if node_id is not None:
+            cached = await self._get_cached_content(
+                course_map_id=course_map_id,
+                node_id=node_id,
+                content_type="qa_detail",
+            )
+            if cached is not None:
+                logger.info(
+                    "Returning cached QA detail",
+                    node_id=node_id,
+                    course_map_id=str(course_map_id),
+                )
+                return cached
         
         # Build prompt context
         prompt_text = PromptRegistry.get_prompt(PromptName.QA_DETAIL)
@@ -336,7 +444,7 @@ class NodeContentService:
             title=data.get("title", "")[:50],
         )
         
-        return {
+        response_data: dict[str, Any] = {
             "type": "qa_detail",
             "title": data.get("title", ""),
             "body_markdown": data.get("body_markdown", ""),
@@ -345,3 +453,115 @@ class NodeContentService:
                 "prompt": image.get("prompt", ""),
             },
         }
+        
+        # Cache the result (best-effort)
+        if node_id is not None:
+            await self._save_cached_content(
+                course_map_id=course_map_id,
+                node_id=node_id,
+                content_type="qa_detail",
+                content_json=response_data,
+            )
+        
+        return response_data
+    
+    # ------------------------------------------------------------------
+    # Cache helpers
+    # ------------------------------------------------------------------
+
+    async def _get_cached_content(
+        self,
+        course_map_id: UUID | None,
+        node_id: int,
+        content_type: str,
+    ) -> dict[str, Any] | None:
+        """Look up a cached content row in node_contents.
+        
+        Returns the stored content_json dict when a cache hit is found,
+        or None on miss or when caching is unavailable.
+        
+        Args:
+            course_map_id: Course map identifier.
+            node_id: Node identifier within the course map.
+            content_type: Content type discriminator (e.g. "knowledge_card").
+            
+        Returns:
+            Cached content dict or None.
+        """
+        if course_map_id is None or self.db is None:
+            return None
+        
+        try:
+            result = await self.db.execute(
+                select(NodeContent).where(
+                    NodeContent.course_map_id == course_map_id,
+                    NodeContent.node_id == node_id,
+                    NodeContent.content_type == content_type,
+                )
+            )
+            cached = result.scalar_one_or_none()
+            if cached is not None:
+                logger.info(
+                    "Cache hit for node content",
+                    course_map_id=str(course_map_id),
+                    node_id=node_id,
+                    content_type=content_type,
+                )
+                return cached.content_json  # type: ignore[return-value]
+        except Exception:
+            # Cache lookup is best-effort; log and continue to LLM
+            logger.warning(
+                "Failed to read cached content, falling back to LLM",
+                course_map_id=str(course_map_id),
+                node_id=node_id,
+                content_type=content_type,
+                exc_info=True,
+            )
+        return None
+
+    async def _save_cached_content(
+        self,
+        course_map_id: UUID | None,
+        node_id: int,
+        content_type: str,
+        content_json: dict[str, Any],
+    ) -> None:
+        """Persist generated content to node_contents for future cache hits.
+        
+        This is best-effort: if the save fails the caller still returns
+        the freshly generated response.
+        
+        Args:
+            course_map_id: Course map identifier.
+            node_id: Node identifier within the course map.
+            content_type: Content type discriminator (e.g. "knowledge_card").
+            content_json: Full response dict to cache.
+        """
+        if course_map_id is None or self.db is None:
+            return
+        
+        try:
+            node_content = NodeContent(
+                course_map_id=course_map_id,
+                node_id=node_id,
+                content_type=content_type,
+                content_json=content_json,
+            )
+            self.db.add(node_content)
+            await self.db.commit()
+            logger.info(
+                "Cached node content",
+                course_map_id=str(course_map_id),
+                node_id=node_id,
+                content_type=content_type,
+            )
+        except Exception:
+            # Best-effort caching — rollback and continue
+            await self.db.rollback()
+            logger.warning(
+                "Failed to cache node content",
+                course_map_id=str(course_map_id),
+                node_id=node_id,
+                content_type=content_type,
+                exc_info=True,
+            )

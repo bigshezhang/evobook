@@ -53,6 +53,7 @@ class CourseMapService:
         verified_concept: str,
         mode: str,
         total_commitment_minutes: int,
+        user_id: UUID | None = None,
     ) -> dict[str, Any]:
         """Generate a course map DAG using LLM.
         
@@ -63,9 +64,10 @@ class CourseMapService:
             verified_concept: Concept verified during onboarding.
             mode: Learning mode (Deep|Fast|Light).
             total_commitment_minutes: Total time budget.
+            user_id: Optional authenticated user ID to associate with the map.
             
         Returns:
-            Dict containing map_meta and nodes.
+            Dict containing course_map_id, map_meta, and nodes.
             
         Raises:
             DAGValidationError: If DAG structure is invalid.
@@ -112,6 +114,7 @@ class CourseMapService:
         # Persist to database
         course_map = CourseMap(
             id=uuid4(),
+            user_id=user_id,
             topic=topic,
             level=level,
             focus=focus,
@@ -128,9 +131,11 @@ class CourseMapService:
             "Course map generated and saved",
             course_map_id=str(course_map.id),
             node_count=len(dag_data.get("nodes", [])),
+            user_id=str(user_id) if user_id else None,
         )
         
         return {
+            "course_map_id": course_map.id,
             "map_meta": dag_data.get("map_meta", {}),
             "nodes": dag_data.get("nodes", []),
         }

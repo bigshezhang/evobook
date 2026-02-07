@@ -5,6 +5,7 @@ This module implements quiz generation using LLM based on learned topics.
 
 import json
 from typing import Any
+from uuid import UUID
 
 from app.core.exceptions import LLMValidationError
 from app.core.logging import get_logger
@@ -35,6 +36,7 @@ class QuizService:
         language: str,
         mode: str,
         learned_topics: list[dict[str, str]],
+        user_id: UUID | None = None,
     ) -> dict[str, Any]:
         """Generate a quiz from learned topics.
         
@@ -43,6 +45,7 @@ class QuizService:
             mode: Learning mode (Deep|Fast|Light) - affects difficulty.
             learned_topics: List of topics with their page content.
                 Each item: {"topic_name": str, "pages_markdown": str}
+            user_id: Optional authenticated user ID (reserved for future use).
             
         Returns:
             Dict containing type, title, greeting, questions.
