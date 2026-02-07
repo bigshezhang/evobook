@@ -1,17 +1,54 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../utils/AuthContext';
 import Header from '../../components/Header';
 import BottomNav from '../../components/BottomNav';
+import { getProfileStats, ProfileStats } from '../../utils/api';
 
 const ProfileView: React.FC = () => {
   const navigate = useNavigate();
   const { signOut } = useAuth();
   const [showInvite, setShowInvite] = useState(false);
+  const [stats, setStats] = useState<ProfileStats | null>(null);
+  const [loading, setLoading] = useState(true);
 
   // The high-fidelity mascot image for the poster
   const POSTER_MASCOT = "https://lh3.googleusercontent.com/aida-public/AB6AXuA46trIZajUdPDtcb5Mve4AANhBVcFPf7hD1VJlypb0dFYRxS2hXKwdShsNFVNhbqxXKQFSjVVMsE3mxGpTikZ_57rFFad-Wac1TeLu7mkLVUcNcXHe1dMp94PSQWv0zRukZyCVX_0DBZ2YWtZ3z95XJoYIk-kHHf_jOtCXVxwOascf_uy1-xN9B6LDuY7LUnDzKY4Em18_6PP7pnkilqsGpMh1-4xyIUGnBpFdw5egLxog1wDMZwcwvb0tgobqJaobQeIGVn7VCUfO";
+
+  // Load profile stats from API
+  useEffect(() => {
+    const loadStats = async () => {
+      try {
+        const data = await getProfileStats();
+        setStats(data);
+      } catch (error) {
+        console.error('Failed to load profile stats:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadStats();
+
+    // Listen for study time updates from heartbeat
+    const handleStudyTimeUpdate = (event: CustomEvent) => {
+      if (stats) {
+        const newSeconds = event.detail.total_study_seconds;
+        setStats({
+          ...stats,
+          total_study_seconds: newSeconds,
+          total_study_hours: Math.ceil(newSeconds / 3600),
+        });
+      }
+    };
+
+    window.addEventListener('study-time-updated', handleStudyTimeUpdate as EventListener);
+
+    return () => {
+      window.removeEventListener('study-time-updated', handleStudyTimeUpdate as EventListener);
+    };
+  }, []);
 
   return (
     <div className="flex flex-col min-h-screen bg-[#F8F9FB] pb-32 overflow-x-hidden font-sans">
@@ -59,21 +96,38 @@ const ProfileView: React.FC = () => {
             <div className="w-10 h-10 bg-blue-50 rounded-2xl flex items-center justify-center mb-2 shadow-inner">
               <span className="material-symbols-outlined text-blue-500 text-xl">schedule</span>
             </div>
-            <span className="text-xl font-black text-slate-900 leading-none">124</span>
-            <span className="text-[10px] font-black text-slate-400 mt-1 uppercase tracking-wider">Study Hrs</span>
+            <span className="text-xl font-black text-slate-900 leading-none">
+              {loading ? '...' : (() => {
+                const seconds = stats?.total_study_seconds || 0;
+                const minutes = Math.floor(seconds / 60);
+                const hours = Math.ceil(seconds / 3600);
+                return minutes < 120 ? minutes : hours;
+              })()}
+            </span>
+            <span className="text-[10px] font-black text-slate-400 mt-1 uppercase tracking-wider">
+              {loading ? 'Study Time' : (() => {
+                const seconds = stats?.total_study_seconds || 0;
+                const minutes = Math.floor(seconds / 60);
+                return minutes < 120 ? 'Study Mins' : 'Study Hrs';
+              })()}
+            </span>
           </div>
           <div className="bg-white p-5 rounded-[2rem] flex flex-col items-center text-center shadow-sm border border-slate-50">
             <div className="w-10 h-10 bg-orange-50 rounded-2xl flex items-center justify-center mb-2 shadow-inner">
               <span className="material-symbols-outlined text-orange-500 text-xl">workspace_premium</span>
             </div>
-            <span className="text-xl font-black text-slate-900 leading-none">12</span>
+            <span className="text-xl font-black text-slate-900 leading-none">
+              {loading ? '...' : stats?.completed_courses_count || 0}
+            </span>
             <span className="text-[10px] font-black text-slate-400 mt-1 uppercase tracking-wider">Mastered</span>
           </div>
           <div className="bg-white p-5 rounded-[2rem] flex flex-col items-center text-center shadow-sm border border-slate-50">
             <div className="w-10 h-10 bg-purple-50 rounded-2xl flex items-center justify-center mb-2 shadow-inner">
               <span className="material-symbols-outlined text-purple-500 text-xl">leaderboard</span>
             </div>
-            <span className="text-xl font-black text-slate-900 leading-none">#42</span>
+            <span className="text-xl font-black text-slate-900 leading-none">
+              {loading ? '...' : (stats?.global_rank ? `#${stats.global_rank}` : 'N/A')}
+            </span>
             <span className="text-[10px] font-black text-slate-400 mt-1 uppercase tracking-wider">Global Rank</span>
           </div>
         </section>

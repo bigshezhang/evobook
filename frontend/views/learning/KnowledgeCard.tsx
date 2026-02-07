@@ -15,6 +15,7 @@ import {
   DAGNode,
   MapMeta,
 } from '../../utils/api';
+import { heartbeatManager } from '../../utils/learningHeartbeat';
 
 // Page break delimiter used in markdown from API
 const PAGE_BREAK_DELIMITER = '<EVOBK_PAGE_BREAK />';
@@ -387,6 +388,19 @@ const KnowledgeCard: React.FC = () => {
     }
   }, [pages]);
 
+  // Start/stop heartbeat when entering/leaving the learning page
+  useEffect(() => {
+    if (courseMapId && currentNodeId) {
+      heartbeatManager.start(courseMapId, currentNodeId);
+      console.log('[KnowledgeCard] Heartbeat started', { courseMapId, nodeId: currentNodeId });
+    }
+
+    return () => {
+      heartbeatManager.stop();
+      console.log('[KnowledgeCard] Heartbeat stopped');
+    };
+  }, [courseMapId, currentNodeId]);
+
   // Load course data from backend API and fetch knowledge card
   useEffect(() => {
     // CRITICAL: Reset content state immediately to prevent flash of old content
@@ -556,10 +570,16 @@ const KnowledgeCard: React.FC = () => {
 
   const handleNext = () => {
     if (currentPage < totalPagesInCard) {
-      setCurrentPage(prev => prev + 1);
+      const nextPage = currentPage + 1;
+      setCurrentPage(nextPage);
       window.scrollTo({ top: 0, behavior: 'smooth' });
+      
+      // 当进入最后一页时自动标记完成
+      if (nextPage === totalPagesInCard) {
+        handleNodeCompletion();
+      }
     } else {
-      handleNodeCompletion();
+      // 已经在最后一页，显示完成弹窗
       setShowComplete(true);
     }
   };

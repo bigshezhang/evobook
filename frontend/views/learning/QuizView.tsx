@@ -14,6 +14,7 @@ import {
   buildLearningPath,
   DAGNode,
 } from '../../utils/api';
+import { heartbeatManager } from '../../utils/learningHeartbeat';
 
 interface UserAnswer {
   questionIdx: number;
@@ -41,6 +42,19 @@ const QuizView: React.FC = () => {
   const [userAnswers, setUserAnswers] = useState<UserAnswer[]>([]);
   
   const MASCOT_SRC = "https://lh3.googleusercontent.com/aida-public/AB6AXuCnRMVMv3VQCalsOm2RCkci09ous1fHuESh9sMZOzls1ru6VuE5HAlxYcKU6AswyAOsq12l9kr0vdwHeD8hswbrsxz4xZRK5oDlUPQMkmsbBJks_RVJ7JpcWNSLbPi4ISfkMH__idCAOv8RTmRLMNFkIzfyPwb3vJzSQ628ux_fwHE7XdjKa0LbGIrGOhhEmLaWRqfg-nPFNVhkih46KYodq5ipAZkQGeaLwK99YG7Az-UcKbMDqfxhd6RQqOg4faz2K3kd90U7PsXV";
+
+  // Start/stop heartbeat when entering/leaving the quiz page
+  useEffect(() => {
+    if (courseMapId && nodeId) {
+      heartbeatManager.start(courseMapId, nodeId);
+      console.log('[QuizView] Heartbeat started', { courseMapId, nodeId });
+    }
+
+    return () => {
+      heartbeatManager.stop();
+      console.log('[QuizView] Heartbeat stopped');
+    };
+  }, [courseMapId, nodeId]);
 
   // Load quiz from API
   useEffect(() => {

@@ -634,3 +634,77 @@ export function getStoredCourseMapId(): string | null {
     return null;
   }
 }
+
+// ==================== Learning Session API (Heartbeat) ====================
+
+export interface HeartbeatRequest {
+  course_map_id: string;
+  node_id: number;
+  client_timestamp?: string;
+}
+
+export interface HeartbeatResponse {
+  acknowledged: boolean;
+  total_study_seconds: number;
+  reason?: string;
+}
+
+/**
+ * Send learning heartbeat to record study time.
+ * Client should send a heartbeat every 30 seconds while the user is actively learning.
+ * 
+ * @param request - Heartbeat request with course_map_id and node_id
+ * @returns Heartbeat response with acknowledged status and total study seconds
+ */
+export async function sendLearningHeartbeat(
+  request: HeartbeatRequest
+): Promise<HeartbeatResponse> {
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${API_BASE_URL}/api/v1/learning/heartbeat`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(request),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(
+      errorData.detail?.message || `Failed to send heartbeat: ${response.status}`
+    );
+  }
+
+  return response.json();
+}
+
+// ==================== Profile Stats API ====================
+
+export interface ProfileStats {
+  total_study_hours: number;
+  total_study_seconds: number;
+  completed_courses_count: number;
+  mastered_nodes_count: number;
+  global_rank: number | null;
+  rank_percentile: number | null;
+  total_users: number;
+}
+
+/**
+ * Get user's learning statistics including study time, completed courses, and global rank.
+ * 
+ * @returns Profile statistics
+ */
+export async function getProfileStats(): Promise<ProfileStats> {
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${API_BASE_URL}/api/v1/profile/stats`, {
+    headers,
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(
+      errorData.detail?.message || `Failed to fetch profile stats: ${response.status}`
+    );
+  }
+
+  return response.json();
+}
