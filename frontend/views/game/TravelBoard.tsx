@@ -3,7 +3,6 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import GameHeader from '../../components/GameHeader';
 import BottomNav from '../../components/BottomNav';
 import Mascot from '../../components/Mascot';
-import { MascotAction } from '../../utils/mascotUtils';
 
 type TileType = 'gold' | 'xp' | 'roll' | 'normal' | 'star' | 'gift' | 'map';
 
@@ -21,8 +20,6 @@ const TravelBoard: React.FC = () => {
   const [currentStep, setCurrentStep] = useState(0); 
   const [isJumping, setIsJumping] = useState(false);
   const [eventModal, setEventModal] = useState<{ type: string; title: string; desc: string } | null>(null);
-  
-  const [mascotAction, setMascotAction] = useState<MascotAction>('idle');
   
   const [path, setPath] = useState<TileData[]>([]);
   const pathRef = useRef<TileData[]>([]);
@@ -74,11 +71,9 @@ const TravelBoard: React.FC = () => {
 
   const startTravel = async (steps: number) => {
     setIsMoving(true);
-    setMascotAction('run');
 
     for (let i = 0; i < steps; i++) {
       setIsJumping(true);
-      setMascotAction('jump');
 
       await new Promise(r => setTimeout(r, 250));
       setCurrentStep(prev => {
@@ -94,13 +89,10 @@ const TravelBoard: React.FC = () => {
     }
     
     setIsMoving(false);
-    setMascotAction('idle');
     
     const finalTile = pathRef.current[currentStep + steps];
     if (finalTile?.type === 'gold') {
-      setMascotAction('success');
       setEventModal({ type: 'gold', title: 'Coins Found!', desc: 'You gained +250 Gold' });
-      setTimeout(() => setMascotAction('idle'), 2000);
     }
   };
 
@@ -182,10 +174,9 @@ const TravelBoard: React.FC = () => {
 
         <div className="absolute left-1/2 -translate-x-1/2 top-[70%] z-[150] pointer-events-none flex flex-col items-center">
           <div className={`transition-all duration-[400ms] transform-gpu ${isJumping ? '-translate-y-40 scale-110' : '-translate-y-[85px] scale-100'}`}>
-            {/* 关键修改：在游戏主棋盘使用 view="back" (背影) */}
+            {/* 使用 travel 场景显示背影，outfit 会自动从 localStorage 读取 */}
             <Mascot 
-              action={mascotAction}
-              view="back"
+              scene="travel"
               width="90" 
               className="drop-shadow-[0_20px_40px_rgba(0,0,0,0.25)]"
             />

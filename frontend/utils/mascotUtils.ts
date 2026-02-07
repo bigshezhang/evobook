@@ -3,41 +3,91 @@
  * Mascot Asset Manager & Registry
  */
 
-export type MascotCharacter = 'oliver' | 'luna' | 'bolt' | 'dog' | 'owl' | 'cat';
+import { 
+  MascotCharacter, 
+  MascotOutfit, 
+  SceneType,
+  getMascotResourcePath,
+  getResourceType
+} from './mascotConfig';
+
+// 兼容旧代码的类型定义
 export type MascotAction = 'idle' | 'jump' | 'wave' | 'run' | 'success';
-export type MascotOutfit = 'default' | 'hat' | 'suit' | 'glasses';
-// 新增：视角维度
 export type MascotView = 'front' | 'back' | 'side';
 
-export const MASCOT_STORAGE_KEY = 'evo_user_mascot';
+// Re-export types from mascotConfig for convenience
+export type { MascotCharacter, MascotOutfit, SceneType };
 
+// Storage keys
+export const MASCOT_STORAGE_KEY = 'evo_user_mascot';
+export const OUTFIT_STORAGE_KEY = 'evo_user_outfit';
+
+/**
+ * 获取当前选中的角色
+ */
 export const getSelectedCharacter = (): MascotCharacter => {
   const saved = localStorage.getItem(MASCOT_STORAGE_KEY);
   return (saved as MascotCharacter) || 'oliver';
 };
 
+/**
+ * 设置当前选中的角色
+ */
 export const setSelectedCharacter = (character: MascotCharacter) => {
   localStorage.setItem(MASCOT_STORAGE_KEY, character);
+  // 触发自定义事件，通知其他组件角色已更新
+  window.dispatchEvent(new CustomEvent('mascot-character-changed', { detail: character }));
+};
+
+/**
+ * 获取当前选中的服装
+ */
+export const getSelectedOutfit = (): MascotOutfit => {
+  const saved = localStorage.getItem(OUTFIT_STORAGE_KEY);
+  return (saved as MascotOutfit) || 'default';
+};
+
+/**
+ * 设置当前选中的服装
+ */
+export const setSelectedOutfit = (outfit: MascotOutfit) => {
+  localStorage.setItem(OUTFIT_STORAGE_KEY, outfit);
+  // 触发自定义事件，通知其他组件服装已更新
+  window.dispatchEvent(new CustomEvent('mascot-outfit-changed', { detail: outfit }));
 };
 
 interface MascotConfig {
   character: MascotCharacter;
   action: MascotAction;
-  view?: MascotView; // 新增视角参数
+  view?: MascotView;
   outfit?: MascotOutfit;
 }
 
-const BASE_URL = '/assets/mascots'; 
-
+/**
+ * 获取资源路径（兼容旧代码）
+ * @deprecated 请使用 getMascotResourcePath 代替
+ */
 export const getMascotPath = ({ 
   character, 
   action, 
   view = 'front', 
   outfit = 'default' 
 }: MascotConfig): string => {
-  // 路径规范更新: [character]_[view]_[action]_[outfit].mp4
-  // 示例: oliver_back_jump_default.mp4
-  return `${BASE_URL}/${character}_${view}_${action}_${outfit}.mp4`;
+  // 根据 view 和 action 映射到新的 scene 系统
+  let scene: SceneType = 'default';
+  
+  if (view === 'back') {
+    scene = 'travel';
+  } else if (action === 'idle' || action === 'wave') {
+    scene = 'onboarding';
+  }
+  
+  return getMascotResourcePath(character, scene, outfit);
 };
+
+/**
+ * 获取场景化的资源路径（新方法）
+ */
+export { getMascotResourcePath, getResourceType };
 
 export const FALLBACK_MASCOT = "https://lh3.googleusercontent.com/aida-public/AB6AXuCnRMVMv3VQCalsOm2RCkci09ous1fHuESh9sMZOzls1ru6VuE5HAlxYcKU6AswyAOsq12l9kr0vdwHeD8hswbrsxz4xZRK5oDlUPQMkmsbBJks_RVJ7JpcWNSLbPi4ISfkMH__idCAOv8RTmRLMNFkIzfyPwb3vJzSQ628ux_fwHE7XdjKa0LbGIrGOhhEmLaWRqfg-nPFNVhkih46KYodq5ipAZkQGeaLwK99YG7Az-UcKbMDqfxhd6RQqOg4faz2K3kd90U7PsXV";

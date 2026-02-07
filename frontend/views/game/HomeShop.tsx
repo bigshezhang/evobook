@@ -3,6 +3,7 @@ import React, { useState, useRef } from 'react';
 import GameHeader from '../../components/GameHeader';
 import BottomNav from '../../components/BottomNav';
 import Mascot from '../../components/Mascot';
+import { MascotOutfit, setSelectedOutfit } from '../../utils/mascotUtils';
 
 interface ShopItem {
   id: number;
@@ -10,15 +11,26 @@ interface ShopItem {
   price: number;
   icon: string;
   color: string;
+  outfit?: MascotOutfit;  // 添加服装类型
 }
 
 const HomeShop: React.FC = () => {
   const [scrollTop, setScrollTop] = useState(0);
-  const [category, setCategory] = useState('Furniture');
+  const [category, setCategory] = useState('Outfits');
   const [selectedItem, setSelectedItem] = useState<ShopItem | null>(null);
 
-  const categories = ['Furniture', 'Decor', 'Walls', 'Floor'];
-  const shopItems: ShopItem[] = [
+  const categories = ['Outfits', 'Furniture', 'Decor', 'Walls'];
+  
+  // 服装商品
+  const outfitItems: ShopItem[] = [
+    { id: 101, name: 'Dress', price: 350, icon: 'checkroom', color: 'text-pink-500', outfit: 'dress' },
+    { id: 102, name: 'Glasses', price: 200, icon: 'visibility', color: 'text-blue-500', outfit: 'glass' },
+    { id: 103, name: 'Suit', price: 450, icon: 'work', color: 'text-slate-700', outfit: 'suit' },
+    { id: 104, name: 'Super Outfit', price: 600, icon: 'star', color: 'text-amber-500', outfit: 'super' },
+  ];
+  
+  // 家具商品
+  const furnitureItems: ShopItem[] = [
     { id: 1, name: 'Modern Chair', price: 250, icon: 'chair', color: 'text-indigo-500' },
     { id: 2, name: 'Palm Tree', price: 180, icon: 'potted_plant', color: 'text-emerald-500' },
     { id: 3, name: 'Neo Lamp', price: 420, icon: 'table_lamp', color: 'text-rose-400' },
@@ -28,6 +40,8 @@ const HomeShop: React.FC = () => {
     { id: 7, name: 'Floor Lamp', price: 300, icon: 'light', color: 'text-yellow-500' },
     { id: 8, name: 'Round Rug', price: 150, icon: 'texture', color: 'text-orange-400' },
   ];
+  
+  const shopItems = category === 'Outfits' ? outfitItems : furnitureItems;
 
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
     setScrollTop(e.currentTarget.scrollTop);
@@ -117,8 +131,18 @@ const HomeShop: React.FC = () => {
                 onClick={() => setSelectedItem(item)}
                 className="bg-slate-50/50 rounded-[32px] p-5 flex flex-col items-center border border-slate-100 active:scale-[0.96] transition-all duration-200 group hover:bg-white hover:shadow-md cursor-pointer"
               >
-                <div className="w-full aspect-square flex items-center justify-center bg-white rounded-2xl shadow-sm mb-4 border border-slate-50 group-hover:scale-105 transition-transform">
-                  <span className={`material-symbols-outlined text-[56px] ${item.color}`} style={{ fontVariationSettings: "'FILL' 1" }}>{item.icon}</span>
+                <div className="w-full aspect-square flex items-center justify-center bg-white rounded-2xl shadow-sm mb-4 border border-slate-50 group-hover:scale-105 transition-transform overflow-hidden">
+                  {item.outfit ? (
+                    // 服装商品显示服装素材
+                    <Mascot 
+                      scene="store"
+                      outfit={item.outfit}
+                      width="100%"
+                    />
+                  ) : (
+                    // 家具商品显示图标
+                    <span className={`material-symbols-outlined text-[56px] ${item.color}`} style={{ fontVariationSettings: "'FILL' 1" }}>{item.icon}</span>
+                  )}
                 </div>
                 <span className="text-sm font-black mb-3 text-slate-800">{item.name}</span>
                 <div className="bg-white px-4 py-2 rounded-full flex items-center gap-1 shadow-sm border border-slate-100">
@@ -136,13 +160,28 @@ const HomeShop: React.FC = () => {
       {selectedItem && (
         <div className="absolute inset-0 z-[200] flex items-center justify-center px-8 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
           <div className="bg-white w-full max-sm rounded-[40px] p-10 flex flex-col items-center shadow-2xl animate-in zoom-in duration-300 border border-white/20">
-            <div className="w-32 h-32 bg-indigo-50 rounded-[32px] flex items-center justify-center mb-8 shadow-inner border border-indigo-100">
-              <span className={`material-symbols-outlined text-[64px] ${selectedItem.color}`} style={{ fontVariationSettings: "'FILL' 1" }}>{selectedItem.icon}</span>
+            <div className="w-32 h-32 bg-indigo-50 rounded-[32px] flex items-center justify-center mb-8 shadow-inner border border-indigo-100 overflow-hidden">
+              {selectedItem.outfit ? (
+                <Mascot 
+                  scene="store"
+                  outfit={selectedItem.outfit}
+                  width="100%"
+                />
+              ) : (
+                <span className={`material-symbols-outlined text-[64px] ${selectedItem.color}`} style={{ fontVariationSettings: "'FILL' 1" }}>{selectedItem.icon}</span>
+              )}
             </div>
             <h2 className="text-2xl font-black text-slate-900 mb-6 text-center">Buy {selectedItem.name}?</h2>
             <div className="w-full flex flex-col gap-3">
               <button 
-                onClick={() => setSelectedItem(null)}
+                onClick={() => {
+                  // 如果是服装，保存选择并触发全局更新
+                  if (selectedItem.outfit) {
+                    setSelectedOutfit(selectedItem.outfit);
+                  }
+                  // TODO: 扣除金币等逻辑
+                  setSelectedItem(null);
+                }}
                 className="w-full bg-black text-white py-5 rounded-full font-black text-base shadow-xl active:scale-95 transition-all"
               >Confirm ({selectedItem.price} Gold)</button>
               <button 

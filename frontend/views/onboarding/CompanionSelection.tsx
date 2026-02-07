@@ -2,13 +2,12 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MascotCharacter, setSelectedCharacter } from '../../utils/mascotUtils';
+import Mascot from '../../components/Mascot';
 
 const companions: { id: MascotCharacter; name: string; title: string; desc: string; icon: string; color: string }[] = [
   { id: 'oliver', name: 'Oliver', title: 'Oliver the Owl', desc: 'WISE & FOCUSED', icon: 'skillet', color: 'bg-card-purple' },
-  { id: 'luna', name: 'Luna', title: 'Luna the Cat', desc: 'PLAYFUL & ALERT', icon: 'pets', color: 'bg-card-yellow' },
-  { id: 'bolt', name: 'Bolt', title: 'Bolt the Robot', desc: 'LOGICAL & FAST', icon: 'smart_toy', color: 'bg-card-blue' },
-  // 你可以在这里加入新角色，例如：
-  // { id: 'dog', name: 'Buddy', title: 'Buddy the Dog', desc: 'LOYAL & ACTIVE', icon: 'potted_plant', color: 'bg-emerald-400' }
+  { id: 'luna', name: 'Luna', title: 'Luna the Bee', desc: 'PLAYFUL & ALERT', icon: 'pets', color: 'bg-card-yellow' },
+  { id: 'bolt', name: 'Bolt', title: 'Bolt the Sheep', desc: 'LOGICAL & FAST', icon: 'smart_toy', color: 'bg-card-blue' },
 ];
 
 const CompanionSelection: React.FC = () => {
@@ -31,8 +30,15 @@ const CompanionSelection: React.FC = () => {
       <main className="flex-1 flex flex-col items-center justify-center px-8">
         <div className="relative w-full max-h-[340px] flex flex-col items-center justify-center">
           <div className="absolute inset-0 bg-primary/20 blur-3xl rounded-full scale-75"></div>
-          <div className={`w-64 h-64 rounded-[48px] ${selected.color} flex items-center justify-center shadow-xl border-4 border-white mb-6 transition-all duration-300`}>
-            <span className="material-symbols-outlined text-[120px] text-white drop-shadow-2xl">{selected.icon}</span>
+          <div className={`w-64 h-64 rounded-[48px] ${selected.color} flex items-center justify-center shadow-xl border-4 border-white mb-6 transition-all duration-300 overflow-hidden`}>
+            {/* 使用 Mascot 组件显示 smile 微笑动画 */}
+            <Mascot 
+              character={selected.id}
+              scene="onboarding"
+              autoPlay={true}
+              width="100%"
+              className="scale-110"
+            />
           </div>
           <div className="text-center">
             <h2 className="text-2xl font-extrabold text-black">{selected.title}</h2>
