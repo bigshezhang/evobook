@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../../components/Header';
 import BottomNav from '../../components/BottomNav';
@@ -11,12 +11,22 @@ interface NodeProgress {
   current: boolean;
 }
 
+interface NodePosition {
+  nodeId: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 const KnowledgeTree: React.FC = () => {
   const navigate = useNavigate();
   
   // Load course data from localStorage
   const [courseData, setCourseData] = useState<CourseMapGenerateResponse | null>(null);
   const [nodeProgress, setNodeProgress] = useState<NodeProgress[]>([]);
+  const [nodePositions, setNodePositions] = useState<NodePosition[]>([]);
+  const nodeRefs = useRef<Map<number, HTMLButtonElement>>(new Map());
   
   useEffect(() => {
     const storedCourseMap = localStorage.getItem(STORAGE_KEYS.COURSE_MAP);
@@ -62,6 +72,50 @@ const KnowledgeTree: React.FC = () => {
   const completedCount = nodeProgress.filter(p => p.completed).length;
   const totalCount = courseData?.nodes.length || 1;
   const progressPercent = Math.round((completedCount / totalCount) * 100);
+
+  // Update node positions when nodes are rendered
+  useEffect(() => {
+    const updatePositions = () => {
+      if (nodeRefs.current.size === 0) {
+        console.log('No node refs found');
+        return;
+      }
+      
+      const container = document.querySelector('.relative.px-6.flex-1.mt-6');
+      if (!container) {
+        console.log('Container not found');
+        return;
+      }
+      
+      const containerRect = container.getBoundingClientRect();
+      const positions: NodePosition[] = [];
+      
+      nodeRefs.current.forEach((element, nodeId) => {
+        const rect = element.getBoundingClientRect();
+        positions.push({
+          nodeId,
+          x: rect.left - containerRect.left + rect.width / 2,
+          y: rect.top - containerRect.top + rect.height / 2,
+          width: rect.width,
+          height: rect.height,
+        });
+      });
+      
+      console.log(`Updated positions for ${positions.length} nodes:`, positions);
+      setNodePositions(positions);
+    };
+
+    // Update with multiple delays to ensure all nodes are rendered
+    const timer1 = setTimeout(updatePositions, 50);
+    const timer2 = setTimeout(updatePositions, 200);
+    const timer3 = setTimeout(updatePositions, 500);
+    
+    return () => {
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+      clearTimeout(timer3);
+    };
+  }, [courseData, layers, nodeProgress]);
 
   // Get course name from map_meta
   const courseName = courseData?.map_meta.course_name || 'Loading...';
@@ -149,6 +203,78 @@ const KnowledgeTree: React.FC = () => {
     return `${base} cursor-not-allowed`;
   };
 
+  // Render connection lines between nodes
+  const renderConnections = () => {
+    if (!courseData || nodePositions.length === 0) return null;
+
+    const paths: JSX.Element[] = [];
+
+    courseData.nodes.forEach((node) => {
+      const targetPos = nodePositions.find(p => p.nodeId === node.id);
+      if (!targetPos) {
+        console.log(`Target position not found for node ${node.id}`);
+        return;
+      }
+
+      node.pre_requisites.forEach((prereqId) => {
+        const sourcePos = nodePositions.find(p => p.nodeId === prereqId);
+        if (!sourcePos) {
+          console.log(`Source position not found for prereq ${prereqId} -> node ${node.id}`);
+          return;
+        }
+
+        // Check if both nodes are completed
+        const sourceCompleted = nodeProgress.find(p => p.nodeId === prereqId)?.completed;
+        const targetCompleted = nodeProgress.find(p => p.nodeId === node.id)?.completed;
+        const isPathCompleted = sourceCompleted && targetCompleted;
+
+        // Calculate path (from bottom of source to top of target)
+        const x1 = sourcePos.x;
+        const y1 = sourcePos.y + sourcePos.height / 2 + 10;  // Start slightly below node
+        const x2 = targetPos.x;
+        const y2 = targetPos.y - targetPos.height / 2 - 10;  // End slightly above node
+        
+        // Control point for smooth quadratic bezier curve
+        const controlY = (y1 + y2) / 2;
+        const path = `M ${x1},${y1} Q ${x1},${controlY} ${x2},${y2}`;
+
+        const key = `${prereqId}-${node.id}`;
+
+        console.log(`Drawing line: ${prereqId} -> ${node.id}, completed: ${isPathCompleted}, path: ${path}`);
+
+        if (isPathCompleted) {
+          // Completed path: thick solid gold line
+          paths.push(
+            <path
+              key={key}
+              d={path}
+              stroke="#FFB938"
+              strokeWidth="8"
+              fill="none"
+              strokeLinecap="round"
+            />
+          );
+        } else {
+          // Incomplete path: simple gray dashed line
+          paths.push(
+            <path
+              key={key}
+              d={path}
+              stroke="#D1D5DB"
+              strokeWidth="4"
+              fill="none"
+              strokeDasharray="8,6"
+              strokeLinecap="round"
+            />
+          );
+        }
+      });
+    });
+
+    console.log(`Total paths rendered: ${paths.length}`);
+    return paths;
+  };
+
   return (
     <div className="flex flex-col h-screen bg-[#F8F9FD] relative pb-40 overflow-x-hidden">
       <Header 
@@ -191,6 +317,17 @@ const KnowledgeTree: React.FC = () => {
 
       {/* Dynamic DAG Rendering */}
       <div className="relative px-6 flex-1 mt-6 overflow-y-auto no-scrollbar">
+        {/* SVG for connection lines */}
+        <svg 
+          className="absolute inset-0 w-full h-full pointer-events-none z-0" 
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <defs>
+            {/* No gradients or filters needed */}
+          </defs>
+          {renderConnections()}
+        </svg>
+
         <div className="flex flex-col items-center gap-12 relative py-6 z-10">
           {layers.map((layer) => {
             const nodesInLayer = nodesByLayer[layer];
@@ -207,6 +344,10 @@ const KnowledgeTree: React.FC = () => {
                   return (
                     <button
                       key={node.id}
+                      ref={(el) => {
+                        if (el) nodeRefs.current.set(node.id, el);
+                        else nodeRefs.current.delete(node.id);
+                      }}
                       onClick={() => handleNodeClick(node)}
                       className={`${nodeClasses} ${widthClass} py-4 rounded-xl flex items-center justify-center gap-2`}
                       style={getNodeStyle(state)}
