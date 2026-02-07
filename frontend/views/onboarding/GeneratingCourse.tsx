@@ -68,8 +68,8 @@ const GeneratingCourse: React.FC = () => {
         // Animate progress to 80%
         setState({ status: 'loading', progress: 80 });
 
-        // Save course map to localStorage
-        localStorage.setItem(STORAGE_KEYS.COURSE_MAP, JSON.stringify(response));
+        // Note: Course is now saved in backend, no need for localStorage
+        // Only keep onboarding data in localStorage for reference
 
         // Animate progress to 100%
         setState({ status: 'success', progress: 100 });

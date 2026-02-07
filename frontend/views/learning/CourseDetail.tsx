@@ -3,13 +3,12 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import Header from '../../components/Header';
 import SuccessFeedbackPill from '../../components/SuccessFeedbackPill';
-import { STORAGE_KEYS, CourseMapGenerateResponse, FinishData, buildLearningPath } from '../../utils/api';
+import { getCourseDetail, buildLearningPath } from '../../utils/api';
 
 const CourseDetail: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const cidFromUrl = searchParams.get('cid');
-  const [courseMapId, setCourseMapId] = useState<string | null>(cidFromUrl);
 
   const [commitment, setCommitment] = useState<'Deep' | 'Fast' | 'Light'>('Fast');
   const [velocity, setVelocity] = useState<'15m' | '30m' | '45m' | '1h'>('30m');
@@ -17,32 +16,37 @@ const CourseDetail: React.FC = () => {
   const [showSuccess, setShowSuccess] = useState(false);
   const [isMainCourse, setIsMainCourse] = useState(false);
 
-  // Course data from localStorage
+  // Course data from backend
   const [courseName, setCourseName] = useState('Loading...');
   const [topic, setTopic] = useState('');
   const [knowledgeTags, setKnowledgeTags] = useState<string[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Load course data from localStorage
-    const courseMapStr = localStorage.getItem(STORAGE_KEYS.COURSE_MAP);
-    const onboardingDataStr = localStorage.getItem(STORAGE_KEYS.ONBOARDING_DATA);
+    const loadCourseData = async () => {
+      if (!cidFromUrl) {
+        setIsLoading(false);
+        return;
+      }
 
-    if (courseMapStr) {
-      const courseMap: CourseMapGenerateResponse = JSON.parse(courseMapStr);
-      setCourseName(courseMap.map_meta.course_name);
-      setCourseMapId(courseMap.course_map_id);
-      setCommitment(courseMap.map_meta.mode);
+      try {
+        const data = await getCourseDetail(cidFromUrl);
+        setCourseName(data.map_meta.course_name as string);
+        setCommitment(data.mode as 'Deep' | 'Fast' | 'Light');
+        setTopic(data.topic);
 
-      // Extract knowledge tags from node titles
-      const tags = courseMap.nodes.slice(0, 6).map(n => n.title);
-      setKnowledgeTags(tags);
-    }
+        // Extract knowledge tags from node titles
+        const tags = (data.nodes as any[]).slice(0, 6).map((n: any) => n.title);
+        setKnowledgeTags(tags);
+      } catch (error) {
+        console.error('Failed to load course:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
-    if (onboardingDataStr) {
-      const onboardingData: FinishData = JSON.parse(onboardingDataStr);
-      setTopic(onboardingData.topic);
-    }
-  }, []);
+    loadCourseData();
+  }, [cidFromUrl]);
 
   const commitmentTimes = {
     Deep: '20H',
@@ -65,7 +69,7 @@ const CourseDetail: React.FC = () => {
 
   const handleConfirm = () => {
     localStorage.setItem('evo_onboarding_completed', 'true');
-    navigate(buildLearningPath('/knowledge-tree', { cid: courseMapId }));
+    navigate(buildLearningPath('/knowledge-tree', { cid: cidFromUrl }));
   };
 
   return (

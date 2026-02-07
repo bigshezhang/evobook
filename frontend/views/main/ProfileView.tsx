@@ -18,7 +18,7 @@ const ProfileView: React.FC = () => {
       {/* Header with explicit back navigation to dashboard */}
       <Header 
         title="Profile"
-        onBack={() => navigate('/dashboard')}
+        onBack={() => navigate('/courses')}
         rightAction={
           <button 
             onClick={() => navigate('/assessment')}

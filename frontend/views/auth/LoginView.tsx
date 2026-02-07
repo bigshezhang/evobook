@@ -49,6 +49,7 @@ const LoginView: React.FC = () => {
         }
         // If email confirmation is disabled, session is available immediately — redirect
         if (data.session) {
+          // New signup always goes through onboarding
           navigate('/', { replace: true });
           return;
         }
@@ -57,7 +58,7 @@ const LoginView: React.FC = () => {
       } else {
         const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
         if (signInError) throw signInError;
-        // Auth state listener in AuthContext will pick up the session.
+        // Redirect to root, which will intelligently route based on user state
         navigate('/', { replace: true });
       }
     } catch (err: unknown) {

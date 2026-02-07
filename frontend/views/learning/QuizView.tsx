@@ -6,11 +6,12 @@ import RewardModal from '../../components/RewardModal';
 import Mascot from '../../components/Mascot';
 import { 
   generateQuiz, 
-  STORAGE_KEYS, 
-  CourseMapGenerateResponse,
+  getCourseDetail,
+  getNodeProgress,
   QuizGenerateResponse,
   QuizQuestion,
   buildLearningPath,
+  DAGNode,
 } from '../../utils/api';
 
 interface UserAnswer {
@@ -44,24 +45,39 @@ const QuizView: React.FC = () => {
       setLoading(true);
       setError(null);
       
+      if (!cidFromUrl) {
+        setError('No course ID provided');
+        return;
+      }
+      
       try {
-        // Get learned topics from localStorage
-        const learnedTopicsStr = localStorage.getItem(STORAGE_KEYS.LEARNED_TOPICS);
-        const courseMapStr = localStorage.getItem(STORAGE_KEYS.COURSE_MAP);
+        // Get course data and node progress from backend
+        const [courseData, progressData] = await Promise.all([
+          getCourseDetail(cidFromUrl),
+          getNodeProgress(cidFromUrl),
+        ]);
         
-        if (!learnedTopicsStr || !courseMapStr) {
-          setError('没有找到学习记录，请先完成一些学习内容');
+        setCourseMapId(courseData.course_map_id);
+        
+        // Find all completed nodes
+        const completedNodeIds = progressData.progress
+          .filter(p => p.status === 'completed')
+          .map(p => p.node_id);
+        
+        if (completedNodeIds.length === 0) {
+          setError('Please complete some learning content first');
           return;
         }
         
-        const learnedTopics = JSON.parse(learnedTopicsStr);
-        const courseMap: CourseMapGenerateResponse = JSON.parse(courseMapStr);
-        setCourseMapId(courseMap.course_map_id);
-        
-        if (learnedTopics.length === 0) {
-          setError('请先完成一些学习内容');
-          return;
-        }
+        // Get markdown content for completed nodes from course data
+        // Note: We don't have the actual markdown content here, only node metadata
+        // For quiz generation, we'll use node titles and descriptions
+        const learnedTopics = (courseData.nodes as DAGNode[])
+          .filter(node => completedNodeIds.includes(node.id))
+          .map(node => ({
+            topic_name: node.title,
+            pages_markdown: node.description, // Use description as fallback
+          }));
         
         // Call API
         const response = await generateQuiz({

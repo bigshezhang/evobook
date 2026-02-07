@@ -3,13 +3,17 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import Header from '../../components/Header';
 import BottomNav from '../../components/BottomNav';
-import { STORAGE_KEYS, DAGNode, CourseMapGenerateResponse, buildLearningPath } from '../../utils/api';
-
-interface NodeProgress {
-  nodeId: number;
-  completed: boolean;
-  current: boolean;
-}
+import { 
+  getCourseDetail, 
+  getNodeProgress, 
+  updateNodeProgress,
+  getUserCourses,
+  DAGNode, 
+  buildLearningPath, 
+  MapMeta,
+  NodeProgressItem,
+  CourseListItem,
+} from '../../utils/api';
 
 interface NodePosition {
   nodeId: number;
@@ -19,43 +23,74 @@ interface NodePosition {
   height: number;
 }
 
+interface CourseData {
+  course_map_id: string;
+  map_meta: MapMeta;
+  nodes: DAGNode[];
+}
+
 const KnowledgeTree: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const cidFromUrl = searchParams.get('cid');
 
-  // Load course data from localStorage
-  const [courseData, setCourseData] = useState<CourseMapGenerateResponse | null>(null);
-  const [nodeProgress, setNodeProgress] = useState<NodeProgress[]>([]);
+  // Load course data from backend
+  const [courseData, setCourseData] = useState<CourseData | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [nodeProgress, setNodeProgress] = useState<NodeProgressItem[]>([]);
   const [nodePositions, setNodePositions] = useState<NodePosition[]>([]);
   const nodeRefs = useRef<Map<number, HTMLButtonElement>>(new Map());
+  
+  // Course navigation state
+  const [allCourses, setAllCourses] = useState<CourseListItem[]>([]);
+  const [currentCourseIndex, setCurrentCourseIndex] = useState<number>(0);
 
   useEffect(() => {
-    const storedCourseMap = localStorage.getItem(STORAGE_KEYS.COURSE_MAP);
-    if (storedCourseMap) {
-      try {
-        const parsed = JSON.parse(storedCourseMap) as CourseMapGenerateResponse;
-        setCourseData(parsed);
-
-        // Initialize node progress (first node is current, none completed)
-        const storedProgress = localStorage.getItem('evo_node_progress');
-        if (storedProgress) {
-          setNodeProgress(JSON.parse(storedProgress));
-        } else if (parsed.nodes.length > 0) {
-          // Set first node as current
-          const initialProgress = parsed.nodes.map((node, idx) => ({
-            nodeId: node.id,
-            completed: false,
-            current: idx === 0,
-          }));
-          setNodeProgress(initialProgress);
-          localStorage.setItem('evo_node_progress', JSON.stringify(initialProgress));
-        }
-      } catch (e) {
-        console.error('Failed to parse course map:', e);
+    const loadCourseData = async () => {
+      if (!cidFromUrl) {
+        setError('No course ID provided');
+        setIsLoading(false);
+        return;
       }
-    }
-  }, []);
+
+      try {
+        setIsLoading(true);
+        
+        // Load all user courses for navigation
+        const coursesData = await getUserCourses();
+        setAllCourses(coursesData.courses);
+        
+        // Find current course index
+        const currentIndex = coursesData.courses.findIndex(
+          (c) => c.course_map_id === cidFromUrl
+        );
+        if (currentIndex !== -1) {
+          setCurrentCourseIndex(currentIndex);
+        }
+        
+        // Load course data
+        const courseData = await getCourseDetail(cidFromUrl);
+        setCourseData({
+          course_map_id: courseData.course_map_id,
+          map_meta: courseData.map_meta as MapMeta,
+          nodes: courseData.nodes as DAGNode[],
+        });
+
+        // Load node progress from backend
+        const progressData = await getNodeProgress(cidFromUrl);
+        setNodeProgress(progressData.progress);
+
+      } catch (e) {
+        console.error('Failed to load course data:', e);
+        setError(e instanceof Error ? e.message : 'Failed to load course');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadCourseData();
+  }, [cidFromUrl]);
 
   // Group nodes by layer for DAG rendering
   const nodesByLayer = useMemo(() => {
@@ -71,7 +106,7 @@ const KnowledgeTree: React.FC = () => {
   const layers = useMemo(() => Object.keys(nodesByLayer).map(Number).sort((a, b) => a - b), [nodesByLayer]);
 
   // Calculate progress
-  const completedCount = nodeProgress.filter(p => p.completed).length;
+  const completedCount = nodeProgress.filter(p => p.status === 'completed').length;
   const totalCount = courseData?.nodes.length || 1;
   const progressPercent = Math.round((completedCount / totalCount) * 100);
 
@@ -126,16 +161,18 @@ const KnowledgeTree: React.FC = () => {
   const bannerColor = "bg-secondary";
 
   const getNodeState = (nodeId: number): 'completed' | 'current' | 'locked' => {
-    const progress = nodeProgress.find(p => p.nodeId === nodeId);
-    if (progress?.completed) return 'completed';
-    if (progress?.current) return 'current';
-
-    // Check if prerequisites are completed
+    const progress = nodeProgress.find(p => p.node_id === nodeId);
+    
+    // Map backend status to frontend state
+    if (progress?.status === 'completed') return 'completed';
+    if (progress?.status === 'in_progress' || progress?.status === 'unlocked') return 'current';
+    
+    // If no progress record, check if locked or available based on prerequisites
     const node = courseData?.nodes.find(n => n.id === nodeId);
     if (!node) return 'locked';
 
     const prereqsCompleted = node.pre_requisites.every(prereqId =>
-      nodeProgress.find(p => p.nodeId === prereqId)?.completed
+      nodeProgress.find(p => p.node_id === prereqId)?.status === 'completed'
     );
 
     return prereqsCompleted ? 'current' : 'locked';
@@ -147,27 +184,52 @@ const KnowledgeTree: React.FC = () => {
     const state = getNodeState(node.id);
     if (state === 'locked') return;
 
-    // Store current node info for KnowledgeCard/Quiz to use (backward compat)
-    localStorage.setItem(STORAGE_KEYS.CURRENT_NODE, JSON.stringify(node));
-
     if (node.type === 'quiz') {
       navigate(buildLearningPath('/quiz', { cid }));
     } else {
       navigate(buildLearningPath('/knowledge-card', { cid, nid: node.id }));
     }
   };
+  
+  // Course navigation handlers
+  const handlePreviousCourse = () => {
+    if (currentCourseIndex > 0 && allCourses.length > 0) {
+      const prevCourse = allCourses[currentCourseIndex - 1];
+      navigate(buildLearningPath('/knowledge-tree', { cid: prevCourse.course_map_id }));
+    }
+  };
+  
+  const handleNextCourse = () => {
+    if (currentCourseIndex < allCourses.length - 1 && allCourses.length > 0) {
+      const nextCourse = allCourses[currentCourseIndex + 1];
+      navigate(buildLearningPath('/knowledge-tree', { cid: nextCourse.course_map_id }));
+    }
+  };
 
-  // Render loading state if no course data
-  if (!courseData) {
+  // Render loading state
+  if (isLoading) {
     return (
       <div className="flex flex-col h-screen bg-[#F8F9FD] items-center justify-center">
         <div className="animate-spin w-12 h-12 border-4 border-secondary border-t-transparent rounded-full"></div>
-        <p className="mt-4 text-slate-500 font-medium">加载课程数据...</p>
+        <p className="mt-4 text-slate-500 font-medium">Loading course data...</p>
+      </div>
+    );
+  }
+
+  // Render error state
+  if (error || !courseData) {
+    return (
+      <div className="flex flex-col h-screen bg-[#F8F9FD] items-center justify-center px-6">
+        <div className="w-20 h-20 mb-4 bg-rose-100 rounded-full flex items-center justify-center">
+          <span className="material-symbols-rounded text-rose-500 text-4xl">error</span>
+        </div>
+        <h3 className="text-xl font-bold text-slate-800 mb-2">Failed to load course</h3>
+        <p className="text-slate-500 text-center mb-6">{error || 'Course not found'}</p>
         <button
-          onClick={() => navigate('/assessment')}
-          className="mt-6 px-6 py-3 bg-secondary text-white rounded-full font-bold"
+          onClick={() => navigate('/courses')}
+          className="px-6 py-3 bg-secondary text-white rounded-full font-bold shadow-lg active:scale-95 transition-all"
         >
-          创建新课程
+          Back to Courses
         </button>
       </div>
     );
@@ -211,7 +273,7 @@ const KnowledgeTree: React.FC = () => {
   const renderConnections = () => {
     if (!courseData || nodePositions.length === 0) return null;
 
-    const paths: JSX.Element[] = [];
+    const paths: React.ReactElement[] = [];
 
     courseData.nodes.forEach((node) => {
       const targetPos = nodePositions.find(p => p.nodeId === node.id);
@@ -228,8 +290,8 @@ const KnowledgeTree: React.FC = () => {
         }
 
         // Check if both nodes are completed
-        const sourceCompleted = nodeProgress.find(p => p.nodeId === prereqId)?.completed;
-        const targetCompleted = nodeProgress.find(p => p.nodeId === node.id)?.completed;
+        const sourceCompleted = nodeProgress.find(p => p.node_id === prereqId)?.status === 'completed';
+        const targetCompleted = nodeProgress.find(p => p.node_id === node.id)?.status === 'completed';
         const isPathCompleted = sourceCompleted && targetCompleted;
 
         // Calculate path (from bottom of source to top of target)
@@ -292,27 +354,63 @@ const KnowledgeTree: React.FC = () => {
         }
       />
 
-      {/* Course Progress Banner */}
+      {/* Course Progress Banner with Navigation */}
       <div className="px-6 mb-4 relative mt-4">
-        <div className={`${bannerColor} rounded-[28px] p-5 text-white shadow-xl flex items-center justify-between relative overflow-hidden transition-colors duration-500`}>
-          {/* Banner content area */}
-          <div
-            onClick={() => navigate(buildLearningPath('/course-detail', { cid }))}
-            className="flex-1 text-center px-8 z-10 animate-in fade-in slide-in-from-right-4 duration-300 cursor-pointer"
-          >
-            <h2 className="text-xl font-extrabold tracking-tight">{courseName}</h2>
-            <div className="flex items-center justify-center gap-3 mt-2">
-              <div className="flex-1 max-w-[140px] bg-white/25 h-1.5 rounded-full overflow-hidden border border-white/10 shadow-inner">
-                <div
-                  className="bg-white h-full shadow-[0_0_8px_rgba(255,255,255,0.8)] transition-all duration-700 ease-out"
-                  style={{ width: `${progressPercent}%` }}
-                ></div>
+        <div className={`${bannerColor} rounded-[28px] p-6 text-white shadow-xl relative overflow-hidden transition-colors duration-500`}>
+          {/* Content Container */}
+          <div className="relative z-10 flex items-center gap-4">
+            {/* Left Arrow */}
+            {allCourses.length > 1 && (
+              <button
+                onClick={handlePreviousCourse}
+                disabled={currentCourseIndex === 0}
+                className={`w-11 h-11 rounded-full flex items-center justify-center transition-all ${
+                  currentCourseIndex === 0
+                    ? 'opacity-30 cursor-not-allowed'
+                    : 'bg-white/20 hover:bg-white/30 active:scale-95 backdrop-blur-sm'
+                }`}
+              >
+                <span className="material-symbols-rounded text-white text-2xl" style={{ fontVariationSettings: "'FILL' 0, 'wght' 300" }}>arrow_back_ios_new</span>
+              </button>
+            )}
+            
+            {/* Course Info - Centered */}
+            <div
+              onClick={() => navigate(buildLearningPath('/course-detail', { cid }))}
+              className="flex-1 cursor-pointer"
+            >
+              <h2 className="text-[19px] font-extrabold tracking-tight text-center mb-3 leading-tight">{courseName}</h2>
+              
+              {/* Progress Bar - Centered */}
+              <div className="flex items-center justify-center gap-3">
+                <div className="w-[180px] bg-white/25 h-2 rounded-full overflow-hidden border border-white/10 shadow-inner">
+                  <div
+                    className="bg-white h-full shadow-[0_0_8px_rgba(255,255,255,0.8)] transition-all duration-700 ease-out rounded-full"
+                    style={{ width: `${progressPercent}%` }}
+                  ></div>
+                </div>
+                <span className="text-[11px] font-extrabold opacity-90 uppercase tracking-[0.15em] min-w-[65px]">{progressPercent}% DONE</span>
               </div>
-              <span className="text-[10px] font-black opacity-90 uppercase tracking-wider">{progressPercent}% DONE</span>
             </div>
+            
+            {/* Right Arrow */}
+            {allCourses.length > 1 && (
+              <button
+                onClick={handleNextCourse}
+                disabled={currentCourseIndex === allCourses.length - 1}
+                className={`w-11 h-11 rounded-full flex items-center justify-center transition-all ${
+                  currentCourseIndex === allCourses.length - 1
+                    ? 'opacity-30 cursor-not-allowed'
+                    : 'bg-white/20 hover:bg-white/30 active:scale-95 backdrop-blur-sm'
+                }`}
+              >
+                <span className="material-symbols-rounded text-white text-2xl" style={{ fontVariationSettings: "'FILL' 0, 'wght' 300" }}>arrow_forward_ios</span>
+              </button>
+            )}
           </div>
 
-          <div className="absolute -right-6 -bottom-6 w-32 h-32 opacity-15 pointer-events-none rotate-12">
+          {/* Background Decorations */}
+          <div className="absolute -right-6 -bottom-6 w-32 h-32 opacity-10 pointer-events-none rotate-12">
             <span className="material-symbols-outlined" style={{ fontSize: '100px' }}>psychology</span>
           </div>
           <div className="absolute -left-10 -top-10 w-24 h-24 bg-white/10 rounded-full blur-2xl"></div>

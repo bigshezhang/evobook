@@ -5,15 +5,15 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import ClarificationSection, { QAItem } from './ClarificationSection';
 import { 
-  STORAGE_KEYS, 
-  CourseMapGenerateResponse, 
-  FinishData,
-  LearnedTopic,
   getClarification,
   getKnowledgeCard,
+  getCourseDetail,
+  updateNodeProgress,
   KnowledgeCardRequest,
   Language,
   buildLearningPath,
+  DAGNode,
+  MapMeta,
 } from '../../utils/api';
 
 // Page break delimiter used in markdown from API
@@ -387,7 +387,7 @@ const KnowledgeCard: React.FC = () => {
     }
   }, [pages]);
 
-  // Load course data from localStorage and fetch knowledge card from API
+  // Load course data from backend API and fetch knowledge card
   useEffect(() => {
     // CRITICAL: Reset content state immediately to prevent flash of old content
     setMarkdownContent('');
@@ -397,56 +397,63 @@ const KnowledgeCard: React.FC = () => {
     setQaList([]);
     setDynamicQuestions([]);
     
-    const courseMapStr = localStorage.getItem(STORAGE_KEYS.COURSE_MAP);
-    const currentNodeStr = localStorage.getItem(STORAGE_KEYS.CURRENT_NODE);
-    const onboardingDataStr = localStorage.getItem(STORAGE_KEYS.ONBOARDING_DATA);
-    
-    let courseMapData: CourseMapGenerateResponse | null = null;
-    let onboardingData: FinishData | null = null;
-    let currentNode: CourseMapGenerateResponse['nodes'][0] | null = null;
-    
-    if (courseMapStr) {
-      courseMapData = JSON.parse(courseMapStr);
-      setCourseName(courseMapData!.map_meta.course_name);
-      setCourseContext(courseMapData!.map_meta.strategy_rationale);
-      setTotalNodes(courseMapData!.nodes.length);
-      setCourseMapId(courseMapData!.course_map_id);
-    }
-    
-    // Resolve current node: prefer URL nid param, fall back to localStorage
-    const targetNodeId = nidFromUrl ? Number(nidFromUrl) : null;
-    if (targetNodeId != null && courseMapData) {
-      // Deep-link: find node by ID from the course map
-      currentNode = courseMapData.nodes.find(n => n.id === targetNodeId) || null;
-    }
-    // Fall back to localStorage CURRENT_NODE (backward compat / normal navigation)
-    if (!currentNode && currentNodeStr) {
+    const loadData = async () => {
+      if (!cidFromUrl) {
+        setError('No course ID provided');
+        setIsLoading(false);
+        return;
+      }
+      
+      const targetNodeId = nidFromUrl ? Number(nidFromUrl) : null;
+      if (!targetNodeId) {
+        setError('No node ID provided');
+        setIsLoading(false);
+        return;
+      }
+      
       try {
-        currentNode = JSON.parse(currentNodeStr);
-      } catch (e) {
-        console.error('Failed to parse current node:', e);
-      }
-    }
-    if (currentNode) {
-      setCurrentNodeId(currentNode.id);
-      setNodeTitle(currentNode.title);
-      setNodeDescription(currentNode.description);
-      setModuleInfo(`Module ${String(currentNode.layer).padStart(2, '0')}`);
-      if (courseMapData) {
-        const completedCount = courseMapData.nodes.filter(n => n.layer < (currentNode?.layer || 1)).length;
+        // Load course data from backend
+        const courseData = await getCourseDetail(cidFromUrl);
+        const courseMapData = {
+          course_map_id: courseData.course_map_id,
+          topic: courseData.topic,
+          level: courseData.level,
+          mode: courseData.mode,
+          map_meta: courseData.map_meta as MapMeta,
+          nodes: courseData.nodes as DAGNode[],
+        };
+        
+        setCourseName((courseMapData.map_meta as any).course_name || courseMapData.topic);
+        setCourseContext((courseMapData.map_meta as any).strategy_rationale || '');
+        setTotalNodes(courseMapData.nodes.length);
+        setCourseMapId(courseMapData.course_map_id);
+        
+        // Find current node by URL parameter
+        const currentNode = courseMapData.nodes.find(n => n.id === targetNodeId);
+        if (!currentNode) {
+          setError('Node not found');
+          setIsLoading(false);
+          return;
+        }
+        
+        setCurrentNodeId(currentNode.id);
+        setNodeTitle(currentNode.title);
+        setNodeDescription(currentNode.description);
+        setModuleInfo(`Module ${String(currentNode.layer).padStart(2, '0')}`);
+        const completedCount = courseMapData.nodes.filter(n => n.layer < currentNode.layer).length;
         setCompletedNodes(completedCount);
+        
+        // Fetch knowledge card from API (with sessionStorage caching)
+        await fetchKnowledgeCard(courseMapData, currentNode);
+      } catch (err) {
+        console.error('Failed to load course data:', err);
+        setError(err instanceof Error ? err.message : 'Failed to load course');
+        setIsLoading(false);
       }
-      // Sync to localStorage so other components can use it
-      localStorage.setItem(STORAGE_KEYS.CURRENT_NODE, JSON.stringify(currentNode));
-    }
+    };
     
-    if (onboardingDataStr) {
-      onboardingData = JSON.parse(onboardingDataStr);
-    }
-    
-    // Fetch knowledge card from API (with sessionStorage caching)
-    const fetchKnowledgeCard = async () => {
-      if (!courseMapData || !currentNode || !onboardingData) {
+    const fetchKnowledgeCard = async (courseMapData: any, currentNode: DAGNode) => {
+      if (!courseMapData || !currentNode) {
         setError('Missing course or node data. Please start from the course selection.');
         setIsLoading(false);
         return;
@@ -476,11 +483,11 @@ const KnowledgeCard: React.FC = () => {
         const request: KnowledgeCardRequest = {
           course_map_id: courseMapData.course_map_id,
           course: {
-            course_name: courseMapData.map_meta.course_name,
-            course_context: courseMapData.map_meta.strategy_rationale,
-            topic: onboardingData.topic,
-            level: onboardingData.level,
-            mode: courseMapData.map_meta.mode,
+            course_name: (courseMapData.map_meta as any).course_name || courseMapData.topic,
+            course_context: (courseMapData.map_meta as any).strategy_rationale || '',
+            topic: courseMapData.topic,
+            level: courseMapData.level,
+            mode: courseMapData.mode,
           },
           node: {
             id: currentNode.id,
@@ -514,8 +521,8 @@ const KnowledgeCard: React.FC = () => {
       }
     };
     
-    fetchKnowledgeCard();
-  }, []);
+    loadData();
+  }, [cidFromUrl, nidFromUrl]);
 
   // Animation trigger for page changes only (not initial mount)
   const [animate, setAnimate] = useState(false);
@@ -532,57 +539,19 @@ const KnowledgeCard: React.FC = () => {
   }, [currentPage]);
 
   /**
-   * Mark the current node as completed, unlock successor nodes whose
-   * prerequisites are all done, and persist the learned topic so that
-   * QuizView can pick it up later.
+   * Mark the current node as completed using backend API.
    */
-  const handleNodeCompletion = () => {
-    // --- 1. Update node progress ---
-    const progressStr = localStorage.getItem('evo_node_progress');
-    const courseMapStr = localStorage.getItem(STORAGE_KEYS.COURSE_MAP);
-    if (!progressStr || !courseMapStr) return;
+  const handleNodeCompletion = async () => {
+    if (!courseMapId || !currentNodeId) return;
 
-    const progress: { nodeId: number; completed: boolean; current: boolean }[] =
-      JSON.parse(progressStr);
-    const courseMap: CourseMapGenerateResponse = JSON.parse(courseMapStr);
-
-    // Mark the current node as completed and no longer current
-    const updated = progress.map((p) =>
-      p.nodeId === currentNodeId
-        ? { ...p, completed: true, current: false }
-        : p,
-    );
-
-    // Determine which successor nodes should be unlocked
-    courseMap.nodes.forEach((node) => {
-      if (!node.pre_requisites.includes(currentNodeId)) return;
-
-      // Check whether *all* prerequisites of this successor are now completed
-      const allPrereqsDone = node.pre_requisites.every((prereqId) => {
-        const entry = updated.find((p) => p.nodeId === prereqId);
-        return entry?.completed === true;
-      });
-
-      if (allPrereqsDone) {
-        const idx = updated.findIndex((p) => p.nodeId === node.id);
-        if (idx !== -1) {
-          updated[idx] = { ...updated[idx], current: true };
-        }
-      }
-    });
-
-    localStorage.setItem('evo_node_progress', JSON.stringify(updated));
-
-    // --- 2. Persist learned topic for Quiz ---
-    const topicsStr = localStorage.getItem(STORAGE_KEYS.LEARNED_TOPICS);
-    const learnedTopics: LearnedTopic[] = topicsStr ? JSON.parse(topicsStr) : [];
-
-    learnedTopics.push({
-      topic_name: nodeTitle,
-      pages_markdown: markdownContent,
-    });
-
-    localStorage.setItem(STORAGE_KEYS.LEARNED_TOPICS, JSON.stringify(learnedTopics));
+    try {
+      // Mark current node as completed
+      await updateNodeProgress(courseMapId, currentNodeId, 'completed');
+      console.log('Node progress updated successfully');
+    } catch (error) {
+      console.error('Failed to update node progress:', error);
+      // Still show completion UI even if API call fails
+    }
   };
 
   const handleNext = () => {

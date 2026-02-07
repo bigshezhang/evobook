@@ -85,12 +85,61 @@ const QADetailRouteView: React.FC = () => {
   return <QADetailModal isOpen={true} onClose={() => navigate(-1)} data={data} />;
 };
 
-// Smart root redirect: onboarded users go to dashboard, new users see welcome
+// Smart root redirect: check if user has courses, then decide where to go
 const RootRedirect: React.FC = () => {
-  const onboardingDone = localStorage.getItem('evo_onboarding_completed') === 'true';
-  if (onboardingDone) {
-    return <Navigate to="/dashboard" replace />;
+  const navigate = useNavigate();
+  const [loading, setLoading] = React.useState(true);
+  const [hasCourses, setHasCourses] = React.useState(false);
+
+  React.useEffect(() => {
+    const checkUserCourses = async () => {
+      try {
+        // Check localStorage first for quick decision
+        const onboardingDone = localStorage.getItem('evo_onboarding_completed') === 'true';
+        
+        if (onboardingDone) {
+          // User has completed onboarding before, go to dashboard
+          setHasCourses(true);
+          setLoading(false);
+          return;
+        }
+
+        // Check backend for courses (handles cross-device login)
+        const { getUserCourses } = await import('./utils/api');
+        const data = await getUserCourses();
+        
+        if (data.courses && data.courses.length > 0) {
+          // User has courses, mark onboarding as done and go to dashboard
+          localStorage.setItem('evo_onboarding_completed', 'true');
+          setHasCourses(true);
+        } else {
+          // New user, show onboarding
+          setHasCourses(false);
+        }
+      } catch (error) {
+        console.error('Failed to check user courses:', error);
+        // On error, assume new user and show onboarding
+        setHasCourses(false);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    checkUserCourses();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-white">
+        <span className="inline-block w-10 h-10 border-4 border-gray-200 border-t-secondary rounded-full animate-spin" />
+      </div>
+    );
   }
+
+  if (hasCourses) {
+    return <Navigate to="/courses" replace />;
+  }
+  
   return <WelcomeView />;
 };
 
@@ -125,7 +174,9 @@ const App: React.FC = () => {
             <Route path="/game/outfit" element={<ProtectedRoute><OutfitView /></ProtectedRoute>} />
             
             {/* Main Navigation Tabs */}
-            <Route path="/dashboard" element={<ProtectedRoute><CoursesDashboard /></ProtectedRoute>} />
+            <Route path="/courses" element={<ProtectedRoute><CoursesDashboard /></ProtectedRoute>} />
+            {/* Keep /dashboard as alias for backward compatibility */}
+            <Route path="/dashboard" element={<Navigate to="/courses" replace />} />
             <Route path="/discovery/:category" element={<ProtectedRoute><DiscoveryList /></ProtectedRoute>} />
             <Route path="/profile" element={<ProtectedRoute><ProfileView /></ProtectedRoute>} />
             

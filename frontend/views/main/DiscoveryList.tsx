@@ -27,7 +27,7 @@ const DiscoveryList: React.FC = () => {
   ];
 
   const handleBack = () => {
-    navigate('/dashboard?tab=discovery');
+    navigate('/courses?tab=discovery');
   };
 
   const handleAddCourse = () => {

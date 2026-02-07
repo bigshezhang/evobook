@@ -1,9 +1,9 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import BottomNav from '../../components/BottomNav';
 import SuccessFeedbackPill from '../../components/SuccessFeedbackPill';
-import { buildLearningPath, getStoredCourseMapId } from '../../utils/api';
+import { buildLearningPath, getUserCourses, CourseListItem } from '../../utils/api';
 
 const CoursesDashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -11,8 +11,32 @@ const CoursesDashboard: React.FC = () => {
   const activeTab = searchParams.get('tab') || 'mine';
   const [statusFilter, setStatusFilter] = useState<'progress' | 'completed' | 'tolearn'>('progress');
   const [showAddSuccess, setShowAddSuccess] = useState(false);
+  const [userCourses, setUserCourses] = useState<CourseListItem[]>([]);
+  const [isLoadingCourses, setIsLoadingCourses] = useState(true);
+  const [coursesError, setCoursesError] = useState<string | null>(null);
 
-  // Discovery tab specific data based on the screenshot
+  // Load user courses from backend
+  useEffect(() => {
+    const loadUserCourses = async () => {
+      try {
+        setIsLoadingCourses(true);
+        setCoursesError(null);
+        const data = await getUserCourses();
+        setUserCourses(data.courses);
+      } catch (error) {
+        console.error('Failed to load user courses:', error);
+        setCoursesError(error instanceof Error ? error.message : 'Failed to load courses');
+      } finally {
+        setIsLoadingCourses(false);
+      }
+    };
+
+    if (activeTab === 'mine') {
+      loadUserCourses();
+    }
+  }, [activeTab]);
+
+  // Discovery tab specific data based on the screenshot (kept for Discovery tab)
   const discoveryData = {
     recommended: [
       { id: 1, title: 'Quantum Physics for Beginners', rating: 4.9, img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBVh0Klh6NP9xJlGoCDBYhLviF2v7kGDywuB2iqsR5JNGI77a5jPKpTPYbkMMje-F3pG_KNuL5u_N9-BOuwNUhahvEaRP8Vqr2uJmDeHVnbiJ9JkBjIvRAzDwvr_5uEJF6I7Tr8gW-yVtUGneFoqwThw77OSJboIaADXg4g3G5kWw27D620BJXojoH6XjH_JHIgnR5fHFAfxsYgmA-dRdvovRH2WqenhXO-X_RM7b0HpUvuNEqz0ReqexuKlaDGKkjHpjS1he3E_4VN' },
@@ -152,31 +176,70 @@ const CoursesDashboard: React.FC = () => {
               </div>
             </section>
 
-            {/* Course Card */}
+            {/* User Courses Section */}
             <section>
-              <div 
-                onClick={() => navigate(buildLearningPath('/course-detail', { cid: getStoredCourseMapId() }))}
-                className="relative flex items-center gap-4 p-5 bg-white rounded-[2.5rem] border border-slate-50 shadow-soft group active:scale-[0.98] transition-all cursor-pointer overflow-hidden"
-              >
-                <div className="w-14 h-14 bg-lavender-pale rounded-2xl flex-shrink-0 flex items-center justify-center shadow-inner">
-                  <span className="material-symbols-rounded text-secondary text-2xl">psychology</span>
-                </div>
-                <div className="flex-1 min-w-0 pr-4">
-                  <h4 className="font-extrabold text-[15px] text-primary truncate">Neural Networks</h4>
-                  <div className="w-full h-[6px] bg-[#F3F4F6] rounded-full mt-3 overflow-hidden">
-                    <div className="bg-secondary h-full w-[65%] rounded-full shadow-[0_0_8px_rgba(124,58,237,0.3)]"></div>
+              {isLoadingCourses ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="flex gap-1.5">
+                    <div className="w-2 h-2 bg-secondary/40 rounded-full animate-bounce"></div>
+                    <div className="w-2 h-2 bg-secondary/40 rounded-full animate-bounce [animation-delay:0.2s]"></div>
+                    <div className="w-2 h-2 bg-secondary/40 rounded-full animate-bounce [animation-delay:0.4s]"></div>
                   </div>
                 </div>
-                <button 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    navigate(buildLearningPath('/course-detail', { cid: getStoredCourseMapId() }));
-                  }}
-                  className="h-10 px-6 bg-black text-white rounded-full flex-shrink-0 flex items-center justify-center shadow-lg active:scale-95 transition-all"
-                >
-                  <span className="text-[10px] font-black uppercase tracking-widest">Study</span>
-                </button>
-              </div>
+              ) : coursesError ? (
+                <div className="p-6 bg-rose-50 rounded-[2.5rem] border border-rose-100">
+                  <p className="text-sm font-medium text-rose-600 text-center">{coursesError}</p>
+                </div>
+              ) : userCourses.length === 0 ? (
+                <div className="p-8 text-center">
+                  <div className="w-20 h-20 mx-auto mb-4 bg-slate-100 rounded-full flex items-center justify-center">
+                    <span className="material-symbols-rounded text-slate-400 text-3xl">school</span>
+                  </div>
+                  <h4 className="font-bold text-slate-700 mb-2">No courses yet</h4>
+                  <p className="text-sm text-slate-500 mb-6">Create your first learning path</p>
+                  <button
+                    onClick={() => navigate('/assessment')}
+                    className="px-6 py-3 bg-secondary text-white rounded-full font-bold shadow-lg active:scale-95 transition-all"
+                  >
+                    Get Started
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {userCourses.map((course) => (
+                    <div 
+                      key={course.course_map_id}
+                      onClick={() => navigate(buildLearningPath('/course-detail', { cid: course.course_map_id }))}
+                      className="relative flex items-center gap-4 p-5 bg-white rounded-[2.5rem] border border-slate-50 shadow-soft group active:scale-[0.98] transition-all cursor-pointer overflow-hidden"
+                    >
+                      <div className="w-14 h-14 bg-lavender-pale rounded-2xl flex-shrink-0 flex items-center justify-center shadow-inner">
+                        <span className="material-symbols-rounded text-secondary text-2xl">psychology</span>
+                      </div>
+                      <div className="flex-1 min-w-0 pr-4">
+                        <h4 className="font-extrabold text-[15px] text-primary truncate">{course.topic}</h4>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wide">{course.level}</span>
+                          <span className="text-slate-300">•</span>
+                          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wide">{course.mode}</span>
+                        </div>
+                        {/* TODO: Add real progress tracking */}
+                        <div className="w-full h-[6px] bg-[#F3F4F6] rounded-full mt-3 overflow-hidden">
+                          <div className="bg-secondary h-full w-[0%] rounded-full shadow-[0_0_8px_rgba(124,58,237,0.3)]"></div>
+                        </div>
+                      </div>
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(buildLearningPath('/course-detail', { cid: course.course_map_id }));
+                        }}
+                        className="h-10 px-6 bg-black text-white rounded-full flex-shrink-0 flex items-center justify-center shadow-lg active:scale-95 transition-all"
+                      >
+                        <span className="text-[10px] font-black uppercase tracking-widest">Study</span>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </section>
           </div>
         ) : (
