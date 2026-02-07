@@ -65,7 +65,7 @@ const App: React.FC = () => {
   
   return (
     <HashRouter>
-      <div className="max-w-md mx-auto min-h-screen bg-white shadow-xl relative overflow-x-hidden">
+      <div className="max-w-lg mx-auto min-h-screen bg-white shadow-xl relative overflow-x-hidden">
         <Routes>
           {/* Onboarding Flow */}
           <Route path="/" element={<WelcomeView />} />
