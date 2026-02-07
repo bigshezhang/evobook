@@ -86,6 +86,15 @@ const QADetailRouteView: React.FC = () => {
   return <QADetailModal isOpen={true} onClose={() => navigate(-1)} data={data} />;
 };
 
+// Smart root redirect: onboarded users go to dashboard, new users see welcome
+const RootRedirect: React.FC = () => {
+  const onboardingDone = localStorage.getItem('evo_onboarding_completed') === 'true';
+  if (onboardingDone) {
+    return <Navigate to="/dashboard" replace />;
+  }
+  return <WelcomeView />;
+};
+
 const App: React.FC = () => {
   useResetOnParam();
   
@@ -98,7 +107,7 @@ const App: React.FC = () => {
             <Route path="/login" element={<LoginView />} />
 
             {/* Onboarding Flow */}
-            <Route path="/" element={<ProtectedRoute><WelcomeView /></ProtectedRoute>} />
+            <Route path="/" element={<ProtectedRoute><RootRedirect /></ProtectedRoute>} />
             <Route path="/interests" element={<ProtectedRoute><InterestSelection /></ProtectedRoute>} />
             <Route path="/assessment" element={<ProtectedRoute><AssessmentChatWithKey /></ProtectedRoute>} />
             <Route path="/companion" element={<ProtectedRoute><CompanionSelection /></ProtectedRoute>} />

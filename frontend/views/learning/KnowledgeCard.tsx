@@ -775,7 +775,7 @@ const KnowledgeCard: React.FC = () => {
               <span className="material-symbols-rounded text-[18px]">sports_esports</span>
             </button>
             <button 
-              onClick={() => navigate('/learning')}
+              onClick={() => navigate('/knowledge-tree')}
               className="w-full py-3 mt-3 bg-transparent text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 rounded-full font-semibold text-[14px] active:scale-95 transition-all"
             >
               Back to learn
