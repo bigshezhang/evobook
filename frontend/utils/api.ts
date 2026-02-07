@@ -103,6 +103,58 @@ export interface CourseMapGenerateResponse {
   nodes: DAGNode[];
 }
 
+export interface CourseListItem {
+  course_map_id: string;
+  topic: string;
+  level: string;
+  mode: string;
+  map_meta: Record<string, any>;
+  nodes: Record<string, any>[];
+  created_at: string;
+}
+
+export interface CourseListResponse {
+  courses: CourseListItem[];
+}
+
+export interface CourseDetailResponse {
+  course_map_id: string;
+  topic: string;
+  level: string;
+  mode: string;
+  focus: string;
+  verified_concept: string;
+  total_commitment_minutes: number;
+  map_meta: Record<string, any>;
+  nodes: Record<string, any>[];
+  created_at: string;
+}
+
+// ==================== Node Progress API Types ====================
+
+export interface NodeProgressItem {
+  node_id: number;
+  status: 'locked' | 'unlocked' | 'in_progress' | 'completed';
+  updated_at: string;
+}
+
+export interface GetProgressResponse {
+  progress: NodeProgressItem[];
+}
+
+export interface UpdateProgressRequest {
+  status: 'locked' | 'unlocked' | 'in_progress' | 'completed';
+}
+
+export interface BatchUpdateItem {
+  node_id: number;
+  status: 'locked' | 'unlocked' | 'in_progress' | 'completed';
+}
+
+export interface BatchUpdateRequest {
+  updates: BatchUpdateItem[];
+}
+
 // ==================== Knowledge Card API Types ====================
 
 export interface CourseInfo {
@@ -287,6 +339,80 @@ export async function generateCourseMap(request: CourseMapGenerateRequest): Prom
 }
 
 /**
+ * Get all course maps for the authenticated user
+ */
+export async function getUserCourses(): Promise<CourseListResponse> {
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${API_BASE_URL}/api/v1/course-map/list`, {
+    method: 'GET',
+    headers,
+  });
+
+  return handleApiResponse<CourseListResponse>(response);
+}
+
+/**
+ * Get a single course map by ID
+ */
+export async function getCourseDetail(courseMapId: string): Promise<CourseDetailResponse> {
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${API_BASE_URL}/api/v1/course-map/${courseMapId}`, {
+    method: 'GET',
+    headers,
+  });
+
+  return handleApiResponse<CourseDetailResponse>(response);
+}
+
+/**
+ * Get node progress for a course map
+ */
+export async function getNodeProgress(courseMapId: string): Promise<GetProgressResponse> {
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${API_BASE_URL}/api/v1/node-progress/${courseMapId}`, {
+    method: 'GET',
+    headers,
+  });
+
+  return handleApiResponse<GetProgressResponse>(response);
+}
+
+/**
+ * Update progress for a single node
+ */
+export async function updateNodeProgress(
+  courseMapId: string,
+  nodeId: number,
+  status: 'locked' | 'unlocked' | 'in_progress' | 'completed'
+): Promise<NodeProgressItem> {
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${API_BASE_URL}/api/v1/node-progress/${courseMapId}/${nodeId}`, {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify({ status }),
+  });
+
+  return handleApiResponse<NodeProgressItem>(response);
+}
+
+/**
+ * Batch update multiple node progresses
+ */
+export async function batchUpdateNodeProgress(
+  courseMapId: string,
+  updates: BatchUpdateItem[]
+): Promise<GetProgressResponse> {
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${API_BASE_URL}/api/v1/node-progress/${courseMapId}/batch`, {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify({ updates }),
+  });
+
+  return handleApiResponse<GetProgressResponse>(response);
+}
+
+/**
  * Generate a knowledge card for a specific node
  */
 export async function getKnowledgeCard(request: KnowledgeCardRequest): Promise<KnowledgeCardResponse> {
@@ -342,6 +468,53 @@ export async function generateQuiz(request: QuizGenerateRequest): Promise<QuizGe
   return handleApiResponse<QuizGenerateResponse>(response);
 }
 
+/**
+ * Get the active course map ID for the authenticated user
+ */
+export async function getActiveCourse(): Promise<{ course_map_id: string | null }> {
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${API_BASE_URL}/api/v1/profile/active-course`, {
+    method: 'GET',
+    headers,
+  });
+
+  return handleApiResponse<{ course_map_id: string | null }>(response);
+}
+
+/**
+ * Set the active course map for the authenticated user
+ */
+export async function setActiveCourse(courseMapId: string): Promise<void> {
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${API_BASE_URL}/api/v1/profile/active-course`, {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify({ course_map_id: courseMapId }),
+  });
+
+  if (!response.ok) {
+    let errorData: ApiError | null = null;
+    try {
+      errorData = await response.json();
+    } catch {
+      // Response is not JSON
+    }
+
+    if (errorData?.error) {
+      throw new ApiRequestError(
+        errorData.error.code,
+        errorData.error.message,
+        errorData.error.details
+      );
+    }
+
+    throw new ApiRequestError(
+      'UNKNOWN_ERROR',
+      `API request failed with status ${response.status}`
+    );
+  }
+}
+
 // ==================== Type Guards ====================
 
 export function isChatResponse(response: OnboardingResponse): response is ChatResponse {
@@ -354,13 +527,32 @@ export function isFinishResponse(response: OnboardingResponse): response is Fini
 
 // ==================== LocalStorage Keys ====================
 
+/**
+ * localStorage keys for temporary client-side state.
+ * 
+ * ⚠️ IMPORTANT: Only use localStorage for non-critical, temporary UI state.
+ * All user data and learning progress should be stored in the backend.
+ */
 export const STORAGE_KEYS = {
+  /** @deprecated Use backend API instead - kept for onboarding session only */
   ONBOARDING_DATA: 'evo_onboarding_data',
+  
+  /** @deprecated All course data is now loaded from backend API */
   COURSE_MAP: 'evo_course_map',
+  
+  /** @deprecated Node selection is now via URL parameters */
   CURRENT_NODE: 'evo_current_node',
+  
+  /** @deprecated Learned topics are derived from backend node_progress API */
   LEARNED_TOPICS: 'evo_learned_topics',
+  
+  /** @deprecated Node progress is now stored in backend database */
   NODE_PROGRESS: 'evo_node_progress',
-  /** Prefix for per-node Q&A history: `${QA_HISTORY_PREFIX}${courseMapId}_${nodeId}` */
+  
+  /** 
+   * Prefix for per-node Q&A history: `${QA_HISTORY_PREFIX}${courseMapId}_${nodeId}`
+   * @note This is acceptable for localStorage as Q&A is ephemeral interaction state
+   */
   QA_HISTORY_PREFIX: 'evo_qa_history_',
 } as const;
 
@@ -385,6 +577,9 @@ export function buildLearningPath(
 /**
  * Read the current course_map_id from localStorage (convenience for components
  * that don't have it in their own state, like BottomNav).
+ * 
+ * @deprecated Use getActiveCourse() API instead. This localStorage-based approach
+ * is unreliable and doesn't reflect the backend's active course state.
  */
 export function getStoredCourseMapId(): string | null {
   try {
