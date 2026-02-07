@@ -740,10 +740,15 @@ const KnowledgeCard: React.FC = () => {
         </div>
 
         <div className="flex items-center justify-between gap-3">
-          {/* Back Action - Unified text color */}
+          {/* Back Action - Disabled when loading or on first page */}
           <button 
             onClick={handleBack}
-            className="w-12 h-12 flex items-center justify-center rounded-full bg-white dark:bg-white/5 neo-shadow active:scale-95 transition-all border border-black/[0.03] dark:border-white/10"
+            disabled={isLoading || currentPage === 1}
+            className={`w-12 h-12 flex items-center justify-center rounded-full bg-white dark:bg-white/5 neo-shadow transition-all border border-black/[0.03] dark:border-white/10 ${
+              isLoading || currentPage === 1 
+                ? 'opacity-30 cursor-not-allowed' 
+                : 'active:scale-95 hover:bg-black/[0.02]'
+            }`}
           >
             <span className="material-symbols-rounded text-[24px] text-primary dark:text-white">arrow_back</span>
           </button>
@@ -766,13 +771,28 @@ const KnowledgeCard: React.FC = () => {
             </button>
           </div>
 
-          {/* Forward Action - Unified text color */}
-          <button 
-            onClick={handleNext}
-            className="w-12 h-12 flex items-center justify-center rounded-full bg-white dark:bg-white/5 neo-shadow active:scale-95 transition-all border border-black/[0.03] dark:border-white/10"
-          >
-            <span className="material-symbols-rounded text-[24px] text-primary dark:text-white">arrow_forward</span>
-          </button>
+          {/* Forward Action - Transforms into Finish button on last page */}
+          {currentPage === totalPagesInCard && !isLoading ? (
+            <button 
+              onClick={handleNext}
+              className="h-14 px-8 flex items-center justify-center rounded-full bg-black dark:bg-white text-white dark:text-black shadow-xl active:scale-95 hover:scale-105 transition-all duration-300 animate-in fade-in zoom-in"
+            >
+              <span className="text-[13px] font-black uppercase tracking-wider">Finish</span>
+              <span className="material-symbols-rounded text-[20px] ml-2">check_circle</span>
+            </button>
+          ) : (
+            <button 
+              onClick={handleNext}
+              disabled={isLoading}
+              className={`w-12 h-12 flex items-center justify-center rounded-full bg-white dark:bg-white/5 neo-shadow transition-all border border-black/[0.03] dark:border-white/10 ${
+                isLoading 
+                  ? 'opacity-30 cursor-not-allowed' 
+                  : 'active:scale-95 hover:bg-black/[0.02]'
+              }`}
+            >
+              <span className="material-symbols-rounded text-[24px] text-primary dark:text-white">arrow_forward</span>
+            </button>
+          )}
         </div>
       </footer>
 

@@ -111,6 +111,7 @@ export interface CourseListItem {
   map_meta: Record<string, any>;
   nodes: Record<string, any>[];
   created_at: string;
+  progress_percentage: number;
 }
 
 export interface CourseListResponse {
@@ -555,6 +556,48 @@ export const STORAGE_KEYS = {
    */
   QA_HISTORY_PREFIX: 'evo_qa_history_',
 } as const;
+
+// ==================== Learning Activities API ====================
+
+export interface LearningActivity {
+  id: string;
+  course_map_id: string;
+  node_id: number;
+  activity_type: string;
+  completed_at: string; // ISO 8601 UTC timestamp
+  extra_data: Record<string, any> | null;
+}
+
+export interface LearningActivitiesResponse {
+  activities: LearningActivity[];
+  total: number;
+}
+
+/**
+ * Get user's learning activities for the past N days.
+ * Returns raw UTC timestamps - frontend handles timezone conversion.
+ * 
+ * @param days - Number of days to look back (default: 180, max: 365)
+ * @returns Learning activities with UTC timestamps
+ */
+export async function getLearningActivities(
+  days: number = 180
+): Promise<LearningActivitiesResponse> {
+  const headers = await getAuthHeaders();
+  const response = await fetch(
+    `${API_BASE_URL}/api/v1/profile/learning-activities?days=${days}`,
+    { headers }
+  );
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(
+      errorData.detail?.message || `Failed to fetch learning activities: ${response.status}`
+    );
+  }
+
+  return response.json();
+}
 
 // ==================== URL Navigation Helpers ====================
 

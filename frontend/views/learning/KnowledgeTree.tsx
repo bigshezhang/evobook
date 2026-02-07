@@ -3,13 +3,13 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import Header from '../../components/Header';
 import BottomNav from '../../components/BottomNav';
-import { 
-  getCourseDetail, 
-  getNodeProgress, 
+import {
+  getCourseDetail,
+  getNodeProgress,
   updateNodeProgress,
   getUserCourses,
-  DAGNode, 
-  buildLearningPath, 
+  DAGNode,
+  buildLearningPath,
   MapMeta,
   NodeProgressItem,
   CourseListItem,
@@ -41,7 +41,7 @@ const KnowledgeTree: React.FC = () => {
   const [nodeProgress, setNodeProgress] = useState<NodeProgressItem[]>([]);
   const [nodePositions, setNodePositions] = useState<NodePosition[]>([]);
   const nodeRefs = useRef<Map<number, HTMLButtonElement>>(new Map());
-  
+
   // Course navigation state
   const [allCourses, setAllCourses] = useState<CourseListItem[]>([]);
   const [currentCourseIndex, setCurrentCourseIndex] = useState<number>(0);
@@ -56,11 +56,11 @@ const KnowledgeTree: React.FC = () => {
 
       try {
         setIsLoading(true);
-        
+
         // Load all user courses for navigation
         const coursesData = await getUserCourses();
         setAllCourses(coursesData.courses);
-        
+
         // Find current course index
         const currentIndex = coursesData.courses.findIndex(
           (c) => c.course_map_id === cidFromUrl
@@ -68,7 +68,7 @@ const KnowledgeTree: React.FC = () => {
         if (currentIndex !== -1) {
           setCurrentCourseIndex(currentIndex);
         }
-        
+
         // Load course data
         const courseData = await getCourseDetail(cidFromUrl);
         setCourseData({
@@ -162,11 +162,11 @@ const KnowledgeTree: React.FC = () => {
 
   const getNodeState = (nodeId: number): 'completed' | 'current' | 'locked' => {
     const progress = nodeProgress.find(p => p.node_id === nodeId);
-    
+
     // Map backend status to frontend state
     if (progress?.status === 'completed') return 'completed';
     if (progress?.status === 'in_progress' || progress?.status === 'unlocked') return 'current';
-    
+
     // If no progress record, check if locked or available based on prerequisites
     const node = courseData?.nodes.find(n => n.id === nodeId);
     if (!node) return 'locked';
@@ -185,12 +185,12 @@ const KnowledgeTree: React.FC = () => {
     if (state === 'locked') return;
 
     if (node.type === 'quiz') {
-      navigate(buildLearningPath('/quiz', { cid }));
+      navigate(buildLearningPath('/quiz', { cid, nid: node.id }));
     } else {
       navigate(buildLearningPath('/knowledge-card', { cid, nid: node.id }));
     }
   };
-  
+
   // Course navigation handlers
   const handlePreviousCourse = () => {
     if (currentCourseIndex > 0 && allCourses.length > 0) {
@@ -198,7 +198,7 @@ const KnowledgeTree: React.FC = () => {
       navigate(buildLearningPath('/knowledge-tree', { cid: prevCourse.course_map_id }));
     }
   };
-  
+
   const handleNextCourse = () => {
     if (currentCourseIndex < allCourses.length - 1 && allCourses.length > 0) {
       const nextCourse = allCourses[currentCourseIndex + 1];
@@ -373,14 +373,14 @@ const KnowledgeTree: React.FC = () => {
                 <span className="material-symbols-rounded text-white text-2xl" style={{ fontVariationSettings: "'FILL' 0, 'wght' 300" }}>arrow_back_ios_new</span>
               </button>
             )}
-            
+
             {/* Course Info - Centered */}
             <div
               onClick={() => navigate(buildLearningPath('/course-detail', { cid }))}
               className="flex-1 cursor-pointer"
             >
               <h2 className="text-[19px] font-extrabold tracking-tight text-center mb-3 leading-tight">{courseName}</h2>
-              
+
               {/* Progress Bar - Centered */}
               <div className="flex items-center justify-center gap-3">
                 <div className="w-[180px] bg-white/25 h-2 rounded-full overflow-hidden border border-white/10 shadow-inner">
@@ -392,7 +392,7 @@ const KnowledgeTree: React.FC = () => {
                 <span className="text-[11px] font-extrabold opacity-90 uppercase tracking-[0.15em] min-w-[65px]">{progressPercent}% DONE</span>
               </div>
             </div>
-            
+
             {/* Right Arrow */}
             {allCourses.length > 1 && (
               <button

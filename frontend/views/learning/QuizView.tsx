@@ -8,6 +8,7 @@ import {
   generateQuiz, 
   getCourseDetail,
   getNodeProgress,
+  updateNodeProgress,
   QuizGenerateResponse,
   QuizQuestion,
   buildLearningPath,
@@ -23,7 +24,9 @@ const QuizView: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const cidFromUrl = searchParams.get('cid');
+  const nidFromUrl = searchParams.get('nid');
   const [courseMapId, setCourseMapId] = useState<string | null>(cidFromUrl);
+  const [nodeId, setNodeId] = useState<number | null>(nidFromUrl ? parseInt(nidFromUrl) : null);
   const [showGreeting, setShowGreeting] = useState(true);
   const [submitted, setSubmitted] = useState(false);
   const [showReward, setShowReward] = useState(false);
@@ -82,7 +85,7 @@ const QuizView: React.FC = () => {
         // Call API
         const response = await generateQuiz({
           language: 'zh',
-          mode: courseMap.map_meta.mode,
+          mode: courseData.map_meta.mode,
           learned_topics: learnedTopics,
         });
         
@@ -361,7 +364,17 @@ const QuizView: React.FC = () => {
 
       <RewardModal 
         isOpen={showReward} 
-        onClose={() => navigate(buildLearningPath('/knowledge-tree', { cid: courseMapId }))} 
+        onClose={async () => {
+          // Mark quiz node as completed
+          if (courseMapId && nodeId) {
+            try {
+              await updateNodeProgress(courseMapId, nodeId, 'completed');
+            } catch (error) {
+              console.error('Failed to update quiz progress:', error);
+            }
+          }
+          navigate(buildLearningPath('/knowledge-tree', { cid: courseMapId }));
+        }} 
         correctCount={quizStats.correct}
         totalCount={quizStats.total}
         goldEarned={quizStats.gold}

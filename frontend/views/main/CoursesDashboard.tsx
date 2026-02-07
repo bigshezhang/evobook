@@ -3,17 +3,20 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import BottomNav from '../../components/BottomNav';
 import SuccessFeedbackPill from '../../components/SuccessFeedbackPill';
-import { buildLearningPath, getUserCourses, CourseListItem } from '../../utils/api';
+import { buildLearningPath, getUserCourses, CourseListItem, getLearningActivities, getStoredCourseMapId } from '../../utils/api';
+import { aggregateActivitiesToHeatmap, DayActivity } from '../../utils/activityAggregator';
 
 const CoursesDashboard: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = searchParams.get('tab') || 'mine';
-  const [statusFilter, setStatusFilter] = useState<'progress' | 'completed' | 'tolearn'>('progress');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'progress' | 'tolearn'>('all');
   const [showAddSuccess, setShowAddSuccess] = useState(false);
   const [userCourses, setUserCourses] = useState<CourseListItem[]>([]);
   const [isLoadingCourses, setIsLoadingCourses] = useState(true);
   const [coursesError, setCoursesError] = useState<string | null>(null);
+  const [heatmapData, setHeatmapData] = useState<DayActivity[]>([]);
+  const [isLoadingActivity, setIsLoadingActivity] = useState(true);
 
   // Load user courses from backend
   useEffect(() => {
@@ -34,6 +37,48 @@ const CoursesDashboard: React.FC = () => {
     if (activeTab === 'mine') {
       loadUserCourses();
     }
+  }, [activeTab]);
+
+  // Load learning activity data for heatmap
+  useEffect(() => {
+    const loadActivityData = async () => {
+      try {
+        setIsLoadingActivity(true);
+        const data = await getLearningActivities(180); // Get 6 months of data
+        
+        // Aggregate into 36-day heatmap
+        const heatmap = aggregateActivitiesToHeatmap(data.activities, 36);
+        setHeatmapData(heatmap);
+      } catch (error) {
+        console.error('Failed to load activity data:', error);
+        // Silently fail and show empty heatmap
+        setHeatmapData([]);
+      } finally {
+        setIsLoadingActivity(false);
+      }
+    };
+
+    if (activeTab === 'mine') {
+      loadActivityData();
+    }
+  }, [activeTab]);
+
+  // Reload activity data when page becomes visible (user returns from other pages)
+  useEffect(() => {
+    const handleVisibilityChange = async () => {
+      if (!document.hidden && activeTab === 'mine') {
+        try {
+          const data = await getLearningActivities(180);
+          const heatmap = aggregateActivitiesToHeatmap(data.activities, 36);
+          setHeatmapData(heatmap);
+        } catch (error) {
+          console.error('Failed to reload activity data:', error);
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [activeTab]);
 
   // Discovery tab specific data based on the screenshot (kept for Discovery tab)
@@ -103,7 +148,7 @@ const CoursesDashboard: React.FC = () => {
   return (
     <div className="flex flex-col min-h-screen bg-white pb-32 overflow-x-hidden font-sans">
       {/* Header Section */}
-      <header className="px-6 pt-12 pb-4">
+      <header className="px-6 pt-12 pb-0">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-[32px] font-black tracking-tight text-primary">Courses</h1>
           <div className="flex items-center gap-3">
@@ -124,7 +169,7 @@ const CoursesDashboard: React.FC = () => {
         </div>
 
         {/* Top Tab Switcher */}
-        <div className="bg-[#F1F3F9] p-1 rounded-2xl flex gap-1 mb-6 shadow-inner">
+        <div className="bg-[#F1F3F9] p-1 rounded-2xl flex gap-1 mb-4 shadow-inner">
           <button 
             onClick={() => setSearchParams({ tab: 'mine' })}
             className={`flex-1 py-3 text-[14px] font-black rounded-xl transition-all ${activeTab === 'mine' ? 'bg-white shadow-md text-primary' : 'text-slate-400'}`}
@@ -142,35 +187,50 @@ const CoursesDashboard: React.FC = () => {
 
       <main className="flex-1">
         {activeTab === 'mine' ? (
-          <div className="px-6 space-y-8 animate-in fade-in duration-500">
+          <div className="px-6 space-y-4 animate-in fade-in duration-500">
             {/* Activity Graph Section */}
             <section>
-              <div className="flex justify-between items-center mb-4">
+              <div className="flex justify-between items-center mb-2">
                 <h3 className="font-black text-[11px] uppercase tracking-[0.2em] text-[#9CA3AF]">Activity Graph</h3>
-                <span className="text-[10px] font-bold text-[#D1D5DB]">PAST 6 MONTHS</span>
               </div>
-              <div className="bg-white p-6 rounded-[2.5rem] border border-slate-50 shadow-soft">
-                <div className="grid grid-cols-12 gap-2">
-                  {[...Array(36)].map((_, i) => {
-                    let bgColor = 'bg-[#F3F4F6]';
-                    if (i === 0 || i === 4 || i === 11 || i === 13 || i === 22 || i === 23 || i === 31 || i === 32) bgColor = 'bg-secondary';
-                    else if (i === 5 || i === 8 || i === 19 || i === 24 || i === 35) bgColor = 'bg-accent-purple/40';
-                    return <div key={i} className={`aspect-square rounded-[4px] ${bgColor}`}></div>;
-                  })}
-                </div>
+              <div className="bg-white p-5 rounded-[2.5rem] border border-slate-50 shadow-soft">
+                {isLoadingActivity ? (
+                  <div className="flex justify-center py-8">
+                    <div className="w-4 h-4 border-2 border-secondary/20 border-t-secondary rounded-full animate-spin" />
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-12 gap-2">
+                    {heatmapData.map((day, i) => {
+                      // Map intensity to colors
+                      const bgColor = 
+                        day.intensity === 'deep' ? 'bg-secondary' :
+                        day.intensity === 'medium' ? 'bg-secondary/60' :
+                        day.intensity === 'light' ? 'bg-accent-purple/40' :
+                        'bg-[#F3F4F6]';
+                      
+                      return (
+                        <div 
+                          key={i} 
+                          className={`aspect-square rounded-[4px] ${bgColor} transition-colors cursor-pointer hover:opacity-80`}
+                          title={`${day.date}: ${day.count} ${day.count === 1 ? 'node' : 'nodes'} completed`}
+                        />
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </section>
 
             {/* Status Tabs */}
             <section>
               <div className="bg-[#F1F3F9] p-1 rounded-2xl flex gap-1 shadow-inner">
-                {['progress', 'completed', 'tolearn'].map((type) => (
+                {['all', 'progress', 'tolearn'].map((type) => (
                   <button 
                     key={type}
                     onClick={() => setStatusFilter(type as any)}
                     className={`flex-1 py-3 text-[13px] font-black rounded-xl transition-all ${statusFilter === type ? 'bg-white shadow-sm text-primary' : 'text-slate-400'}`}
                   >
-                    {type === 'progress' ? 'In Progress' : type === 'completed' ? 'Completed' : 'To Learn'}
+                    {type === 'all' ? 'All' : type === 'progress' ? 'In Progress' : 'To Learn'}
                   </button>
                 ))}
               </div>
@@ -206,7 +266,14 @@ const CoursesDashboard: React.FC = () => {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {userCourses.map((course) => (
+                  {userCourses
+                    .filter(course => {
+                      if (statusFilter === 'all') return true;
+                      if (statusFilter === 'progress') return course.progress_percentage > 0;
+                      if (statusFilter === 'tolearn') return course.progress_percentage === 0;
+                      return true;
+                    })
+                    .map((course) => (
                     <div 
                       key={course.course_map_id}
                       onClick={() => navigate(buildLearningPath('/course-detail', { cid: course.course_map_id }))}
@@ -222,15 +289,23 @@ const CoursesDashboard: React.FC = () => {
                           <span className="text-slate-300">•</span>
                           <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wide">{course.mode}</span>
                         </div>
-                        {/* TODO: Add real progress tracking */}
-                        <div className="w-full h-[6px] bg-[#F3F4F6] rounded-full mt-3 overflow-hidden">
-                          <div className="bg-secondary h-full w-[0%] rounded-full shadow-[0_0_8px_rgba(124,58,237,0.3)]"></div>
+                        {/* Progress bar with percentage */}
+                        <div className="flex items-center gap-2 mt-3">
+                          <div className="flex-1 h-[6px] bg-[#F3F4F6] rounded-full overflow-hidden">
+                            <div 
+                              className="bg-secondary h-full rounded-full shadow-[0_0_8px_rgba(124,58,237,0.3)] transition-all duration-500"
+                              style={{ width: `${course.progress_percentage}%` }}
+                            ></div>
+                          </div>
+                          <span className="text-[11px] font-bold text-slate-400 min-w-[35px] text-right">
+                            {Math.round(course.progress_percentage)}%
+                          </span>
                         </div>
                       </div>
                       <button 
                         onClick={(e) => {
                           e.stopPropagation();
-                          navigate(buildLearningPath('/course-detail', { cid: course.course_map_id }));
+                          navigate(buildLearningPath('/knowledge-tree', { cid: course.course_map_id }));
                         }}
                         className="h-10 px-6 bg-black text-white rounded-full flex-shrink-0 flex items-center justify-center shadow-lg active:scale-95 transition-all"
                       >
