@@ -25,13 +25,13 @@ const OutfitView: React.FC = () => {
     <div className="flex flex-col h-screen bg-[#F9F9F9] overflow-hidden select-none font-sans">
       <GameHeader />
       
-      <main className="h-[35%] relative flex flex-col items-center justify-center bg-[#F9F9F9]">
-        <div className="absolute w-[240px] h-[240px] bg-primary/5 rounded-full blur-[60px] -z-10"></div>
-        <div className="relative z-10 w-[120px] h-[120px] drop-shadow-2xl animate-in fade-in zoom-in duration-500">
+      <main className="h-[35%] relative flex flex-col items-center justify-center bg-black">
+        <div className="absolute w-[240px] h-[240px] bg-white/5 rounded-full blur-[60px] -z-10"></div>
+        <div className="relative z-10 w-[180px] h-[180px] drop-shadow-2xl animate-in fade-in zoom-in duration-500">
           {/* 使用 onboarding 场景显示角色微笑动画 */}
           <Mascot scene="onboarding" width="100%" className="drop-shadow-2xl" />
         </div>
-        <div className="absolute bottom-4 w-40 h-4 bg-black/5 blur-xl rounded-[100%]"></div>
+        <div className="absolute bottom-4 w-40 h-4 bg-white/5 blur-xl rounded-[100%]"></div>
       </main>
 
       <div className="h-[65%] bg-white rounded-t-[48px] shadow-[0_-30px_100px_rgba(0,0,0,0.08)] p-6 z-40 overflow-hidden flex flex-col border-t border-slate-50">
