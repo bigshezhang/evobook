@@ -9,7 +9,6 @@ const GameHeader: React.FC = () => {
   const tabs = [
     { label: 'Travel', path: '/game' },
     { label: 'Outfit', path: '/game/outfit' },
-    { label: 'Home', path: '/game/home' },
   ];
 
   const currentTab = tabs.find(t => t.path === location.pathname)?.label || 'Travel';

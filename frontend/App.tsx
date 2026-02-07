@@ -34,7 +34,6 @@ import QADetailModal from './views/learning/QADetailModal';
 // Game Views
 import TravelBoard from './views/game/TravelBoard';
 import OutfitView from './views/game/OutfitView';
-import HomeShop from './views/game/HomeShop';
 
 // Wrapper component to force AssessmentChat remount on every navigation
 // This prevents flash of old content when re-entering the page
@@ -85,7 +84,6 @@ const App: React.FC = () => {
           {/* Game Flow */}
           <Route path="/game" element={<TravelBoard />} />
           <Route path="/game/outfit" element={<OutfitView />} />
-          <Route path="/game/home" element={<HomeShop />} />
           
           {/* Main Navigation Tabs */}
           <Route path="/dashboard" element={<CoursesDashboard />} />
