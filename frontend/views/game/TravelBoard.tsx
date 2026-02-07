@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import GameHeader from '../../components/GameHeader';
 import BottomNav from '../../components/BottomNav';
 import Mascot from '../../components/Mascot';
@@ -14,6 +15,7 @@ interface TileData {
 }
 
 const TravelBoard: React.FC = () => {
+  const navigate = useNavigate();
   const [isRolling, setIsRolling] = useState(false);
   const [rollResult, setRollResult] = useState<number | null>(null);
   const [isMoving, setIsMoving] = useState(false);
@@ -125,7 +127,10 @@ const TravelBoard: React.FC = () => {
               <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">rolls left</span>
             </div>
           </div>
-          <button className="flex items-center gap-2 bg-black text-white px-5 py-3 rounded-full shadow-xl active:scale-95 transition-all">
+          <button 
+            onClick={() => navigate('/knowledge-tree')}
+            className="flex items-center gap-2 bg-black text-white px-5 py-3 rounded-full shadow-xl active:scale-95 transition-all"
+          >
             <span className="material-symbols-outlined text-[18px]">auto_stories</span>
             <span className="text-[11px] font-black uppercase tracking-tight">Learning</span>
           </button>

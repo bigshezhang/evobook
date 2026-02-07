@@ -8,6 +8,7 @@ import {
   STORAGE_KEYS, 
   CourseMapGenerateResponse, 
   FinishData,
+  LearnedTopic,
   getClarification,
   getKnowledgeCard,
   KnowledgeCardRequest,
@@ -380,6 +381,14 @@ const KnowledgeCard: React.FC = () => {
 
   // Load course data from localStorage and fetch knowledge card from API
   useEffect(() => {
+    // CRITICAL: Reset content state immediately to prevent flash of old content
+    setMarkdownContent('');
+    setCurrentPage(1);
+    setError(null);
+    setIsLoading(true);
+    setQaList([]);
+    setDynamicQuestions([]);
+    
     const courseMapStr = localStorage.getItem(STORAGE_KEYS.COURSE_MAP);
     const currentNodeStr = localStorage.getItem(STORAGE_KEYS.CURRENT_NODE);
     const onboardingDataStr = localStorage.getItem(STORAGE_KEYS.ONBOARDING_DATA);
@@ -473,11 +482,66 @@ const KnowledgeCard: React.FC = () => {
     return () => clearTimeout(timer);
   }, [currentPage]);
 
+  /**
+   * Mark the current node as completed, unlock successor nodes whose
+   * prerequisites are all done, and persist the learned topic so that
+   * QuizView can pick it up later.
+   */
+  const handleNodeCompletion = () => {
+    // --- 1. Update node progress ---
+    const progressStr = localStorage.getItem('evo_node_progress');
+    const courseMapStr = localStorage.getItem(STORAGE_KEYS.COURSE_MAP);
+    if (!progressStr || !courseMapStr) return;
+
+    const progress: { nodeId: number; completed: boolean; current: boolean }[] =
+      JSON.parse(progressStr);
+    const courseMap: CourseMapGenerateResponse = JSON.parse(courseMapStr);
+
+    // Mark the current node as completed and no longer current
+    const updated = progress.map((p) =>
+      p.nodeId === currentNodeId
+        ? { ...p, completed: true, current: false }
+        : p,
+    );
+
+    // Determine which successor nodes should be unlocked
+    courseMap.nodes.forEach((node) => {
+      if (!node.pre_requisites.includes(currentNodeId)) return;
+
+      // Check whether *all* prerequisites of this successor are now completed
+      const allPrereqsDone = node.pre_requisites.every((prereqId) => {
+        const entry = updated.find((p) => p.nodeId === prereqId);
+        return entry?.completed === true;
+      });
+
+      if (allPrereqsDone) {
+        const idx = updated.findIndex((p) => p.nodeId === node.id);
+        if (idx !== -1) {
+          updated[idx] = { ...updated[idx], current: true };
+        }
+      }
+    });
+
+    localStorage.setItem('evo_node_progress', JSON.stringify(updated));
+
+    // --- 2. Persist learned topic for Quiz ---
+    const topicsStr = localStorage.getItem(STORAGE_KEYS.LEARNED_TOPICS);
+    const learnedTopics: LearnedTopic[] = topicsStr ? JSON.parse(topicsStr) : [];
+
+    learnedTopics.push({
+      topic_name: nodeTitle,
+      pages_markdown: markdownContent,
+    });
+
+    localStorage.setItem(STORAGE_KEYS.LEARNED_TOPICS, JSON.stringify(learnedTopics));
+  };
+
   const handleNext = () => {
     if (currentPage < totalPagesInCard) {
       setCurrentPage(prev => prev + 1);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } else {
+      handleNodeCompletion();
       setShowComplete(true);
     }
   };
@@ -711,7 +775,7 @@ const KnowledgeCard: React.FC = () => {
               <span className="material-symbols-rounded text-[18px]">sports_esports</span>
             </button>
             <button 
-              onClick={() => navigate('/learning')}
+              onClick={() => navigate('/knowledge-tree')}
               className="w-full py-3 mt-3 bg-transparent text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 rounded-full font-semibold text-[14px] active:scale-95 transition-all"
             >
               Back to learn

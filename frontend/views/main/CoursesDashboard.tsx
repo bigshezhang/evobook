@@ -89,9 +89,12 @@ const CoursesDashboard: React.FC = () => {
               <span className="material-symbols-rounded text-secondary text-[22px]" style={{ fontVariationSettings: "'FILL' 0" }}>library_add</span>
               <span className="text-[13px] font-bold text-slate-700">Create</span>
             </button>
-            <div className="w-11 h-11 rounded-full bg-[#E0E2D1] border border-slate-100 shadow-sm flex items-center justify-center">
-               <span className="material-symbols-rounded text-white text-xl" style={{ fontVariationSettings: "'FILL' 1" }}>lightbulb</span>
-            </div>
+            <button 
+              onClick={() => navigate('/profile')}
+              className="w-11 h-11 rounded-full bg-[#E0E2D1] border border-slate-100 shadow-sm flex items-center justify-center active:scale-95 transition-transform"
+            >
+               <span className="material-symbols-rounded text-white text-xl" style={{ fontVariationSettings: "'FILL' 1" }}>person</span>
+            </button>
           </div>
         </div>
 

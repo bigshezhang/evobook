@@ -1,11 +1,13 @@
 
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../utils/AuthContext';
 import Header from '../../components/Header';
 import BottomNav from '../../components/BottomNav';
 
 const ProfileView: React.FC = () => {
   const navigate = useNavigate();
+  const { signOut } = useAuth();
   const [showInvite, setShowInvite] = useState(false);
 
   // The high-fidelity mascot image for the poster
@@ -106,7 +108,14 @@ const ProfileView: React.FC = () => {
               <span className="material-symbols-outlined text-slate-300 text-lg">chevron_right</span>
             </button>
             <div className="h-px bg-slate-100/50 mx-5 my-1"></div>
-            <button className="w-full flex items-center justify-between py-4 px-5 hover:bg-rose-50 rounded-2xl transition-colors">
+            <button 
+              onClick={async () => {
+                localStorage.clear();
+                await signOut();
+                navigate('/login', { replace: true });
+              }}
+              className="w-full flex items-center justify-between py-4 px-5 hover:bg-rose-50 rounded-2xl transition-colors"
+            >
               <div className="flex items-center gap-4">
                 <span className="material-symbols-outlined text-rose-500 text-xl">logout</span>
                 <span className="text-[15px] font-black text-slate-800">Logout</span>
