@@ -1,6 +1,7 @@
 
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { buildLearningPath, getStoredCourseMapId } from '../utils/api';
 
 interface BottomNavProps {
   activeTab?: 'courses' | 'learning' | 'game';
@@ -32,7 +33,7 @@ const BottomNav: React.FC<BottomNavProps> = ({ activeTab }) => {
       
       {/* Learning Management */}
       <button 
-        onClick={() => navigate('/knowledge-tree')}
+        onClick={() => navigate(buildLearningPath('/knowledge-tree', { cid: getStoredCourseMapId() }))}
         className={`flex-1 h-14 flex items-center justify-center rounded-full transition-all duration-300 mx-1 ${current === 'learning' ? 'bg-white text-primary' : 'text-white/40 hover:text-white'}`}
       >
         <span className="material-symbols-rounded text-[26px]" style={{ fontVariationSettings: `'FILL' ${current === 'learning' ? 1 : 0}` }}>school</span>

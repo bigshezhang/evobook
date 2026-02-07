@@ -1,39 +1,43 @@
 
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import Header from '../../components/Header';
 import SuccessFeedbackPill from '../../components/SuccessFeedbackPill';
-import { STORAGE_KEYS, CourseMapGenerateResponse, FinishData } from '../../utils/api';
+import { STORAGE_KEYS, CourseMapGenerateResponse, FinishData, buildLearningPath } from '../../utils/api';
 
 const CourseDetail: React.FC = () => {
   const navigate = useNavigate();
-  
+  const [searchParams] = useSearchParams();
+  const cidFromUrl = searchParams.get('cid');
+  const [courseMapId, setCourseMapId] = useState<string | null>(cidFromUrl);
+
   const [commitment, setCommitment] = useState<'Deep' | 'Fast' | 'Light'>('Fast');
   const [velocity, setVelocity] = useState<'15m' | '30m' | '45m' | '1h'>('30m');
   const [formats, setFormats] = useState<string[]>(['Video', 'Lab', 'Read']);
   const [showSuccess, setShowSuccess] = useState(false);
   const [isMainCourse, setIsMainCourse] = useState(false);
-  
+
   // Course data from localStorage
   const [courseName, setCourseName] = useState('Loading...');
   const [topic, setTopic] = useState('');
   const [knowledgeTags, setKnowledgeTags] = useState<string[]>([]);
-  
+
   useEffect(() => {
     // Load course data from localStorage
     const courseMapStr = localStorage.getItem(STORAGE_KEYS.COURSE_MAP);
     const onboardingDataStr = localStorage.getItem(STORAGE_KEYS.ONBOARDING_DATA);
-    
+
     if (courseMapStr) {
       const courseMap: CourseMapGenerateResponse = JSON.parse(courseMapStr);
       setCourseName(courseMap.map_meta.course_name);
+      setCourseMapId(courseMap.course_map_id);
       setCommitment(courseMap.map_meta.mode);
-      
+
       // Extract knowledge tags from node titles
       const tags = courseMap.nodes.slice(0, 6).map(n => n.title);
       setKnowledgeTags(tags);
     }
-    
+
     if (onboardingDataStr) {
       const onboardingData: FinishData = JSON.parse(onboardingDataStr);
       setTopic(onboardingData.topic);
@@ -47,7 +51,7 @@ const CourseDetail: React.FC = () => {
   };
 
   const toggleFormat = (format: string) => {
-    setFormats(prev => 
+    setFormats(prev =>
       prev.includes(format) ? prev.filter(f => f !== format) : [...prev, format]
     );
   };
@@ -61,19 +65,19 @@ const CourseDetail: React.FC = () => {
 
   const handleConfirm = () => {
     localStorage.setItem('evo_onboarding_completed', 'true');
-    navigate('/knowledge-tree');
+    navigate(buildLearningPath('/knowledge-tree', { cid: courseMapId }));
   };
 
   return (
     <div className="flex flex-col h-screen bg-white font-sans overflow-hidden">
-      <Header 
-        subtitle="Editorial Plan" 
+      <Header
+        subtitle="Editorial Plan"
         rightAction={
-          <button 
+          <button
             onClick={handleSetMainCourse}
             className="w-10 h-10 flex items-center justify-center active:scale-90 transition-transform"
           >
-            <span 
+            <span
               className={`material-symbols-outlined text-[24px] transition-colors ${isMainCourse ? 'text-amber-400' : 'text-charcoal'}`}
               style={{ fontVariationSettings: `'FILL' ${isMainCourse ? 1 : 0}` }}
             >
@@ -116,7 +120,7 @@ const CourseDetail: React.FC = () => {
           </div>
           <div className="bg-[#F3F4F6] p-1.5 rounded-2xl flex">
             {(['Deep', 'Fast', 'Light'] as const).map(item => (
-              <button 
+              <button
                 key={item}
                 onClick={() => setCommitment(item)}
                 className={`flex-1 py-3 text-[14px] font-black rounded-xl transition-all ${commitment === item ? 'bg-charcoal text-white shadow-lg' : 'text-slate-400'}`}
@@ -134,7 +138,7 @@ const CourseDetail: React.FC = () => {
           </div>
           <div className="bg-[#F3F4F6] p-1.5 rounded-2xl flex gap-1">
             {(['15m', '30m', '45m', '1h'] as const).map(item => (
-              <button 
+              <button
                 key={item}
                 onClick={() => setVelocity(item)}
                 className={`flex-1 py-3 text-[14px] font-black rounded-xl transition-all ${velocity === item ? 'bg-charcoal text-white shadow-lg' : 'text-slate-400'}`}
@@ -153,12 +157,12 @@ const CourseDetail: React.FC = () => {
               { id: 'Lab', icon: 'touch_app' },
               { id: 'Read', icon: 'description' }
             ].map(format => (
-              <button 
+              <button
                 key={format.id}
                 onClick={() => toggleFormat(format.id)}
                 className={`flex-1 py-4 rounded-2xl flex items-center justify-center gap-2 border-2 transition-all active:scale-95 ${
-                  formats.includes(format.id) 
-                    ? 'bg-[#F3F4F6] border-charcoal/10' 
+                  formats.includes(format.id)
+                    ? 'bg-[#F3F4F6] border-charcoal/10'
                     : 'bg-white border-transparent text-slate-300 grayscale'
                 }`}
               >
@@ -172,7 +176,7 @@ const CourseDetail: React.FC = () => {
 
       <div className="p-8 bg-white border-t border-slate-50 flex justify-center z-40">
         <div className="max-w-md w-full pointer-events-auto">
-          <button 
+          <button
             onClick={handleConfirm}
             className="w-full bg-charcoal text-white py-5 rounded-[24px] flex items-center justify-center gap-3 shadow-2xl active:scale-95 transition-all group"
           >
@@ -182,10 +186,10 @@ const CourseDetail: React.FC = () => {
         </div>
       </div>
 
-      <SuccessFeedbackPill 
-        isOpen={showSuccess} 
-        onClose={() => setShowSuccess(false)} 
-        message="已加入为主页面课程" 
+      <SuccessFeedbackPill
+        isOpen={showSuccess}
+        onClose={() => setShowSuccess(false)}
+        message="已加入为主页面课程"
       />
     </div>
   );

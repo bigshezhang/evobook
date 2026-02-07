@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import Header from '../../components/Header';
 import BottomNav from '../../components/BottomNav';
-import { STORAGE_KEYS, DAGNode, CourseMapGenerateResponse } from '../../utils/api';
+import { STORAGE_KEYS, DAGNode, CourseMapGenerateResponse, buildLearningPath } from '../../utils/api';
 
 interface NodeProgress {
   nodeId: number;
@@ -21,20 +21,22 @@ interface NodePosition {
 
 const KnowledgeTree: React.FC = () => {
   const navigate = useNavigate();
-  
+  const [searchParams] = useSearchParams();
+  const cidFromUrl = searchParams.get('cid');
+
   // Load course data from localStorage
   const [courseData, setCourseData] = useState<CourseMapGenerateResponse | null>(null);
   const [nodeProgress, setNodeProgress] = useState<NodeProgress[]>([]);
   const [nodePositions, setNodePositions] = useState<NodePosition[]>([]);
   const nodeRefs = useRef<Map<number, HTMLButtonElement>>(new Map());
-  
+
   useEffect(() => {
     const storedCourseMap = localStorage.getItem(STORAGE_KEYS.COURSE_MAP);
     if (storedCourseMap) {
       try {
         const parsed = JSON.parse(storedCourseMap) as CourseMapGenerateResponse;
         setCourseData(parsed);
-        
+
         // Initialize node progress (first node is current, none completed)
         const storedProgress = localStorage.getItem('evo_node_progress');
         if (storedProgress) {
@@ -80,16 +82,16 @@ const KnowledgeTree: React.FC = () => {
         console.log('No node refs found');
         return;
       }
-      
+
       const container = document.querySelector('.relative.px-6.flex-1.mt-6');
       if (!container) {
         console.log('Container not found');
         return;
       }
-      
+
       const containerRect = container.getBoundingClientRect();
       const positions: NodePosition[] = [];
-      
+
       nodeRefs.current.forEach((element, nodeId) => {
         const rect = element.getBoundingClientRect();
         positions.push({
@@ -100,7 +102,7 @@ const KnowledgeTree: React.FC = () => {
           height: rect.height,
         });
       });
-      
+
       console.log(`Updated positions for ${positions.length} nodes:`, positions);
       setNodePositions(positions);
     };
@@ -109,7 +111,7 @@ const KnowledgeTree: React.FC = () => {
     const timer1 = setTimeout(updatePositions, 50);
     const timer2 = setTimeout(updatePositions, 200);
     const timer3 = setTimeout(updatePositions, 500);
-    
+
     return () => {
       clearTimeout(timer1);
       clearTimeout(timer2);
@@ -119,7 +121,7 @@ const KnowledgeTree: React.FC = () => {
 
   // Get course name from map_meta
   const courseName = courseData?.map_meta.course_name || 'Loading...';
-  
+
   // Color for banner
   const bannerColor = "bg-secondary";
 
@@ -127,29 +129,31 @@ const KnowledgeTree: React.FC = () => {
     const progress = nodeProgress.find(p => p.nodeId === nodeId);
     if (progress?.completed) return 'completed';
     if (progress?.current) return 'current';
-    
+
     // Check if prerequisites are completed
     const node = courseData?.nodes.find(n => n.id === nodeId);
     if (!node) return 'locked';
-    
-    const prereqsCompleted = node.pre_requisites.every(prereqId => 
+
+    const prereqsCompleted = node.pre_requisites.every(prereqId =>
       nodeProgress.find(p => p.nodeId === prereqId)?.completed
     );
-    
+
     return prereqsCompleted ? 'current' : 'locked';
   };
+
+  const cid = courseData?.course_map_id || cidFromUrl;
 
   const handleNodeClick = (node: DAGNode) => {
     const state = getNodeState(node.id);
     if (state === 'locked') return;
-    
-    // Store current node info for KnowledgeCard/Quiz to use
+
+    // Store current node info for KnowledgeCard/Quiz to use (backward compat)
     localStorage.setItem(STORAGE_KEYS.CURRENT_NODE, JSON.stringify(node));
-    
+
     if (node.type === 'quiz') {
-      navigate('/quiz');
+      navigate(buildLearningPath('/quiz', { cid }));
     } else {
-      navigate('/knowledge-card');
+      navigate(buildLearningPath('/knowledge-card', { cid, nid: node.id }));
     }
   };
 
@@ -159,7 +163,7 @@ const KnowledgeTree: React.FC = () => {
       <div className="flex flex-col h-screen bg-[#F8F9FD] items-center justify-center">
         <div className="animate-spin w-12 h-12 border-4 border-secondary border-t-transparent rounded-full"></div>
         <p className="mt-4 text-slate-500 font-medium">加载课程数据...</p>
-        <button 
+        <button
           onClick={() => navigate('/assessment')}
           className="mt-6 px-6 py-3 bg-secondary text-white rounded-full font-bold"
         >
@@ -233,7 +237,7 @@ const KnowledgeTree: React.FC = () => {
         const y1 = sourcePos.y + sourcePos.height / 2 + 10;  // Start slightly below node
         const x2 = targetPos.x;
         const y2 = targetPos.y - targetPos.height / 2 - 10;  // End slightly above node
-        
+
         // Control point for smooth quadratic bezier curve
         const controlY = (y1 + y2) / 2;
         const path = `M ${x1},${y1} Q ${x1},${controlY} ${x2},${y2}`;
@@ -277,7 +281,7 @@ const KnowledgeTree: React.FC = () => {
 
   return (
     <div className="flex flex-col h-screen bg-[#F8F9FD] relative pb-40 overflow-x-hidden">
-      <Header 
+      <Header
         title="Learning"
         showBack={false}
         rightAction={
@@ -292,15 +296,15 @@ const KnowledgeTree: React.FC = () => {
       <div className="px-6 mb-4 relative mt-4">
         <div className={`${bannerColor} rounded-[28px] p-5 text-white shadow-xl flex items-center justify-between relative overflow-hidden transition-colors duration-500`}>
           {/* Banner content area */}
-          <div 
-            onClick={() => navigate('/course-detail')}
+          <div
+            onClick={() => navigate(buildLearningPath('/course-detail', { cid }))}
             className="flex-1 text-center px-8 z-10 animate-in fade-in slide-in-from-right-4 duration-300 cursor-pointer"
           >
             <h2 className="text-xl font-extrabold tracking-tight">{courseName}</h2>
             <div className="flex items-center justify-center gap-3 mt-2">
               <div className="flex-1 max-w-[140px] bg-white/25 h-1.5 rounded-full overflow-hidden border border-white/10 shadow-inner">
-                <div 
-                  className="bg-white h-full shadow-[0_0_8px_rgba(255,255,255,0.8)] transition-all duration-700 ease-out" 
+                <div
+                  className="bg-white h-full shadow-[0_0_8px_rgba(255,255,255,0.8)] transition-all duration-700 ease-out"
                   style={{ width: `${progressPercent}%` }}
                 ></div>
               </div>
@@ -318,8 +322,8 @@ const KnowledgeTree: React.FC = () => {
       {/* Dynamic DAG Rendering */}
       <div className="relative px-6 flex-1 mt-6 overflow-y-auto no-scrollbar">
         {/* SVG for connection lines */}
-        <svg 
-          className="absolute inset-0 w-full h-full pointer-events-none z-0" 
+        <svg
+          className="absolute inset-0 w-full h-full pointer-events-none z-0"
           xmlns="http://www.w3.org/2000/svg"
         >
           <defs>
@@ -332,7 +336,7 @@ const KnowledgeTree: React.FC = () => {
           {layers.map((layer) => {
             const nodesInLayer = nodesByLayer[layer];
             const isMultiple = nodesInLayer.length > 1;
-            
+
             return (
               <div key={layer} className={`flex ${isMultiple ? 'gap-4' : ''} justify-center`}>
                 {nodesInLayer.map((node) => {
@@ -340,7 +344,7 @@ const KnowledgeTree: React.FC = () => {
                   const icon = getNodeIcon(node, state);
                   const nodeClasses = getNodeClasses(state);
                   const widthClass = isMultiple ? 'w-36' : 'w-48';
-                  
+
                   return (
                     <button
                       key={node.id}
@@ -352,7 +356,7 @@ const KnowledgeTree: React.FC = () => {
                       className={`${nodeClasses} ${widthClass} py-4 rounded-xl flex items-center justify-center gap-2`}
                       style={getNodeStyle(state)}
                     >
-                      <span 
+                      <span
                         className="material-symbols-outlined text-[18px] font-bold"
                         style={{ fontVariationSettings: state === 'current' ? "'FILL' 1" : undefined }}
                       >

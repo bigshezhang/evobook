@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import BottomNav from '../../components/BottomNav';
 import SuccessFeedbackPill from '../../components/SuccessFeedbackPill';
+import { buildLearningPath, getStoredCourseMapId } from '../../utils/api';
 
 const CoursesDashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -34,7 +35,7 @@ const CoursesDashboard: React.FC = () => {
   const CourseCard: React.FC<{ course: any }> = ({ course }) => (
     <div className="flex flex-col gap-3">
       <div 
-        onClick={() => navigate('/course-detail')}
+        onClick={() => navigate(buildLearningPath('/course-detail', { cid: getStoredCourseMapId() }))}
         className="aspect-square bg-[#F0EBE3] rounded-[2.5rem] overflow-hidden relative group cursor-pointer shadow-sm border border-black/5"
       >
         <img 
@@ -55,7 +56,7 @@ const CoursesDashboard: React.FC = () => {
         )}
       </div>
       <div className="flex justify-between items-start gap-1 pr-1">
-        <div className="flex-1 cursor-pointer" onClick={() => navigate('/course-detail')}>
+        <div className="flex-1 cursor-pointer" onClick={() => navigate(buildLearningPath('/course-detail', { cid: getStoredCourseMapId() }))}>
           <h4 className="font-extrabold text-[15px] leading-[1.2] text-primary line-clamp-2">{course.title}</h4>
           <div className="flex items-center gap-1 mt-1">
             <span className="material-symbols-rounded text-[14px] text-amber-400" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
@@ -154,7 +155,7 @@ const CoursesDashboard: React.FC = () => {
             {/* Course Card */}
             <section>
               <div 
-                onClick={() => navigate('/course-detail')}
+                onClick={() => navigate(buildLearningPath('/course-detail', { cid: getStoredCourseMapId() }))}
                 className="relative flex items-center gap-4 p-5 bg-white rounded-[2.5rem] border border-slate-50 shadow-soft group active:scale-[0.98] transition-all cursor-pointer overflow-hidden"
               >
                 <div className="w-14 h-14 bg-lavender-pale rounded-2xl flex-shrink-0 flex items-center justify-center shadow-inner">
@@ -169,7 +170,7 @@ const CoursesDashboard: React.FC = () => {
                 <button 
                   onClick={(e) => {
                     e.stopPropagation();
-                    navigate('/course-detail');
+                    navigate(buildLearningPath('/course-detail', { cid: getStoredCourseMapId() }));
                   }}
                   className="h-10 px-6 bg-black text-white rounded-full flex-shrink-0 flex items-center justify-center shadow-lg active:scale-95 transition-all"
                 >

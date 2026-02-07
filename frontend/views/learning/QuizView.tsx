@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import Header from '../../components/Header';
 import RewardModal from '../../components/RewardModal';
 import Mascot from '../../components/Mascot';
@@ -9,7 +9,8 @@ import {
   STORAGE_KEYS, 
   CourseMapGenerateResponse,
   QuizGenerateResponse,
-  QuizQuestion
+  QuizQuestion,
+  buildLearningPath,
 } from '../../utils/api';
 
 interface UserAnswer {
@@ -19,6 +20,9 @@ interface UserAnswer {
 
 const QuizView: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const cidFromUrl = searchParams.get('cid');
+  const [courseMapId, setCourseMapId] = useState<string | null>(cidFromUrl);
   const [showGreeting, setShowGreeting] = useState(true);
   const [submitted, setSubmitted] = useState(false);
   const [showReward, setShowReward] = useState(false);
@@ -52,6 +56,7 @@ const QuizView: React.FC = () => {
         
         const learnedTopics = JSON.parse(learnedTopicsStr);
         const courseMap: CourseMapGenerateResponse = JSON.parse(courseMapStr);
+        setCourseMapId(courseMap.course_map_id);
         
         if (learnedTopics.length === 0) {
           setError('请先完成一些学习内容');
@@ -196,7 +201,7 @@ const QuizView: React.FC = () => {
         <p className="text-rose-600 font-bold text-lg mb-2">加载失败</p>
         <p className="text-slate-500 text-center mb-6">{error || '未知错误'}</p>
         <button 
-          onClick={() => navigate('/knowledge-tree')}
+          onClick={() => navigate(buildLearningPath('/knowledge-tree', { cid: courseMapId }))}
           className="px-6 py-3 bg-secondary text-white rounded-full font-bold"
         >
           返回课程
@@ -207,44 +212,46 @@ const QuizView: React.FC = () => {
 
   if (showGreeting) {
     return (
-      <div className="relative flex flex-col h-screen bg-white font-display overflow-hidden items-center justify-center px-8 text-center">
+      <div className="relative flex flex-col h-screen bg-white font-display overflow-y-auto no-scrollbar">
         {/* Background Glow */}
         <div className="absolute top-[-10%] right-[-20%] w-96 h-96 bg-accent-purple/10 rounded-full blur-[100px] pointer-events-none"></div>
         <div className="absolute bottom-[-10%] left-[-20%] w-96 h-96 bg-accent-blue/10 rounded-full blur-[100px] pointer-events-none"></div>
 
-        <div className="animate-in fade-in zoom-in slide-in-from-bottom-8 duration-700 flex flex-col items-center max-w-sm">
-          <div className="mb-8 relative">
-            <div className="absolute inset-0 bg-slate-100 rounded-full blur-2xl scale-125 opacity-50"></div>
-            <Mascot src={MASCOT_SRC} width="160" className="drop-shadow-2xl relative z-10" />
-          </div>
+        <div className="flex-1 flex items-center justify-center px-8 py-12 text-center">
+          <div className="animate-in fade-in zoom-in slide-in-from-bottom-8 duration-700 flex flex-col items-center max-w-sm">
+            <div className="mb-8 relative">
+              <div className="absolute inset-0 bg-slate-100 rounded-full blur-2xl scale-125 opacity-50"></div>
+              <Mascot src={MASCOT_SRC} width="160" className="drop-shadow-2xl relative z-10" />
+            </div>
 
-          <p className="text-[10px] font-black uppercase tracking-[0.4em] text-secondary mb-3">Assessment Ready</p>
-          <h1 className="text-3xl font-black text-slate-900 tracking-tighter leading-tight mb-4 italic uppercase">
-            Time to test <br /> your progress!
-          </h1>
-          <p className="text-slate-500 text-[14px] font-medium leading-relaxed mb-8">
-            {quizData.greeting.message}
-          </p>
+            <p className="text-[10px] font-black uppercase tracking-[0.4em] text-secondary mb-3">Assessment Ready</p>
+            <h1 className="text-3xl font-black text-slate-900 tracking-tighter leading-tight mb-4 italic uppercase">
+              Time to test <br /> your progress!
+            </h1>
+            <p className="text-slate-500 text-[14px] font-medium leading-relaxed mb-8">
+              {quizData.greeting.message}
+            </p>
 
-          <div className="w-full space-y-3 mb-12">
-            <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400 text-left pl-2">Topics Included:</h4>
-            {quizData.greeting.topics_included.map((topic, i) => (
-              <div key={i} className="flex items-center gap-4 bg-slate-50 p-4 rounded-3xl border border-slate-100 shadow-sm animate-in fade-in slide-in-from-left-4" style={{ animationDelay: `${i * 150}ms` }}>
-                <div className="w-10 h-10 bg-white rounded-2xl flex items-center justify-center shadow-sm">
-                  <span className="material-symbols-rounded text-secondary text-xl">school</span>
+            <div className="w-full space-y-3 mb-12">
+              <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400 text-left pl-2">Topics Included:</h4>
+              {quizData.greeting.topics_included.map((topic, i) => (
+                <div key={i} className="flex items-center gap-4 bg-slate-50 p-4 rounded-3xl border border-slate-100 shadow-sm animate-in fade-in slide-in-from-left-4" style={{ animationDelay: `${i * 150}ms` }}>
+                  <div className="w-10 h-10 bg-white rounded-2xl flex items-center justify-center shadow-sm">
+                    <span className="material-symbols-rounded text-secondary text-xl">school</span>
+                  </div>
+                  <span className="text-[13px] font-bold text-slate-800 tracking-tight">{topic}</span>
                 </div>
-                <span className="text-[13px] font-bold text-slate-800 tracking-tight">{topic}</span>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
 
-          <button 
-            onClick={() => setShowGreeting(false)}
-            className="w-full py-5 bg-black text-white rounded-[28px] font-black text-base shadow-[0_20px_40px_rgba(0,0,0,0.15)] active:scale-95 transition-all flex items-center justify-center gap-3 group"
-          >
-            Start Assessment
-            <span className="material-symbols-rounded text-xl group-hover:translate-x-1 transition-transform">bolt</span>
-          </button>
+            <button 
+              onClick={() => setShowGreeting(false)}
+              className="w-full py-5 bg-black text-white rounded-[28px] font-black text-base shadow-[0_20px_40px_rgba(0,0,0,0.15)] active:scale-95 transition-all flex items-center justify-center gap-3 group"
+            >
+              Start Assessment
+              <span className="material-symbols-rounded text-xl group-hover:translate-x-1 transition-transform">bolt</span>
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -253,7 +260,7 @@ const QuizView: React.FC = () => {
   return (
     <div className="relative flex flex-col h-screen bg-white font-display overflow-hidden">
       <Header 
-        onBack={() => navigate('/knowledge-tree')}
+        onBack={() => navigate(buildLearningPath('/knowledge-tree', { cid: courseMapId }))}
         progress={{ current: 1, total: quizData.questions.length }}
       />
 
@@ -338,7 +345,7 @@ const QuizView: React.FC = () => {
 
       <RewardModal 
         isOpen={showReward} 
-        onClose={() => navigate('/knowledge-tree')} 
+        onClose={() => navigate(buildLearningPath('/knowledge-tree', { cid: courseMapId }))} 
         correctCount={quizStats.correct}
         totalCount={quizStats.total}
         goldEarned={quizStats.gold}

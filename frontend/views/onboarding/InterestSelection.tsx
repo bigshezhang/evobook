@@ -73,7 +73,7 @@ const InterestSelection: React.FC = () => {
     // CRITICAL: Clear any existing session data before starting a new assessment
     // This ensures a fresh start and prevents flash of old content
     localStorage.removeItem(STORAGE_KEY_SESSION_ID);
-    
+
     // Save selected topic to localStorage for AssessmentChat to read
     localStorage.setItem(STORAGE_KEY_SELECTED_TOPIC, topic);
 
@@ -89,12 +89,12 @@ const InterestSelection: React.FC = () => {
         </h1>
         <div className="relative">
           <span className={`material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 ${hasSelectedInterest ? 'text-gray-300' : 'text-gray-400'}`}>edit</span>
-          <input 
-            type="text" 
+          <input
+            type="text"
             value={topicInput}
             onChange={handleInputChange}
             disabled={hasSelectedInterest}
-            placeholder={hasSelectedInterest ? `Selected: ${interests.find(i => i.id === selected)?.label}` : "Enter your learning topic (e.g., Python, Machine Learning)..."} 
+            placeholder={hasSelectedInterest ? `Selected: ${interests.find(i => i.id === selected)?.label}` : "Enter your learning topic (e.g., Python, Machine Learning)..."}
             className={`w-full pl-12 pr-4 py-4 bg-white border-none rounded-2xl shadow-sm text-lg focus:ring-2 focus:ring-black/20 transition-all ${
               hasSelectedInterest ? 'opacity-50 cursor-not-allowed' : ''
             }`}
@@ -107,17 +107,17 @@ const InterestSelection: React.FC = () => {
           {interests.map(item => {
             const isSelected = selected === item.id;
             const isDisabled = hasTopicInput;
-            
+
             return (
-              <button 
+              <button
                 key={item.id}
                 onClick={() => handleInterestClick(item.id)}
                 disabled={isDisabled}
                 className={`h-24 rounded-2xl flex flex-col items-center justify-center transition-all ${item.color} ${
-                  isSelected 
-                    ? 'ring-2 ring-black scale-105' 
-                    : isDisabled 
-                      ? 'opacity-40 cursor-not-allowed grayscale' 
+                  isSelected
+                    ? 'ring-2 ring-black scale-105'
+                    : isDisabled
+                      ? 'opacity-40 cursor-not-allowed grayscale'
                       : 'opacity-90 hover:opacity-100'
                 }`}
               >
@@ -136,7 +136,7 @@ const InterestSelection: React.FC = () => {
             <div className="h-full bg-black rounded-full" style={{ width: '50%' }}></div>
           </div>
         </div>
-        <button 
+        <button
           onClick={handleNextStep}
           disabled={!canProceed}
           className={`w-full h-16 rounded-full text-white font-black text-xl shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2 ${

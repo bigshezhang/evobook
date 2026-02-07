@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { generateCourseMap, STORAGE_KEYS, FinishData, Mode } from '../../utils/api';
+import { generateCourseMap, STORAGE_KEYS, FinishData, Mode, buildLearningPath } from '../../utils/api';
 
 interface GenerationState {
   status: 'loading' | 'success' | 'error';
@@ -20,7 +20,7 @@ const GeneratingCourse: React.FC = () => {
   useEffect(() => {
     // Use AbortController to handle cleanup properly in StrictMode
     const abortController = new AbortController();
-    
+
     // Prevent double execution in StrictMode
     if (hasStarted.current) return;
     hasStarted.current = true;
@@ -28,7 +28,7 @@ const GeneratingCourse: React.FC = () => {
     const generateCourse = async () => {
       // Check if aborted before proceeding
       if (abortController.signal.aborted) return;
-      
+
       try {
         // Read onboarding data from localStorage
         const onboardingDataStr = localStorage.getItem(STORAGE_KEYS.ONBOARDING_DATA);
@@ -75,7 +75,7 @@ const GeneratingCourse: React.FC = () => {
         setState({ status: 'success', progress: 100 });
 
         // Navigate to knowledge tree after brief delay
-        setTimeout(() => navigate('/knowledge-tree'), 800);
+        setTimeout(() => navigate(buildLearningPath('/knowledge-tree', { cid: response.course_map_id })), 800);
       } catch (error) {
         if (abortController.signal.aborted) return;
         console.error('Failed to generate course map:', error);
@@ -104,16 +104,16 @@ const GeneratingCourse: React.FC = () => {
       <div className="relative w-80 h-80 mb-12 flex items-center justify-center">
         <svg className="absolute inset-0 w-full h-full -rotate-90 transform" viewBox="0 0 200 200">
           <circle cx="100" cy="100" fill="none" r="92" stroke="#E2E8F0" strokeWidth="10" className="opacity-30" />
-          <circle 
-            cx="100" 
-            cy="100" 
-            fill="none" 
-            r="92" 
-            stroke="url(#purpleGradient)" 
-            strokeWidth="12" 
-            strokeDasharray="578" 
-            strokeDashoffset={strokeDashoffset} 
-            className="transition-all duration-1000" 
+          <circle
+            cx="100"
+            cy="100"
+            fill="none"
+            r="92"
+            stroke="url(#purpleGradient)"
+            strokeWidth="12"
+            strokeDasharray="578"
+            strokeDashoffset={strokeDashoffset}
+            className="transition-all duration-1000"
           />
           <defs>
             <linearGradient id="purpleGradient" x1="0%" x2="100%" y1="0%" y2="100%">

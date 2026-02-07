@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import ClarificationSection, { QAItem } from './ClarificationSection';
@@ -12,7 +12,8 @@ import {
   getClarification,
   getKnowledgeCard,
   KnowledgeCardRequest,
-  Language
+  Language,
+  buildLearningPath,
 } from '../../utils/api';
 
 // Page break delimiter used in markdown from API
@@ -334,11 +335,18 @@ const ParsedContentRenderer: React.FC<{ content: string }> = ({ content }) => {
 
 const KnowledgeCard: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const cidFromUrl = searchParams.get('cid');
+  const nidFromUrl = searchParams.get('nid');
+
   const [showComplete, setShowComplete] = useState(false);
   const [inputValue, setInputValue] = useState('');
   const [dynamicQuestions, setDynamicQuestions] = useState<string[]>([]);
   const [qaList, setQaList] = useState<QAItem[]>([]);
   
+  // Course map ID for server-side caching
+  const [courseMapId, setCourseMapId] = useState<string | undefined>(cidFromUrl || undefined);
+
   // Course metadata loaded from localStorage
   const [courseName, setCourseName] = useState('Loading...');
   const [courseContext, setCourseContext] = useState('');
@@ -402,38 +410,63 @@ const KnowledgeCard: React.FC = () => {
       setCourseName(courseMapData!.map_meta.course_name);
       setCourseContext(courseMapData!.map_meta.strategy_rationale);
       setTotalNodes(courseMapData!.nodes.length);
+      setCourseMapId(courseMapData!.course_map_id);
     }
     
-    // Parse current node from localStorage (stored as JSON object by KnowledgeTree)
-    if (currentNodeStr) {
+    // Resolve current node: prefer URL nid param, fall back to localStorage
+    const targetNodeId = nidFromUrl ? Number(nidFromUrl) : null;
+    if (targetNodeId != null && courseMapData) {
+      // Deep-link: find node by ID from the course map
+      currentNode = courseMapData.nodes.find(n => n.id === targetNodeId) || null;
+    }
+    // Fall back to localStorage CURRENT_NODE (backward compat / normal navigation)
+    if (!currentNode && currentNodeStr) {
       try {
         currentNode = JSON.parse(currentNodeStr);
-        if (currentNode) {
-          setCurrentNodeId(currentNode.id);
-          setNodeTitle(currentNode.title);
-          setNodeDescription(currentNode.description);
-          setModuleInfo(`Module ${String(currentNode.layer).padStart(2, '0')}`);
-          // Calculate completed nodes (nodes before current in the layer order)
-          if (courseMapData) {
-            const completedCount = courseMapData.nodes.filter(n => n.layer < (currentNode?.layer || 1)).length;
-            setCompletedNodes(completedCount);
-          }
-        }
       } catch (e) {
         console.error('Failed to parse current node:', e);
       }
+    }
+    if (currentNode) {
+      setCurrentNodeId(currentNode.id);
+      setNodeTitle(currentNode.title);
+      setNodeDescription(currentNode.description);
+      setModuleInfo(`Module ${String(currentNode.layer).padStart(2, '0')}`);
+      if (courseMapData) {
+        const completedCount = courseMapData.nodes.filter(n => n.layer < (currentNode?.layer || 1)).length;
+        setCompletedNodes(completedCount);
+      }
+      // Sync to localStorage so other components can use it
+      localStorage.setItem(STORAGE_KEYS.CURRENT_NODE, JSON.stringify(currentNode));
     }
     
     if (onboardingDataStr) {
       onboardingData = JSON.parse(onboardingDataStr);
     }
     
-    // Fetch knowledge card from API
+    // Fetch knowledge card from API (with sessionStorage caching)
     const fetchKnowledgeCard = async () => {
       if (!courseMapData || !currentNode || !onboardingData) {
         setError('Missing course or node data. Please start from the course selection.');
         setIsLoading(false);
         return;
+      }
+
+      // Check sessionStorage cache first to avoid redundant LLM calls
+      const cacheKey = `evo_kc_${courseMapData.course_map_id}_${currentNode.id}`;
+      try {
+        const cachedStr = sessionStorage.getItem(cacheKey);
+        if (cachedStr) {
+          const cached = JSON.parse(cachedStr) as { markdown: string; totalPagesInCard: number };
+          setMarkdownContent(cached.markdown);
+          setTotalPagesInCard(cached.totalPagesInCard || 1);
+          setCurrentPage(1);
+          setIsLoading(false);
+          return;
+        }
+      } catch {
+        // Corrupted cache — ignore and re-fetch
+        sessionStorage.removeItem(cacheKey);
       }
       
       try {
@@ -463,6 +496,16 @@ const KnowledgeCard: React.FC = () => {
         setMarkdownContent(response.markdown);
         setTotalPagesInCard(response.totalPagesInCard || 1);
         setCurrentPage(1);
+
+        // Save to sessionStorage for subsequent visits
+        try {
+          sessionStorage.setItem(cacheKey, JSON.stringify({
+            markdown: response.markdown,
+            totalPagesInCard: response.totalPagesInCard || 1,
+          }));
+        } catch {
+          // sessionStorage quota exceeded — non-critical, just skip
+        }
       } catch (err) {
         console.error('Failed to fetch knowledge card:', err);
         setError(err instanceof Error ? err.message : 'Failed to load content. Please try again.');
@@ -474,9 +517,15 @@ const KnowledgeCard: React.FC = () => {
     fetchKnowledgeCard();
   }, []);
 
-  // Animation trigger for content changes
-  const [animate, setAnimate] = useState(true);
+  // Animation trigger for page changes only (not initial mount)
+  const [animate, setAnimate] = useState(false);
+  const isFirstRender = React.useRef(true);
   useEffect(() => {
+    // Skip animation on first render to prevent 300ms blank screen
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
     setAnimate(true);
     const timer = setTimeout(() => setAnimate(false), 300);
     return () => clearTimeout(timer);
@@ -551,7 +600,7 @@ const KnowledgeCard: React.FC = () => {
       setCurrentPage(prev => prev - 1);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } else {
-      navigate('/knowledge-tree');
+      navigate(buildLearningPath('/knowledge-tree', { cid: courseMapId }));
     }
   };
 
@@ -582,7 +631,9 @@ const KnowledgeCard: React.FC = () => {
       const response = await getClarification({
         language,
         user_question_raw: question,
-        page_markdown: pageMarkdown
+        page_markdown: pageMarkdown,
+        course_map_id: courseMapId,
+        node_id: currentNodeId || undefined,
       });
       
       // Create new QA item
@@ -609,7 +660,7 @@ const KnowledgeCard: React.FC = () => {
       <header className="pt-12 px-5 pb-3 flex items-center justify-between w-full z-30 border-b border-black/[0.03] dark:border-white/[0.05] bg-white/80 backdrop-blur-md">
         <div className="flex items-center gap-3">
           <button 
-            onClick={() => navigate('/knowledge-tree')}
+            onClick={() => navigate(buildLearningPath('/knowledge-tree', { cid: courseMapId }))}
             className="w-8 h-8 flex items-center justify-center rounded-full bg-black/5 dark:bg-white/10 active:scale-90 transition-transform"
           >
             <span className="material-symbols-rounded text-primary dark:text-white text-[20px]">arrow_back</span>
@@ -699,6 +750,8 @@ const KnowledgeCard: React.FC = () => {
                 initialQAList={qaList}
                 pageMarkdown={currentPageContent || `${nodeTitle}: Learning content about ${courseName}`}
                 language={language}
+                courseMapId={courseMapId}
+                nodeId={currentNodeId || undefined}
               />
             </div>
           </div>
@@ -775,7 +828,7 @@ const KnowledgeCard: React.FC = () => {
               <span className="material-symbols-rounded text-[18px]">sports_esports</span>
             </button>
             <button 
-              onClick={() => navigate('/knowledge-tree')}
+              onClick={() => navigate(buildLearningPath('/knowledge-tree', { cid: courseMapId }))}
               className="w-full py-3 mt-3 bg-transparent text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 rounded-full font-semibold text-[14px] active:scale-95 transition-all"
             >
               Back to learn

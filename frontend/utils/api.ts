@@ -141,6 +141,8 @@ export interface ClarificationRequest {
   language: Language;
   user_question_raw: string;
   page_markdown: string;
+  course_map_id?: string;
+  node_id?: number;
 }
 
 export interface ClarificationResponse {
@@ -155,6 +157,8 @@ export interface QADetailRequest {
   language: Language;
   qa_title: string;
   qa_short_answer: string;
+  course_map_id?: string;
+  node_id?: number;
 }
 
 export interface ImageSpec {
@@ -355,4 +359,40 @@ export const STORAGE_KEYS = {
   COURSE_MAP: 'evo_course_map',
   CURRENT_NODE: 'evo_current_node',
   LEARNED_TOPICS: 'evo_learned_topics',
+  NODE_PROGRESS: 'evo_node_progress',
+  /** Prefix for per-node Q&A history: `${QA_HISTORY_PREFIX}${courseMapId}_${nodeId}` */
+  QA_HISTORY_PREFIX: 'evo_qa_history_',
 } as const;
+
+// ==================== URL Navigation Helpers ====================
+
+/**
+ * Build a learning page URL with course/node identification query params.
+ * e.g. buildLearningPath('/knowledge-card', { cid: 'abc', nid: 3 })
+ *   => '/knowledge-card?cid=abc&nid=3'
+ */
+export function buildLearningPath(
+  base: string,
+  params: { cid?: string | null; nid?: number | null },
+): string {
+  const sp = new URLSearchParams();
+  if (params.cid) sp.set('cid', params.cid);
+  if (params.nid != null) sp.set('nid', String(params.nid));
+  const qs = sp.toString();
+  return qs ? `${base}?${qs}` : base;
+}
+
+/**
+ * Read the current course_map_id from localStorage (convenience for components
+ * that don't have it in their own state, like BottomNav).
+ */
+export function getStoredCourseMapId(): string | null {
+  try {
+    const str = localStorage.getItem(STORAGE_KEYS.COURSE_MAP);
+    if (!str) return null;
+    const data = JSON.parse(str) as CourseMapGenerateResponse;
+    return data.course_map_id || null;
+  } catch {
+    return null;
+  }
+}

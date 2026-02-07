@@ -1,8 +1,48 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import QADetailModal from './QADetailModal';
 import DeleteConfirmationModal from '../../components/DeleteConfirmationModal';
-import { getClarification, getQADetail, Language } from '../../utils/api';
+import { getClarification, getQADetail, Language, STORAGE_KEYS } from '../../utils/api';
+
+// ============================================================================
+// localStorage persistence helpers for Q&A history
+// ============================================================================
+
+/** Shape persisted to localStorage for each Q&A pair. */
+interface PersistedQAItem {
+  question: string;
+  correctedTitle: string;
+  shortAnswer: string;
+  qaDetail?: {
+    title: string;
+    content: string[];
+    visualLabel: string;
+  } | null;
+}
+
+function qaStorageKey(courseMapId: string, nodeId: number): string {
+  return `${STORAGE_KEYS.QA_HISTORY_PREFIX}${courseMapId}_${nodeId}`;
+}
+
+function loadQAHistory(courseMapId: string | undefined, nodeId: number | undefined): PersistedQAItem[] {
+  if (!courseMapId || nodeId == null) return [];
+  try {
+    const raw = localStorage.getItem(qaStorageKey(courseMapId, nodeId));
+    if (!raw) return [];
+    return JSON.parse(raw) as PersistedQAItem[];
+  } catch {
+    return [];
+  }
+}
+
+function saveQAHistory(courseMapId: string | undefined, nodeId: number | undefined, items: PersistedQAItem[]): void {
+  if (!courseMapId || nodeId == null) return;
+  try {
+    localStorage.setItem(qaStorageKey(courseMapId, nodeId), JSON.stringify(items));
+  } catch {
+    // localStorage full or unavailable — silently ignore
+  }
+}
 
 // 骨架屏动画组件：更精致的 Shimmer 效果
 const SkeletonLoader: React.FC = () => (
@@ -42,6 +82,8 @@ interface ClarificationSectionProps {
   initialQAList?: QAItem[];
   pageMarkdown?: string;
   language?: Language;
+  courseMapId?: string;
+  nodeId?: number;
   onNewQA?: (qa: QAItem) => void;
 }
 
@@ -50,13 +92,67 @@ const ClarificationSection: React.FC<ClarificationSectionProps> = ({
   initialQAList = [],
   pageMarkdown = '',
   language = 'en',
+  courseMapId,
+  nodeId,
   onNewQA
 }) => {
   const [selectedQA, setSelectedQA] = useState<any>(null);
-  const [qaList, setQaList] = useState<QAItem[]>(initialQAList);
+  const [qaList, setQaList] = useState<QAItem[]>([]);
   const [loadingDetail, setLoadingDetail] = useState<number | null>(null);
 
   const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null);
+
+  // -------------------------------------------------------------------
+  // Restore Q&A history from localStorage on mount / when node changes
+  // -------------------------------------------------------------------
+  useEffect(() => {
+    const persisted = loadQAHistory(courseMapId, nodeId);
+    if (persisted.length > 0) {
+      const restored: QAItem[] = persisted.map((p, idx) => ({
+        id: idx + 1,
+        question: p.correctedTitle || p.question,
+        answer: p.shortAnswer,
+        detail: p.qaDetail ?? null,
+      }));
+      setQaList(restored);
+    } else if (initialQAList.length > 0) {
+      setQaList(initialQAList);
+    } else {
+      setQaList([]);
+    }
+  }, [courseMapId, nodeId]);
+
+  // -------------------------------------------------------------------
+  // Sync new items appended by the parent (e.g. KnowledgeCard)
+  // -------------------------------------------------------------------
+  useEffect(() => {
+    if (initialQAList.length === 0) return;
+    setQaList(prev => {
+      // Find items in initialQAList that are not yet in our list (by id)
+      const existingIds = new Set(prev.map(q => q.id));
+      const newItems = initialQAList.filter(q => !existingIds.has(q.id));
+      if (newItems.length === 0) return prev;
+      const merged = [...prev, ...newItems];
+      persistToStorage(merged);
+      return merged;
+    });
+  }, [initialQAList]);
+
+  // -------------------------------------------------------------------
+  // Persist Q&A list to localStorage whenever it changes
+  // -------------------------------------------------------------------
+  const persistToStorage = useCallback(
+    (items: QAItem[]) => {
+      const persisted: PersistedQAItem[] = items.map(q => ({
+        question: q.question,
+        correctedTitle: q.question,
+        shortAnswer: q.answer,
+        qaDetail: q.detail,
+      }));
+      saveQAHistory(courseMapId, nodeId, persisted);
+    },
+    [courseMapId, nodeId],
+  );
 
   // Handle clicking "Details" button - fetch detail from API if not cached
   const handleShowDetail = async (item: QAItem) => {
@@ -71,7 +167,9 @@ const ClarificationSection: React.FC<ClarificationSectionProps> = ({
       const response = await getQADetail({
         language,
         qa_title: item.question,
-        qa_short_answer: item.answer
+        qa_short_answer: item.answer,
+        course_map_id: courseMapId,
+        node_id: nodeId,
       });
       
       const detail = {
@@ -80,10 +178,14 @@ const ClarificationSection: React.FC<ClarificationSectionProps> = ({
         visualLabel: response.image?.placeholder || 'Detailed Explanation'
       };
       
-      // Update qaList with fetched detail
-      setQaList(prev => prev.map(q => 
-        q.id === item.id ? { ...q, detail } : q
-      ));
+      // Update qaList with fetched detail and persist
+      setQaList(prev => {
+        const updated = prev.map(q => 
+          q.id === item.id ? { ...q, detail } : q
+        );
+        persistToStorage(updated);
+        return updated;
+      });
       
       setSelectedQA(detail);
     } catch (error) {
@@ -95,22 +197,14 @@ const ClarificationSection: React.FC<ClarificationSectionProps> = ({
 
   const handleDeleteConfirm = () => {
     if (deleteTargetId !== null) {
-      setQaList(prev => prev.filter(item => item.id !== deleteTargetId));
+      setQaList(prev => {
+        const updated = prev.filter(item => item.id !== deleteTargetId);
+        persistToStorage(updated);
+        return updated;
+      });
       setDeleteTargetId(null);
     }
   };
-  
-  // Add new QA from parent component (e.g., when user asks a question)
-  const addQA = (qa: QAItem) => {
-    setQaList(prev => [...prev, qa]);
-  };
-  
-  // Expose addQA method via ref or callback
-  React.useEffect(() => {
-    if (initialQAList.length > 0 && qaList.length === 0) {
-      setQaList(initialQAList);
-    }
-  }, [initialQAList]);
 
   return (
     <div className="mt-2 pt-2 border-t border-black/[0.03] dark:border-white/[0.05]">

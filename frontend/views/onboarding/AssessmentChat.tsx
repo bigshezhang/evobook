@@ -58,7 +58,7 @@ const AssessmentChat: React.FC = () => {
   useEffect(() => {
     const completed = localStorage.getItem('evo_onboarding_completed') === 'true';
     setIsOnboarding(!completed);
-    
+
     // Read selected topic from localStorage
     const topic = localStorage.getItem(STORAGE_KEY_SELECTED_TOPIC);
     if (topic) {
@@ -79,26 +79,26 @@ const AssessmentChat: React.FC = () => {
     setOptions([]);
     setInput('');
     setError(null);
-    
+
     // Flag to track if component is still mounted (using ref to survive StrictMode remounts)
     const abortController = new AbortController();
-    
+
     const initSession = async () => {
       setLoading(true);
       setError(null);
       try {
         // Read selected topic for initial context
         const topic = localStorage.getItem(STORAGE_KEY_SELECTED_TOPIC);
-        
+
         // Pass initial_topic to skip Phase 1 if topic is pre-selected
         // Backend will start at calibration phase directly
         const response = await onboardingNext({
           initial_topic: topic || undefined,
         });
-        
+
         // Check if component was unmounted during the request
         if (abortController.signal.aborted) return;
-        
+
         handleResponse(response, true);
       } catch (err) {
         if (!abortController.signal.aborted) {
@@ -112,7 +112,7 @@ const AssessmentChat: React.FC = () => {
       }
     };
     initSession();
-    
+
     // Cleanup on unmount
     return () => {
       abortController.abort();
@@ -122,11 +122,11 @@ const AssessmentChat: React.FC = () => {
   const handleFinishResponse = (response: OnboardingResponse) => {
     if (isFinishResponse(response)) {
       // Add final message before navigation
-      setMessages(prev => [...prev, { 
-        role: 'assistant', 
-        content: '太棒了！我已经了解了你的学习目标。现在让我为你定制专属学习路径...' 
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: '太棒了！我已经了解了你的学习目标。现在让我为你定制专属学习路径...'
       }]);
-      
+
       // Save data and navigate after a brief delay
       setTimeout(() => {
         localStorage.setItem('evo_onboarding_data', JSON.stringify(response.data));

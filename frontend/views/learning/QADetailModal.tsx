@@ -19,14 +19,14 @@ const QADetailModal: React.FC<QADetailModalProps> = ({ isOpen, onClose, data }) 
   const modalContent = (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-6 animate-in fade-in duration-300">
       {/* 磨砂背景遮罩 - 点击关闭 */}
-      <div 
-        className="absolute inset-0 bg-black/40 backdrop-blur-[2px] cursor-pointer" 
+      <div
+        className="absolute inset-0 bg-black/40 backdrop-blur-[2px] cursor-pointer"
         onClick={onClose}
       />
-      
+
       {/* 弹窗主体 - 深度还原 HTML 视觉效果 */}
       <div className="relative z-10 w-full max-w-[380px] bg-white dark:bg-card-dark rounded-[40px] shadow-[0_30px_60px_-12px_rgba(0,0,0,0.25),0_18px_36px_-18px_rgba(0,0,0,0.3)] overflow-hidden flex flex-col max-h-[85vh] animate-in zoom-in duration-300">
-        
+
         <div className="flex-1 overflow-y-auto no-scrollbar p-8 pb-24">
           <header className="mb-6 pt-2">
             <h2 className="text-[24px] font-extrabold text-primary dark:text-white leading-tight">
@@ -61,7 +61,7 @@ const QADetailModal: React.FC<QADetailModalProps> = ({ isOpen, onClose, data }) 
 
         {/* 底部关闭按钮 */}
         <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-white dark:from-card-dark via-white dark:via-card-dark to-transparent">
-          <button 
+          <button
             onClick={onClose}
             className="w-full h-14 bg-black dark:bg-white rounded-full flex items-center justify-center active:scale-[0.98] transition-all shadow-lg"
           >

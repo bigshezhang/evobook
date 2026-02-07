@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import GameHeader from '../../components/GameHeader';
 import BottomNav from '../../components/BottomNav';
 import Mascot from '../../components/Mascot';
+import { buildLearningPath, getStoredCourseMapId } from '../../utils/api';
 
 type TileType = 'gold' | 'xp' | 'roll' | 'normal' | 'star' | 'gift' | 'map';
 
@@ -128,7 +129,7 @@ const TravelBoard: React.FC = () => {
             </div>
           </div>
           <button 
-            onClick={() => navigate('/knowledge-tree')}
+            onClick={() => navigate(buildLearningPath('/knowledge-tree', { cid: getStoredCourseMapId() }))}
             className="flex items-center gap-2 bg-black text-white px-5 py-3 rounded-full shadow-xl active:scale-95 transition-all"
           >
             <span className="material-symbols-outlined text-[18px]">auto_stories</span>
