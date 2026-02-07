@@ -403,13 +403,16 @@ const KnowledgeCard: React.FC = () => {
 
   // Load course data from backend API and fetch knowledge card
   useEffect(() => {
-    // CRITICAL: Reset content state immediately to prevent flash of old content
+    // CRITICAL: Reset ALL state immediately to prevent flash of old content
     setMarkdownContent('');
     setCurrentPage(1);
+    setTotalPagesInCard(1);
     setError(null);
     setIsLoading(true);
     setQaList([]);
     setDynamicQuestions([]);
+    setShowComplete(false);
+    setInputValue('');
     
     const loadData = async () => {
       if (!cidFromUrl) {
@@ -693,7 +696,7 @@ const KnowledgeCard: React.FC = () => {
             {moduleInfo} • {courseName}
           </span>
           <h1 className="text-[26px] font-extrabold text-primary dark:text-white leading-tight">
-            {nodeTitle || 'Neural Networks Architecture'}
+            {nodeTitle || ''}
           </h1>
         </div>
 
@@ -737,7 +740,7 @@ const KnowledgeCard: React.FC = () => {
               <ClarificationSection 
                 pendingQuestions={dynamicQuestions}
                 initialQAList={qaList}
-                pageMarkdown={currentPageContent || `${nodeTitle}: Learning content about ${courseName}`}
+                pageMarkdown={currentPageContent || ''}
                 language={language}
                 courseMapId={courseMapId}
                 nodeId={currentNodeId || undefined}
