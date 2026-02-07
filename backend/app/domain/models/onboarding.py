@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import DateTime, Index, Text, text
+from sqlalchemy import DateTime, ForeignKey, Index, Text, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -20,6 +20,12 @@ class OnboardingSession(Base):
         PG_UUID(as_uuid=True),
         primary_key=True,
         default=uuid4,
+    )
+    user_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("profiles.id", ondelete="SET NULL"),
+        nullable=True,
+        comment="Owner user, nullable for backward compatibility",
     )
     phase: Mapped[str] = mapped_column(
         Text,
@@ -64,6 +70,7 @@ class OnboardingSession(Base):
     __table_args__ = (
         Index("idx_onboarding_phase", "phase"),
         Index("idx_onboarding_topic", "topic"),
+        Index("idx_onboarding_user_id", "user_id"),
     )
     
     def __repr__(self) -> str:

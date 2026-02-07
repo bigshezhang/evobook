@@ -45,6 +45,12 @@ class Settings(BaseSettings):
         description="Logging level",
     )
     
+    # Supabase Auth
+    supabase_url: str = Field(
+        ...,
+        description="Supabase project URL (e.g. https://xxxx.supabase.co)",
+    )
+    
     # LLM Client settings
     mock_llm: bool = Field(
         default=False,

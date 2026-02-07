@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import DateTime, Index, Integer, Text, text
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, Text, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -24,6 +24,12 @@ class CourseMap(Base):
         PG_UUID(as_uuid=True),
         primary_key=True,
         default=uuid4,
+    )
+    user_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("profiles.id", ondelete="SET NULL"),
+        nullable=True,
+        comment="Owner user, nullable for backward compatibility",
     )
     topic: Mapped[str] = mapped_column(
         Text,
@@ -76,6 +82,7 @@ class CourseMap(Base):
         Index("idx_course_maps_topic", "topic"),
         Index("idx_course_maps_mode", "mode"),
         Index("idx_course_maps_created_at", "created_at"),
+        Index("idx_course_maps_user_id", "user_id"),
     )
     
     def __repr__(self) -> str:
