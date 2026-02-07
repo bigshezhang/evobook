@@ -380,6 +380,14 @@ const KnowledgeCard: React.FC = () => {
 
   // Load course data from localStorage and fetch knowledge card from API
   useEffect(() => {
+    // CRITICAL: Reset content state immediately to prevent flash of old content
+    setMarkdownContent('');
+    setCurrentPage(1);
+    setError(null);
+    setIsLoading(true);
+    setQaList([]);
+    setDynamicQuestions([]);
+    
     const courseMapStr = localStorage.getItem(STORAGE_KEYS.COURSE_MAP);
     const currentNodeStr = localStorage.getItem(STORAGE_KEYS.CURRENT_NODE);
     const onboardingDataStr = localStorage.getItem(STORAGE_KEYS.ONBOARDING_DATA);

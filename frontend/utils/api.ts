@@ -2,7 +2,30 @@
  * API client for EvoBook backend
  */
 
+import { supabase } from './supabase';
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+
+/**
+ * Build request headers, injecting the Supabase auth token when available.
+ */
+async function getAuthHeaders(): Promise<Record<string, string>> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.access_token) {
+      headers['Authorization'] = `Bearer ${session.access_token}`;
+    }
+  } catch {
+    // If fetching the session fails we still send the request without auth.
+    // The backend will return 401 if auth is required.
+  }
+
+  return headers;
+}
 
 // ==================== Common Types ====================
 
@@ -235,11 +258,10 @@ async function handleApiResponse<T>(response: Response): Promise<T> {
  * Call the onboarding/next endpoint to progress through onboarding flow
  */
 export async function onboardingNext(request: OnboardingNextRequest): Promise<OnboardingResponse> {
+  const headers = await getAuthHeaders();
   const response = await fetch(`${API_BASE_URL}/api/v1/onboarding/next`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers,
     body: JSON.stringify(request),
   });
 
@@ -250,11 +272,10 @@ export async function onboardingNext(request: OnboardingNextRequest): Promise<On
  * Generate a course map (DAG) based on onboarding results
  */
 export async function generateCourseMap(request: CourseMapGenerateRequest): Promise<CourseMapGenerateResponse> {
+  const headers = await getAuthHeaders();
   const response = await fetch(`${API_BASE_URL}/api/v1/course-map/generate`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers,
     body: JSON.stringify(request),
   });
 
@@ -265,11 +286,10 @@ export async function generateCourseMap(request: CourseMapGenerateRequest): Prom
  * Generate a knowledge card for a specific node
  */
 export async function getKnowledgeCard(request: KnowledgeCardRequest): Promise<KnowledgeCardResponse> {
+  const headers = await getAuthHeaders();
   const response = await fetch(`${API_BASE_URL}/api/v1/node-content/knowledge-card`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers,
     body: JSON.stringify(request),
   });
 
@@ -280,11 +300,10 @@ export async function getKnowledgeCard(request: KnowledgeCardRequest): Promise<K
  * Generate a clarification answer for a user question
  */
 export async function getClarification(request: ClarificationRequest): Promise<ClarificationResponse> {
+  const headers = await getAuthHeaders();
   const response = await fetch(`${API_BASE_URL}/api/v1/node-content/clarification`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers,
     body: JSON.stringify(request),
   });
 
@@ -295,11 +314,10 @@ export async function getClarification(request: ClarificationRequest): Promise<C
  * Generate a detailed QA explanation
  */
 export async function getQADetail(request: QADetailRequest): Promise<QADetailResponse> {
+  const headers = await getAuthHeaders();
   const response = await fetch(`${API_BASE_URL}/api/v1/node-content/qa-detail`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers,
     body: JSON.stringify(request),
   });
 
@@ -310,11 +328,10 @@ export async function getQADetail(request: QADetailRequest): Promise<QADetailRes
  * Generate a quiz based on learned topics
  */
 export async function generateQuiz(request: QuizGenerateRequest): Promise<QuizGenerateResponse> {
+  const headers = await getAuthHeaders();
   const response = await fetch(`${API_BASE_URL}/api/v1/quiz/generate`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers,
     body: JSON.stringify(request),
   });
 

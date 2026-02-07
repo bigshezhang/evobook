@@ -1,6 +1,7 @@
 
 import React, { useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
+import { AuthProvider, useAuth } from './utils/AuthContext';
 
 // Reset localStorage when ?reset=1 is in URL
 const useResetOnParam = () => {
@@ -14,6 +15,9 @@ const useResetOnParam = () => {
     }
   }, []);
 };
+
+// Auth Views
+import LoginView from './views/auth/LoginView';
 
 // Views
 import WelcomeView from './views/onboarding/WelcomeView';
@@ -36,6 +40,28 @@ import TravelBoard from './views/game/TravelBoard';
 import OutfitView from './views/game/OutfitView';
 import HomeShop from './views/game/HomeShop';
 
+// ── ProtectedRoute ─────────────────────────────────────
+// Shows a loading spinner while auth is being checked, then either renders
+// children or redirects to /login.
+
+const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-white">
+        <span className="inline-block w-10 h-10 border-4 border-gray-200 border-t-secondary rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return <>{children}</>;
+};
+
 // Wrapper component to force AssessmentChat remount on every navigation
 // This prevents flash of old content when re-entering the page
 const AssessmentChatWithKey: React.FC = () => {
@@ -51,7 +77,7 @@ const KnowledgeCardWithKey: React.FC = () => {
   return <KnowledgeCard key={location.key} />;
 };
 
-// 简单的路由包装器，用于展示 QA 详情
+// Simple route wrapper for QA detail view
 const QADetailRouteView: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -64,38 +90,43 @@ const App: React.FC = () => {
   useResetOnParam();
   
   return (
-    <HashRouter>
-      <div className="max-w-lg mx-auto min-h-screen bg-white shadow-xl relative overflow-x-hidden">
-        <Routes>
-          {/* Onboarding Flow */}
-          <Route path="/" element={<WelcomeView />} />
-          <Route path="/interests" element={<InterestSelection />} />
-          <Route path="/assessment" element={<AssessmentChatWithKey />} />
-          <Route path="/companion" element={<CompanionSelection />} />
-          <Route path="/notifications" element={<NotificationPermission />} />
-          <Route path="/generating" element={<GeneratingCourse />} />
-          
-          {/* Main Learning Flow */}
-          <Route path="/course-detail" element={<CourseDetail />} />
-          <Route path="/knowledge-tree" element={<KnowledgeTree />} />
-          <Route path="/knowledge-card" element={<KnowledgeCardWithKey />} />
-          <Route path="/quiz" element={<QuizView />} />
-          <Route path="/qa-detail" element={<QADetailRouteView />} />
-          
-          {/* Game Flow */}
-          <Route path="/game" element={<TravelBoard />} />
-          <Route path="/game/outfit" element={<OutfitView />} />
-          <Route path="/game/home" element={<HomeShop />} />
-          
-          {/* Main Navigation Tabs */}
-          <Route path="/dashboard" element={<CoursesDashboard />} />
-          <Route path="/discovery/:category" element={<DiscoveryList />} />
-          <Route path="/profile" element={<ProfileView />} />
-          
-          <Route path="*" element={<Navigate to="/" />} />
-        </Routes>
-      </div>
-    </HashRouter>
+    <AuthProvider>
+      <HashRouter>
+        <div className="max-w-lg mx-auto min-h-screen bg-white shadow-xl relative overflow-x-hidden">
+          <Routes>
+            {/* Public route — login / signup */}
+            <Route path="/login" element={<LoginView />} />
+
+            {/* Onboarding Flow */}
+            <Route path="/" element={<ProtectedRoute><WelcomeView /></ProtectedRoute>} />
+            <Route path="/interests" element={<ProtectedRoute><InterestSelection /></ProtectedRoute>} />
+            <Route path="/assessment" element={<ProtectedRoute><AssessmentChatWithKey /></ProtectedRoute>} />
+            <Route path="/companion" element={<ProtectedRoute><CompanionSelection /></ProtectedRoute>} />
+            <Route path="/notifications" element={<ProtectedRoute><NotificationPermission /></ProtectedRoute>} />
+            <Route path="/generating" element={<ProtectedRoute><GeneratingCourse /></ProtectedRoute>} />
+            
+            {/* Main Learning Flow */}
+            <Route path="/course-detail" element={<ProtectedRoute><CourseDetail /></ProtectedRoute>} />
+            <Route path="/knowledge-tree" element={<ProtectedRoute><KnowledgeTree /></ProtectedRoute>} />
+            <Route path="/knowledge-card" element={<ProtectedRoute><KnowledgeCardWithKey /></ProtectedRoute>} />
+            <Route path="/quiz" element={<ProtectedRoute><QuizView /></ProtectedRoute>} />
+            <Route path="/qa-detail" element={<ProtectedRoute><QADetailRouteView /></ProtectedRoute>} />
+            
+            {/* Game Flow */}
+            <Route path="/game" element={<ProtectedRoute><TravelBoard /></ProtectedRoute>} />
+            <Route path="/game/outfit" element={<ProtectedRoute><OutfitView /></ProtectedRoute>} />
+            <Route path="/game/home" element={<ProtectedRoute><HomeShop /></ProtectedRoute>} />
+            
+            {/* Main Navigation Tabs */}
+            <Route path="/dashboard" element={<ProtectedRoute><CoursesDashboard /></ProtectedRoute>} />
+            <Route path="/discovery/:category" element={<ProtectedRoute><DiscoveryList /></ProtectedRoute>} />
+            <Route path="/profile" element={<ProtectedRoute><ProfileView /></ProtectedRoute>} />
+            
+            <Route path="*" element={<Navigate to="/" />} />
+          </Routes>
+        </div>
+      </HashRouter>
+    </AuthProvider>
   );
 };
 
