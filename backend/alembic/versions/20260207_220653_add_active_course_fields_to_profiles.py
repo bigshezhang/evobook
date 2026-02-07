@@ -34,7 +34,7 @@ def upgrade() -> None:
             comment='User-set active course for home page',
         ),
     )
-    
+
     # Add last_accessed_course_map_id column - most recently accessed course
     op.add_column(
         'profiles',
@@ -46,7 +46,7 @@ def upgrade() -> None:
             comment='Last accessed course map',
         ),
     )
-    
+
     # Add last_accessed_at timestamp
     op.add_column(
         'profiles',
@@ -57,7 +57,7 @@ def upgrade() -> None:
             comment='Timestamp of last course access',
         ),
     )
-    
+
     # Create indexes for better query performance
     op.create_index(
         'idx_profiles_active_course',
@@ -76,7 +76,7 @@ def downgrade() -> None:
     # Drop indexes
     op.drop_index('idx_profiles_last_accessed_course', table_name='profiles')
     op.drop_index('idx_profiles_active_course', table_name='profiles')
-    
+
     # Drop columns in reverse order
     op.drop_column('profiles', 'last_accessed_at')
     op.drop_column('profiles', 'last_accessed_course_map_id')

@@ -1,6 +1,7 @@
 """Domain models package."""
 
 from app.domain.models.course_map import CourseMap
+from app.domain.models.learning_activity import LearningActivity
 from app.domain.models.node_content import NodeContent
 from app.domain.models.node_progress import NodeProgress
 from app.domain.models.onboarding import OnboardingSession
@@ -10,6 +11,7 @@ from app.domain.models.quiz_attempt import QuizAttempt
 
 __all__ = [
     "CourseMap",
+    "LearningActivity",
     "NodeContent",
     "NodeProgress",
     "OnboardingSession",

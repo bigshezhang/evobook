@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import get_current_user_id
 from app.core.exceptions import AppException
+from app.domain.services.activity_service import ActivityService
 from app.domain.services.profile_service import ProfileService
 from app.infrastructure.database import get_db_session
 
@@ -57,6 +58,24 @@ class SetActiveCourseRequest(BaseModel):
     """Request body for setting active course."""
 
     course_map_id: str = Field(..., description="Course map UUID to set as active")
+
+
+class LearningActivityItem(BaseModel):
+    """Single learning activity item."""
+
+    id: str
+    course_map_id: str
+    node_id: int
+    activity_type: str
+    completed_at: str = Field(..., description="ISO 8601 UTC timestamp")
+    extra_data: dict | None = None
+
+
+class LearningActivitiesResponse(BaseModel):
+    """Response for learning activities endpoint."""
+
+    activities: list[LearningActivityItem]
+    total: int
 
 
 # ---------------------------------------------------------------------------
@@ -191,6 +210,58 @@ async def set_active_course(
         raise HTTPException(
             status_code=400,
             detail={"code": "INVALID_UUID", "message": "Invalid course map UUID"},
+        )
+    except AppException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail={"code": "INTERNAL_ERROR", "message": str(e)},
+        )
+
+
+@router.get("/learning-activities", response_model=LearningActivitiesResponse)
+async def get_learning_activities(
+    days: int = 180,
+    user_id: Annotated[UUID, Depends(get_current_user_id)] = None,
+    db: Annotated[AsyncSession, Depends(get_db_session)] = None,
+) -> dict:
+    """Get user's learning activities for the past N days.
+
+    Returns raw UTC timestamps. Frontend handles timezone conversion and aggregation.
+
+    Args:
+        days: Number of days to look back (default: 180, max: 365).
+        user_id: Authenticated user ID from JWT.
+        db: Database session.
+
+    Returns:
+        List of learning activities with UTC timestamps.
+    """
+    try:
+        if days < 1 or days > 365:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "code": "INVALID_DAYS",
+                    "message": "days parameter must be between 1 and 365",
+                },
+            )
+
+        activities = await ActivityService.get_user_activities(
+            user_id=user_id,
+            days=days,
+            db=db,
+        )
+
+        return {
+            "activities": activities,
+            "total": len(activities),
+        }
+    except ValueError as e:
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "INVALID_PARAMETER", "message": str(e)},
         )
     except AppException:
         raise

@@ -8,7 +8,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
@@ -16,6 +16,7 @@ from app.core.auth import get_current_user_id, get_optional_user_id
 from app.core.exceptions import AppException, NotFoundError
 from app.core.logging import get_logger
 from app.domain.models.course_map import CourseMap
+from app.domain.models.node_progress import NodeProgress
 from app.domain.services.course_map_service import CourseMapService
 from app.domain.services.profile_service import ProfileService
 from app.infrastructure.database import get_db_session
@@ -159,6 +160,7 @@ class CourseMapListItem(BaseModel):
     map_meta: dict[str, Any]
     nodes: list[dict[str, Any]]
     created_at: str
+    progress_percentage: float = Field(..., description="Percentage of completed nodes (0-100)")
 
 
 class CourseMapListResponse(BaseModel):
@@ -194,13 +196,14 @@ async def list_course_maps(
     """List all course maps for the authenticated user.
 
     Returns courses ordered by created_at DESC (newest first).
+    Includes progress_percentage calculated from node_progress table.
 
     Args:
         user_id: Authenticated user ID from JWT.
         db: Database session.
 
     Returns:
-        List of course maps.
+        List of course maps with progress percentages.
     """
     try:
         stmt = (
@@ -211,8 +214,26 @@ async def list_course_maps(
         result = await db.execute(stmt)
         rows = result.scalars().all()
 
-        courses = [
-            {
+        courses = []
+        for row in rows:
+            # 计算进度百分比
+            total_nodes = len(row.nodes) if row.nodes else 0
+
+            if total_nodes > 0:
+                # 查询已完成的节点数
+                progress_stmt = select(func.count(NodeProgress.id)).where(
+                    NodeProgress.user_id == user_id,
+                    NodeProgress.course_map_id == row.id,
+                    NodeProgress.status == "completed",
+                )
+                progress_result = await db.execute(progress_stmt)
+                completed_count = progress_result.scalar() or 0
+
+                progress_percentage = (completed_count / total_nodes) * 100
+            else:
+                progress_percentage = 0.0
+
+            courses.append({
                 "course_map_id": str(row.id),
                 "topic": row.topic,
                 "level": row.level,
@@ -220,9 +241,8 @@ async def list_course_maps(
                 "map_meta": row.map_meta,
                 "nodes": row.nodes,
                 "created_at": row.created_at.isoformat(),
-            }
-            for row in rows
-        ]
+                "progress_percentage": round(progress_percentage, 1),
+            })
 
         logger.info(
             "Listed course maps",

@@ -124,7 +124,7 @@ export function getStoredCourseMapId(): string | null
 const handleLearningClick = async () => {
   try {
     const { course_map_id } = await getActiveCourse();
-    
+
     if (course_map_id) {
       // 有课程 → 跳转到知识树
       navigate(buildLearningPath('/knowledge-tree', { cid: course_map_id }));

@@ -12,7 +12,7 @@ from app.infrastructure.database import Base
 
 class Profile(Base):
     """User business profile, 1:1 with Supabase auth.users.
-    
+
     The id comes from Supabase auth.users.id (set on registration).
     """
 
@@ -40,7 +40,7 @@ class Profile(Base):
         server_default=text("false"),
         comment="Whether user has completed onboarding",
     )
-    
+
     # 活跃课程相关字段
     active_course_map_id: Mapped[UUID | None] = mapped_column(
         PG_UUID(as_uuid=True),
@@ -59,7 +59,7 @@ class Profile(Base):
         nullable=True,
         comment="Timestamp of last course access",
     )
-    
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import get_current_user_id
 from app.core.exceptions import AppException
+from app.domain.services.activity_service import ActivityService
 from app.domain.services.node_progress_service import NodeProgressService
 from app.infrastructure.database import get_db_session
 
@@ -127,6 +128,21 @@ async def batch_update_node_progress(
             updates=updates,
             db=db,
         )
+        
+        # Record learning activities for all completed nodes
+        for item in request.updates:
+            if item.status == "completed":
+                await ActivityService.record_activity(
+                    user_id=user_id,
+                    course_map_id=course_map_id,
+                    node_id=item.node_id,
+                    activity_type="node_completed",
+                    extra_data=None,
+                    db=db,
+                )
+        
+        await db.commit()
+        
         return {"progress": progress}
     except AppException:
         raise
@@ -165,6 +181,19 @@ async def update_node_progress(
             status=request.status,
             db=db,
         )
+        
+        # Record learning activity when node is completed
+        if request.status == "completed":
+            await ActivityService.record_activity(
+                user_id=user_id,
+                course_map_id=course_map_id,
+                node_id=node_id,
+                activity_type="node_completed",
+                extra_data=None,
+                db=db,
+            )
+            await db.commit()
+        
         return result
     except AppException:
         raise

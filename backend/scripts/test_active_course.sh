@@ -36,9 +36,9 @@ if [ "$course_map_id" != "null" ] && [ -n "$course_map_id" ]; then
     -H "Authorization: Bearer $AUTH_TOKEN" \
     -H "Content-Type: application/json" \
     -d "{\"course_map_id\":\"$course_map_id\"}")
-  
+
   http_status=$(echo "$set_response" | grep "HTTP_STATUS:" | cut -d: -f2)
-  
+
   if [ "$http_status" = "204" ]; then
     echo "✅ Successfully set active course to: $course_map_id"
   else
