@@ -20,16 +20,12 @@ const GameHeader: React.FC = () => {
         <div className="flex items-center gap-2">
           {/* Gold */}
           <div className="flex items-center gap-2 bg-black text-white px-3 py-1.5 rounded-2xl shadow-md border border-white/10">
-            <div className="w-5 h-5 bg-accent-gold rounded-full flex items-center justify-center">
-              <span className="material-icons-round text-black text-[12px] font-bold">monetization_on</span>
-            </div>
+            <span className="text-lg">💰</span>
             <span className="font-black text-xs">12,450</span>
           </div>
           {/* Level */}
           <div className="flex items-center gap-2 bg-black text-white px-3 py-1.5 rounded-2xl shadow-md border border-white/10">
-            <div className="w-5 h-5 bg-[#B5A3FF] rounded-full flex items-center justify-center">
-              <span className="material-icons-round text-white text-[12px]">auto_awesome</span>
-            </div>
+            <span className="text-lg">✨</span>
             <span className="font-black text-xs">LV. 14</span>
           </div>
         </div>

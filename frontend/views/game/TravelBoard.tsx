@@ -142,8 +142,9 @@ const TravelBoard: React.FC = () => {
           style={{ perspective: '1000px', perspectiveOrigin: '50% 50%', transformStyle: 'preserve-3d' }}
         >
           <div 
-            className="absolute top-[70%] w-full h-full transition-transform duration-500 ease-out"
+            className="absolute w-full h-full transition-transform duration-500 ease-out"
             style={{ 
+              top: 'calc(50% + 10px)',
               transformStyle: 'preserve-3d',
               transform: `rotateX(45deg) translateY(${currentStep * STEP_UNIT}px)`
             }}
@@ -178,7 +179,7 @@ const TravelBoard: React.FC = () => {
           </div>
         </div>
 
-        <div className="absolute left-1/2 -translate-x-1/2 top-[70%] z-[150] pointer-events-none flex flex-col items-center">
+        <div className="absolute left-1/2 -translate-x-1/2 z-[150] pointer-events-none flex flex-col items-center" style={{ top: 'calc(50% + 10px)' }}>
           <div className={`transition-all duration-[400ms] transform-gpu ${isJumping ? '-translate-y-40 scale-110' : '-translate-y-[85px] scale-100'}`}>
             {/* 使用 travel 场景显示背影，outfit 会自动从 localStorage 读取 */}
             <Mascot 

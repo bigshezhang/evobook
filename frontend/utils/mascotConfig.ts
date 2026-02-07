@@ -18,19 +18,19 @@ export const CHARACTER_MAPPING: Record<MascotCharacter, string> = {
 // 场景资源目录映射
 export const SCENE_BASE_PATHS: Record<SceneType, string> = {
   store: '/compressed_output/cloth_processed',
-  onboarding: '/compressed_output/smile',
+  onboarding: '/compressed_output/smile_transparent',
   hello: '/compressed_output/dress_hello',
   travel: '/compressed_output/back_processed',
-  default: '/compressed_output/smile', // 默认使用 smile
+  default: '/compressed_output/smile_transparent', // 默认使用 smile_transparent
 };
 
 // 场景资源文件扩展名
-export const SCENE_EXTENSIONS: Record<SceneType, 'webp' | 'mp4'> = {
+export const SCENE_EXTENSIONS: Record<SceneType, 'webp' | 'mp4' | 'webm'> = {
   store: 'webp',      // 服装图片
-  onboarding: 'mp4',  // 微笑动画
-  hello: 'mp4',       // 问候动画
+  onboarding: 'webm',  // 微笑动画（支持透明通道）
+  hello: 'webm',       // 问候动画（支持透明通道）
   travel: 'webp',     // 背影图片
-  default: 'mp4',
+  default: 'webm',
 };
 
 /**
@@ -60,7 +60,7 @@ export function getMascotResourcePath(
     
     case 'onboarding':
       // 引导阶段：微笑动画
-      // 例如: /compressed_output/smile/owl_smile.mp4 或 owl_smile_dress.mp4
+      // 例如: /compressed_output/smile/owl_smile.webm 或 owl_smile_dress.webm
       if (outfit === 'default') {
         return `${basePath}/${resourceCharacter}_smile.${extension}`;
       } else {
@@ -69,7 +69,7 @@ export function getMascotResourcePath(
     
     case 'hello':
       // 问候动画：必须带服装
-      // 例如: /compressed_output/dress_hello/owl_hello_dress.mp4
+      // 例如: /compressed_output/dress_hello/owl_hello_dress.webm
       if (outfit === 'default') {
         // hello 动画没有 default 版本，使用 smile 作为回退
         return getMascotResourcePath(character, 'onboarding', 'default');
@@ -96,7 +96,8 @@ export function getMascotResourcePath(
  * 获取资源类型（图片或视频）
  */
 export function getResourceType(scene: SceneType): 'image' | 'video' {
-  return SCENE_EXTENSIONS[scene] === 'mp4' ? 'video' : 'image';
+  const ext = SCENE_EXTENSIONS[scene];
+  return (ext === 'mp4' || ext === 'webm') ? 'video' : 'image';
 }
 
 /**
