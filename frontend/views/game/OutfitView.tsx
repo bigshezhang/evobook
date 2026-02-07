@@ -1,9 +1,9 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import GameHeader from '../../components/GameHeader';
 import BottomNav from '../../components/BottomNav';
 import Mascot from '../../components/Mascot';
-import { MascotOutfit, setSelectedOutfit } from '../../utils/mascotUtils';
+import { MascotOutfit, setSelectedOutfit, getSelectedOutfit } from '../../utils/mascotUtils';
 
 interface Item {
   id: number;
@@ -15,14 +15,26 @@ interface Item {
 }
 
 const OutfitView: React.FC = () => {
-  const [activeSubTab, setActiveSubTab] = useState<'Mine' | 'Shop'>('Mine');
   const [category, setCategory] = useState('Clothes');
+  const [activeSubTab, setActiveSubTab] = useState<'Mine' | 'Shop'>('Shop');
   const [selectedItem, setSelectedItem] = useState<Item | null>(null);
+  
+  // 获取当前穿着的服装（响应式）
+  const [currentOutfit, setCurrentOutfit] = useState<MascotOutfit>(getSelectedOutfit());
+
+  useEffect(() => {
+    const handleOutfitChange = () => {
+      setCurrentOutfit(getSelectedOutfit());
+    };
+    window.addEventListener('mascot-outfit-changed', handleOutfitChange);
+    return () => window.removeEventListener('mascot-outfit-changed', handleOutfitChange);
+  }, []);
 
   const categories = ['Clothes', 'Furniture'];
 
   // 服装数据
   const clothesItems: Item[] = [
+    { id: 0, name: 'No Outfit', price: 0, owned: true, outfit: 'default' },
     { id: 1, name: 'Dress', price: 350, owned: true, outfit: 'dress' },
     { id: 2, name: 'Glasses', price: 200, owned: false, outfit: 'glass' },
     { id: 3, name: 'Suit', price: 450, owned: false, outfit: 'suit' },
@@ -119,42 +131,63 @@ const OutfitView: React.FC = () => {
 
         <div className="flex-1 overflow-y-auto no-scrollbar pb-28">
           <div className={`grid gap-4 p-1 ${category === 'Clothes' ? 'grid-cols-3' : 'grid-cols-2'}`}>
-            {items.map(item => (
-              <div 
-                key={item.id}
-                onClick={() => activeSubTab === 'Shop' && setSelectedItem(item)}
-                className={`bg-slate-50/50 rounded-[32px] p-3 border-2 flex flex-col items-center justify-center relative transition-all duration-200 ${
-                  category === 'Clothes' ? 'aspect-square' : 'aspect-video'
-                } ${
-                  item.owned ? 'border-primary/20 bg-white shadow-sm' : 'border-transparent'
-                } ${activeSubTab === 'Shop' ? 'cursor-pointer active:scale-95' : ''}`}
-              >
-                {item.owned && <div className="absolute top-3 right-3 w-2.5 h-2.5 bg-primary rounded-full shadow-lg ring-2 ring-white"></div>}
-                
-                {/* 显示商品内容 */}
-                <div className="w-full h-full flex items-center justify-center">
-                  {item.outfit ? (
-                    // 服装：显示服装贴图
-                    <img 
-                      src={`/compressed_output/cloth_processed/${item.outfit}.webp`}
-                      alt={item.name}
-                      className="w-full h-full object-contain drop-shadow-sm"
-                    />
-                  ) : item.image ? (
-                    // 家具：显示家具图片
-                    <img 
-                      src={`/compressed_output/furniture/${item.image}`}
-                      alt={item.name}
-                      className="w-full h-full object-contain drop-shadow-sm"
-                    />
-                  ) : null}
-                </div>
+            {items.map(item => {
+              // 检查当前衣服是否正在穿着
+              const isUsed = item.outfit && item.outfit === currentOutfit;
+              
+              return (
+                <div 
+                  key={item.id}
+                  onClick={() => {
+                    if (activeSubTab === 'Shop') {
+                      setSelectedItem(item);
+                    } else if (activeSubTab === 'Mine' && item.outfit) {
+                      setSelectedOutfit(item.outfit);
+                    }
+                  }}
+                  className={`bg-slate-50/50 rounded-[32px] p-3 border-2 flex flex-col items-center justify-center relative transition-all duration-200 cursor-pointer active:scale-95 ${
+                    category === 'Clothes' ? 'aspect-square' : 'aspect-video'
+                  } ${
+                    item.owned ? 'border-primary/20 bg-white shadow-sm' : 'border-transparent'
+                  }`}
+                >
+                  {item.owned && <div className="absolute top-3 right-3 w-2.5 h-2.5 bg-primary rounded-full shadow-lg ring-2 ring-white"></div>}
+                  
+                  {/* 显示商品内容 */}
+                  <div className="w-full h-full flex items-center justify-center">
+                    {item.outfit ? (
+                      item.outfit === 'default' ? (
+                        // "啥也不穿"显示 X 图标
+                        <div className="w-full h-full flex items-center justify-center">
+                          <span className="material-symbols-outlined text-slate-300 text-[64px]">close</span>
+                        </div>
+                      ) : (
+                        // 服装：显示服装贴图
+                        <img 
+                          src={`/compressed_output/cloth_processed/${item.outfit}.webp`}
+                          alt={item.name}
+                          className="w-full h-full object-contain drop-shadow-sm"
+                        />
+                      )
+                    ) : item.image ? (
+                      // 家具：显示家具图片
+                      <img 
+                        src={`/compressed_output/furniture/${item.image}`}
+                        alt={item.name}
+                        className="w-full h-full object-contain drop-shadow-sm"
+                      />
+                    ) : null}
+                  </div>
 
-                {item.owned && activeSubTab === 'Mine' && (
-                  <span className="absolute bottom-3 text-[8px] font-black text-slate-300 uppercase tracking-widest">Owned</span>
-                )}
-              </div>
-            ))}
+                  {/* 显示 Dressed 标志（当前穿着的衣服）*/}
+                  {isUsed && (
+                    <div className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-secondary text-white px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider shadow-lg">
+                      Dressed
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>
@@ -169,11 +202,18 @@ const OutfitView: React.FC = () => {
               selectedItem.outfit ? 'aspect-square max-w-[160px]' : 'aspect-video'
             }`}>
               {selectedItem.outfit ? (
-                <img 
-                  src={`/compressed_output/cloth_processed/${selectedItem.outfit}.webp`}
-                  alt={selectedItem.name}
-                  className="w-full h-full object-contain"
-                />
+                selectedItem.outfit === 'default' ? (
+                  // "啥也不穿"显示 X 图标
+                  <div className="w-full h-full flex items-center justify-center">
+                    <span className="material-symbols-outlined text-slate-300 text-[96px]">close</span>
+                  </div>
+                ) : (
+                  <img 
+                    src={`/compressed_output/cloth_processed/${selectedItem.outfit}.webp`}
+                    alt={selectedItem.name}
+                    className="w-full h-full object-contain"
+                  />
+                )
               ) : selectedItem.image ? (
                 <img 
                   src={`/compressed_output/furniture/${selectedItem.image}`}
@@ -183,10 +223,12 @@ const OutfitView: React.FC = () => {
               ) : null}
             </div>
             <h2 className="text-2xl font-black text-slate-900 mb-2 text-center">{selectedItem.name}</h2>
-            <div className="flex items-center gap-1.5 mb-6">
-              <span className="material-symbols-outlined text-amber-500 text-lg" style={{ fontVariationSettings: "'FILL' 1" }}>monetization_on</span>
-              <span className="text-lg font-black text-amber-700">{selectedItem.price}</span>
-            </div>
+            {selectedItem.price > 0 && (
+              <div className="flex items-center gap-1.5 mb-6">
+                <span className="material-symbols-outlined text-amber-500 text-lg" style={{ fontVariationSettings: "'FILL' 1" }}>monetization_on</span>
+                <span className="text-lg font-black text-amber-700">{selectedItem.price}</span>
+              </div>
+            )}
             <div className="w-full flex flex-col gap-3">
               <button 
                 onClick={() => {
@@ -199,7 +241,7 @@ const OutfitView: React.FC = () => {
                 }}
                 className="w-full bg-black text-white py-5 rounded-full font-black text-base shadow-xl active:scale-95 transition-all"
               >
-                {selectedItem.owned ? 'Already Owned' : 'Buy Now'}
+                {selectedItem.price === 0 ? 'Switch' : (selectedItem.owned ? 'Already Owned' : 'Buy Now')}
               </button>
               <button 
                 onClick={() => setSelectedItem(null)}
