@@ -156,14 +156,11 @@ const GuideOverlay: React.FC<GuideOverlayProps> = ({
     prevStepRef.current = currentStep;
 
     if (isStepChange && ready) {
-      // Step transition: recompute position, then fade content back in
-      const t1 = setTimeout(() => {
-        measure();
-        // Small delay so the position transition starts before content appears
-        const t2 = setTimeout(() => setContentVisible(true), 80);
-        return () => clearTimeout(t2);
-      }, 40);
-      return () => clearTimeout(t1);
+      // Step transition: recompute position, wait for animation, then fade content back in
+      measure();
+      // Wait for position animation to complete (DURATION = 380ms) before showing new content
+      const t = setTimeout(() => setContentVisible(true), DURATION + 50);
+      return () => clearTimeout(t);
     } else if (!ready) {
       // Initial mount: compute position then reveal
       const t = setTimeout(() => {
@@ -276,11 +273,12 @@ const GuideOverlay: React.FC<GuideOverlayProps> = ({
         ref={tooltipRef}
         className="absolute bg-white rounded-2xl shadow-2xl p-6 max-w-sm"
         style={{
-          top: tooltipPos.top,
-          left: tooltipPos.left,
+          top: isCenter ? '50%' : tooltipPos.top,
+          left: isCenter ? '50%' : tooltipPos.left,
+          transform: isCenter ? 'translate(-50%, -50%)' : undefined,
           opacity: ready ? 1 : 0,
           transition: animate
-            ? `top ${DURATION}ms ${EASE}, left ${DURATION}ms ${EASE}, opacity 0.2s ease-out`
+            ? `${isCenter ? 'opacity 0.2s ease-out' : `top ${DURATION}ms ${EASE}, left ${DURATION}ms ${EASE}, opacity 0.2s ease-out`}`
             : 'opacity 0.25s ease-out',
         }}
       >
