@@ -15,6 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from app.config import get_settings
+from app.core.error_codes import ERROR_INVALID_TOKEN
 from app.core.logging import get_logger
 from app.infrastructure.database import get_session_factory
 
@@ -80,7 +81,7 @@ def _decode_supabase_token(token: str) -> dict:
     except jwt.InvalidTokenError as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={"code": "INVALID_TOKEN", "message": f"Invalid token: {e}"},
+            detail={"code": ERROR_INVALID_TOKEN, "message": f"Invalid token: {e}"},
         )
     except Exception as e:
         raise HTTPException(
@@ -161,7 +162,7 @@ async def get_current_user_id(
     if not sub:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={"code": "INVALID_TOKEN", "message": "Token missing 'sub' claim"},
+            detail={"code": ERROR_INVALID_TOKEN, "message": "Token missing 'sub' claim"},
         )
 
     try:
@@ -169,7 +170,7 @@ async def get_current_user_id(
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={"code": "INVALID_TOKEN", "message": "Token 'sub' is not a valid UUID"},
+            detail={"code": ERROR_INVALID_TOKEN, "message": "Token 'sub' is not a valid UUID"},
         )
 
     await _ensure_profile_exists(user_id)

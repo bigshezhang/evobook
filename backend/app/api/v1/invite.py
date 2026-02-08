@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.core.auth import get_current_user_id
+from app.core.error_codes import ERROR_INTERNAL
 from app.core.logging import get_logger
 from app.domain.services.invite_service import InviteService
 from app.infrastructure.database import get_db_session
@@ -83,7 +84,7 @@ async def get_invite_code(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={
                 "error": {
-                    "code": "INTERNAL_ERROR",
+                    "code": ERROR_INTERNAL,
                     "message": "Failed to get invite code"
                 }
             }
@@ -157,7 +158,7 @@ async def bind_invite_code(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={
                 "error": {
-                    "code": "INTERNAL_ERROR",
+                    "code": ERROR_INTERNAL,
                     "message": "Failed to bind invite code"
                 }
             }

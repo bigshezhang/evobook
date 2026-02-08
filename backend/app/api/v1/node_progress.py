@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import get_current_user_id
+from app.core.error_codes import ERROR_INTERNAL
 from app.core.exceptions import AppException
 from app.domain.services.activity_service import ActivityService
 from app.domain.services.node_progress_service import NodeProgressService
@@ -95,7 +96,7 @@ async def get_node_progress(
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail={"code": "INTERNAL_ERROR", "message": str(e)},
+            detail={"code": ERROR_INTERNAL, "message": str(e)},
         )
 
 
@@ -149,7 +150,7 @@ async def batch_update_node_progress(
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail={"code": "INTERNAL_ERROR", "message": str(e)},
+            detail={"code": ERROR_INTERNAL, "message": str(e)},
         )
 
 
@@ -200,5 +201,5 @@ async def update_node_progress(
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail={"code": "INTERNAL_ERROR", "message": str(e)},
+            detail={"code": ERROR_INTERNAL, "message": str(e)},
         )

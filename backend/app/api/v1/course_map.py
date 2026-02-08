@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.core.auth import get_current_user_id, get_optional_user_id
+from app.core.error_codes import ERROR_INTERNAL
 from app.core.exceptions import AppException, NotFoundError
 from app.core.logging import get_logger
 from app.domain.models.course_map import CourseMap
@@ -256,7 +257,7 @@ async def list_course_maps(
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail={"code": "INTERNAL_ERROR", "message": str(e)},
+            detail={"code": ERROR_INTERNAL, "message": str(e)},
         )
 
 
@@ -331,5 +332,5 @@ async def get_course_map(
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail={"code": "INTERNAL_ERROR", "message": str(e)},
+            detail={"code": ERROR_INTERNAL, "message": str(e)},
         )

@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import get_current_user_id
+from app.core.error_codes import ERROR_INTERNAL, ERROR_INVALID_UUID
 from app.core.exceptions import AppException
 from app.domain.services.inventory_service import InventoryService
 from app.infrastructure.database import get_db_session
@@ -91,7 +92,7 @@ async def get_inventory(
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail={"code": "INTERNAL_ERROR", "message": str(e)},
+            detail={"code": ERROR_INTERNAL, "message": str(e)},
         )
 
 
@@ -136,12 +137,12 @@ async def equip_item(
     except ValueError:
         raise HTTPException(
             status_code=400,
-            detail={"code": "INVALID_UUID", "message": "Invalid item UUID"},
+            detail={"code": ERROR_INVALID_UUID, "message": "Invalid item UUID"},
         )
     except AppException:
         raise
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail={"code": "INTERNAL_ERROR", "message": str(e)},
+            detail={"code": ERROR_INTERNAL, "message": str(e)},
         )

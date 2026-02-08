@@ -12,6 +12,13 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import get_current_user_id
+from app.core.error_codes import (
+    ERROR_INTERNAL,
+    ERROR_INVALID_DAYS,
+    ERROR_INVALID_PARAMETER,
+    ERROR_INVALID_UUID,
+    ERROR_PROFILE_NOT_FOUND,
+)
 from app.core.exceptions import AppException
 from app.domain.services.activity_service import ActivityService
 from app.domain.services.profile_service import ProfileService
@@ -128,7 +135,7 @@ async def get_profile(
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail={"code": "INTERNAL_ERROR", "message": str(e)},
+            detail={"code": ERROR_INTERNAL, "message": str(e)},
         )
 
 
@@ -167,7 +174,7 @@ async def update_profile(
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail={"code": "INTERNAL_ERROR", "message": str(e)},
+            detail={"code": ERROR_INTERNAL, "message": str(e)},
         )
 
 
@@ -204,7 +211,7 @@ async def get_active_course(
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail={"code": "INTERNAL_ERROR", "message": str(e)},
+            detail={"code": ERROR_INTERNAL, "message": str(e)},
         )
 
 
@@ -234,14 +241,14 @@ async def set_active_course(
     except ValueError:
         raise HTTPException(
             status_code=400,
-            detail={"code": "INVALID_UUID", "message": "Invalid course map UUID"},
+            detail={"code": ERROR_INVALID_UUID, "message": "Invalid course map UUID"},
         )
     except AppException:
         raise
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail={"code": "INTERNAL_ERROR", "message": str(e)},
+            detail={"code": ERROR_INTERNAL, "message": str(e)},
         )
 
 
@@ -268,7 +275,7 @@ async def get_learning_activities(
             raise HTTPException(
                 status_code=400,
                 detail={
-                    "code": "INVALID_DAYS",
+                    "code": ERROR_INVALID_DAYS,
                     "message": "days parameter must be between 1 and 365",
                 },
             )
@@ -286,14 +293,14 @@ async def get_learning_activities(
     except ValueError as e:
         raise HTTPException(
             status_code=400,
-            detail={"code": "INVALID_PARAMETER", "message": str(e)},
+            detail={"code": ERROR_INVALID_PARAMETER, "message": str(e)},
         )
     except AppException:
         raise
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail={"code": "INTERNAL_ERROR", "message": str(e)},
+            detail={"code": ERROR_INTERNAL, "message": str(e)},
         )
 
 
@@ -333,7 +340,7 @@ async def get_profile_stats(
         if profile is None:
             raise HTTPException(
                 status_code=404,
-                detail={"code": "PROFILE_NOT_FOUND", "message": "User profile not found"},
+                detail={"code": ERROR_PROFILE_NOT_FOUND, "message": "User profile not found"},
             )
 
         # 2. 获取用户统计数据
@@ -386,5 +393,5 @@ async def get_profile_stats(
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail={"code": "INTERNAL_ERROR", "message": str(e)},
+            detail={"code": ERROR_INTERNAL, "message": str(e)},
         )

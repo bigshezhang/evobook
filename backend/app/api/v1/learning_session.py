@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import get_current_user_id
+from app.core.error_codes import ERROR_INTERNAL, ERROR_INVALID_UUID
 from app.core.exceptions import AppException
 from app.domain.services.learning_session_service import LearningSessionService
 from app.infrastructure.database import get_db_session
@@ -84,7 +85,7 @@ async def record_heartbeat(
         raise HTTPException(
             status_code=400,
             detail={
-                "code": "INVALID_UUID",
+                "code": ERROR_INVALID_UUID,
                 "message": "Invalid course_map_id format",
             },
         )
@@ -104,5 +105,5 @@ async def record_heartbeat(
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail={"code": "INTERNAL_ERROR", "message": str(e)},
+            detail={"code": ERROR_INTERNAL, "message": str(e)},
         )

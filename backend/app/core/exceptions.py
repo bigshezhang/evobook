@@ -4,6 +4,8 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from app.core.error_codes import ERROR_NOT_FOUND
+
 
 class ErrorDetail(BaseModel):
     """Standard error detail structure."""
@@ -63,7 +65,7 @@ class NotFoundError(AppException):
 
     def __init__(self, resource: str, identifier: str) -> None:
         super().__init__(
-            code="NOT_FOUND",
+            code=ERROR_NOT_FOUND,
             message=f"{resource} not found: {identifier}",
             status_code=404,
         )

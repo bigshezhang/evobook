@@ -10,6 +10,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from app.core.error_codes import ERROR_INTERNAL
 from app.core.exceptions import AppException, ErrorDetail, ErrorResponse
 
 logger = structlog.get_logger(__name__)
@@ -118,7 +119,7 @@ def setup_exception_handlers(app: FastAPI) -> None:
             status_code=500,
             content=ErrorResponse(
                 error=ErrorDetail(
-                    code="INTERNAL_ERROR",
+                    code=ERROR_INTERNAL,
                     message="An unexpected error occurred",
                     details=None,
                 )
