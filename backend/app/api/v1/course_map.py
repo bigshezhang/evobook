@@ -15,6 +15,7 @@ from app.config import get_settings
 from app.core.auth import get_current_user_id, get_optional_user_id
 from app.core.error_codes import ERROR_INTERNAL
 from app.core.exceptions import AppException, NotFoundError
+from app.core.language import get_language
 from app.core.logging import get_logger
 from app.domain.models.course_map import CourseMap
 from app.domain.models.node_progress import NodeProgress
@@ -95,6 +96,7 @@ async def generate_course_map(
     db: Annotated[AsyncSession, Depends(get_db_session)],
     llm_client: Annotated[LLMClient, Depends(get_llm_client)],
     user_id: UUID | None = Depends(get_optional_user_id),
+    language: str = Depends(get_language),
 ) -> dict[str, Any]:
     """Generate a course map (DAG) for a learning path.
 
@@ -125,6 +127,7 @@ async def generate_course_map(
         mode=request.mode,
         total_commitment_minutes=request.total_commitment_minutes,
         user_id=user_id,
+        language=language,
     )
 
     course_map_id = result["course_map_id"]
@@ -158,7 +161,7 @@ async def generate_course_map(
         "mode": request.mode,
         "course_name": map_meta.get("course_name", ""),
         "strategy_rationale": map_meta.get("strategy_rationale", ""),
-        "language": "en",  # Default language, can be made configurable
+        "language": language,
     }
 
     # Add background task (creates new DB session internally)

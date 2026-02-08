@@ -148,14 +148,14 @@ class RecoveryService:
             )
             return
 
-        # 2. Prepare course context
+        # 2. Prepare course context (read language from persisted course map)
         course_context = {
             "course_name": course_map.map_meta.get("course_name", ""),
             "strategy_rationale": course_map.map_meta.get("strategy_rationale", ""),
             "topic": course_map.topic or "",
             "level": course_map.level or "Beginner",
             "mode": course_map.map_meta.get("mode", "Fast"),
-            "language": "en",  # Default language
+            "language": getattr(course_map, "language", "en") or "en",
         }
 
         # 3. Start background generation task with its own database session

@@ -1,9 +1,10 @@
 """Game service for managing currency and progression."""
 
+import random
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.error_codes import (
@@ -25,6 +26,9 @@ from app.domain.constants import (
 )
 from app.domain.models.game_transaction import GameTransaction
 from app.domain.models.profile import Profile
+from app.domain.models.shop_item import ShopItem
+from app.domain.models.user_inventory import UserInventory
+from app.domain.services.inventory_service import InventoryService
 
 logger = get_logger(__name__)
 
@@ -147,8 +151,6 @@ class GameService:
         Raises:
             AppException: If no dice rolls available or profile not found
         """
-        import random
-
         stmt = select(Profile).where(Profile.id == user_id)
         result = await db.execute(stmt)
         profile = result.scalar_one_or_none()
@@ -326,20 +328,27 @@ class GameService:
         amount: int,
         source: str,
         db: AsyncSession,
+        gold_reward: int = 0,
+        dice_reward: int = 0,
         source_details: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        """Add experience points to user and handle level ups with rewards.
+        """Add experience points to user and apply base + level-up rewards.
+
+        Base gold/dice rewards are always applied. Level-up bonuses (100 gold +
+        2 dice per level) are added on top when the user levels up.
 
         Args:
             user_id: User UUID
             amount: Amount of EXP to add (must be positive)
             source: Source of EXP (e.g., 'learning_reward', 'quiz_completion')
             db: Database session
+            gold_reward: Base gold reward to always give
+            dice_reward: Base dice roll reward to always give
             source_details: Optional details about the source
 
         Returns:
             Dict containing success, exp_earned, current_exp, current_level,
-            level_up flag, and rewards (if leveled up)
+            level_up flag, and total rewards (base + level-up)
 
         Raises:
             AppException: If profile not found or invalid amount
@@ -369,10 +378,12 @@ class GameService:
         # Add EXP
         profile.current_exp += amount
 
-        # Check for level up and apply rewards
+        # Start with base rewards (always applied)
+        total_gold_reward = gold_reward
+        total_dice_reward = dice_reward
+
+        # Check for level up and add level-up bonus rewards
         level_up = False
-        total_gold_reward = 0
-        total_dice_reward = 0
         levels_gained = 0
 
         while True:
@@ -383,7 +394,7 @@ class GameService:
                 levels_gained += 1
                 level_up = True
 
-                # Level up rewards: 100 gold + 2 dice per level
+                # Level up bonus: 100 gold + 2 dice per level
                 total_gold_reward += 100
                 total_dice_reward += 2
 
@@ -396,39 +407,40 @@ class GameService:
             else:
                 break
 
-        # Apply level up rewards
-        if level_up:
+        # Apply all rewards (base + level-up) to profile
+        if total_gold_reward > 0:
             profile.gold_balance += total_gold_reward
+
+            gold_transaction = GameTransaction(
+                user_id=user_id,
+                transaction_type="earn_gold",
+                amount=total_gold_reward,
+                source=source,
+                source_detail={
+                    "base_gold": gold_reward,
+                    "level_up_gold": total_gold_reward - gold_reward,
+                    "levels_gained": levels_gained,
+                    **(source_details or {}),
+                },
+            )
+            db.add(gold_transaction)
+
+        if total_dice_reward > 0:
             profile.dice_rolls_count += total_dice_reward
 
-            # Record level up reward transaction
-            if total_gold_reward > 0:
-                gold_transaction = GameTransaction(
-                    user_id=user_id,
-                    transaction_type="earn_gold",
-                    amount=total_gold_reward,
-                    source="level_up_reward",
-                    source_detail={
-                        "levels_gained": levels_gained,
-                        "from_level": old_level,
-                        "to_level": profile.level,
-                    },
-                )
-                db.add(gold_transaction)
-
-            if total_dice_reward > 0:
-                dice_transaction = GameTransaction(
-                    user_id=user_id,
-                    transaction_type="earn_dice",
-                    amount=total_dice_reward,
-                    source="level_up_reward",
-                    source_detail={
-                        "levels_gained": levels_gained,
-                        "from_level": old_level,
-                        "to_level": profile.level,
-                    },
-                )
-                db.add(dice_transaction)
+            dice_transaction = GameTransaction(
+                user_id=user_id,
+                transaction_type="earn_dice",
+                amount=total_dice_reward,
+                source=source,
+                source_detail={
+                    "base_dice": dice_reward,
+                    "level_up_dice": total_dice_reward - dice_reward,
+                    "levels_gained": levels_gained,
+                    **(source_details or {}),
+                },
+            )
+            db.add(dice_transaction)
 
         # Record EXP transaction
         exp_transaction = GameTransaction(
@@ -452,24 +464,21 @@ class GameService:
             new_exp=profile.current_exp,
             level_up=level_up,
             levels_gained=levels_gained,
+            total_gold_reward=total_gold_reward,
+            total_dice_reward=total_dice_reward,
         )
 
-        response: dict[str, Any] = {
+        return {
             "success": True,
             "exp_earned": amount,
             "current_exp": profile.current_exp,
             "current_level": profile.level,
             "level_up": level_up,
-            "rewards": None,
-        }
-
-        if level_up:
-            response["rewards"] = {
+            "rewards": {
                 "gold": total_gold_reward,
                 "dice_rolls": total_dice_reward,
-            }
-
-        return response
+            },
+        }
 
     @staticmethod
     async def calculate_learning_reward(
@@ -497,4 +506,124 @@ class GameService:
         return {
             "gold": base_gold,
             "exp": base_exp,
+        }
+
+    @staticmethod
+    async def claim_gift_reward(
+        user_id: UUID,
+        db: AsyncSession,
+        source_details: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Claim a gift reward from the travel board.
+
+        Randomly selects an unowned item (clothes or furniture) and grants it.
+        If the user already owns all items, falls back to a gold reward.
+
+        Args:
+            user_id: User UUID
+            db: Database session
+            source_details: Optional details (tile_position, course_map_id, etc.)
+
+        Returns:
+            Dict with reward_type ('item' or 'gold'), item details or gold amount
+        """
+        # Find all items the user does NOT own
+        owned_subquery = (
+            select(UserInventory.item_id)
+            .where(UserInventory.user_id == user_id)
+        )
+        unowned_stmt = (
+            select(ShopItem)
+            .where(
+                and_(
+                    ShopItem.id.notin_(owned_subquery),
+                    ShopItem.is_default == False,  # noqa: E712 - exclude default items
+                )
+            )
+        )
+        result = await db.execute(unowned_stmt)
+        unowned_items = result.scalars().all()
+
+        # If user owns all items, fall back to gold reward
+        if not unowned_items:
+            fallback_gold = 200
+            profile_stmt = select(Profile).where(Profile.id == user_id)
+            profile_result = await db.execute(profile_stmt)
+            profile = profile_result.scalar_one_or_none()
+
+            if not profile:
+                raise AppException(
+                    status_code=404,
+                    error_code=ERROR_PROFILE_NOT_FOUND,
+                    message="User profile not found",
+                )
+
+            profile.gold_balance += fallback_gold
+
+            transaction = GameTransaction(
+                user_id=user_id,
+                transaction_type="earn_gold",
+                amount=fallback_gold,
+                source="gift_fallback_all_owned",
+                source_detail=source_details,
+            )
+            db.add(transaction)
+            await db.commit()
+            await db.refresh(profile)
+
+            logger.info(
+                "Gift reward fallback to gold (all items owned)",
+                user_id=str(user_id),
+                gold_amount=fallback_gold,
+            )
+
+            return {
+                "success": True,
+                "reward_type": "gold",
+                "gold_amount": fallback_gold,
+                "item": None,
+                "message": "You already own all items! Here's some gold instead.",
+            }
+
+        # Randomly pick one unowned item
+        chosen_item = random.choice(unowned_items)
+
+        # Grant item to user via InventoryService
+        grant_result = await InventoryService.grant_item(
+            user_id=user_id,
+            item_id=chosen_item.id,
+            db=db,
+            source="tile_gift",
+        )
+
+        # Record gift transaction
+        transaction = GameTransaction(
+            user_id=user_id,
+            transaction_type="earn_item",
+            amount=1,
+            source="tile_gift",
+            source_detail={
+                **(source_details or {}),
+                "item_id": str(chosen_item.id),
+                "item_name": chosen_item.name,
+                "item_type": chosen_item.item_type,
+            },
+        )
+        db.add(transaction)
+        await db.commit()
+
+        logger.info(
+            "Gift reward item granted",
+            user_id=str(user_id),
+            item_id=str(chosen_item.id),
+            item_name=chosen_item.name,
+            item_type=chosen_item.item_type,
+        )
+
+        return {
+            "success": True,
+            "reward_type": "item",
+            "gold_amount": None,
+            "item": grant_result["item"],
+            "message": f"You received: {chosen_item.name}!",
         }

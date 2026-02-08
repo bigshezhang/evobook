@@ -6,7 +6,7 @@ from uuid import UUID
 from sqlalchemy import and_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.error_codes import ERROR_ITEM_NOT_OWNED
+from app.core.error_codes import ERROR_ITEM_NOT_FOUND, ERROR_ITEM_NOT_OWNED
 from app.core.exceptions import AppException
 from app.core.logging import get_logger
 from app.domain.models.profile import Profile
@@ -258,6 +258,102 @@ class InventoryService:
                 "is_equipped": False,
             },
             "message": "Item unequipped successfully",
+        }
+
+    @staticmethod
+    async def grant_item(
+        user_id: UUID,
+        item_id: UUID,
+        db: AsyncSession,
+        source: str = "gift_reward",
+    ) -> dict[str, Any]:
+        """Grant an item to user for free (gift/reward).
+
+        If the user already owns the item, returns success with already_owned=True.
+
+        Args:
+            user_id: User UUID
+            item_id: Shop item UUID to grant
+            db: Database session
+            source: Source of the grant (e.g., 'tile_gift', 'event_reward')
+
+        Returns:
+            Dict with success status, item info, and already_owned flag
+
+        Raises:
+            AppException: If item not found in shop
+        """
+        # Get item details
+        item_stmt = select(ShopItem).where(ShopItem.id == item_id)
+        item_result = await db.execute(item_stmt)
+        item = item_result.scalar_one_or_none()
+
+        if not item:
+            raise AppException(
+                status_code=404,
+                error_code=ERROR_ITEM_NOT_FOUND,
+                message="Shop item not found",
+            )
+
+        # Check if already owned
+        ownership_stmt = select(UserInventory).where(
+            and_(
+                UserInventory.user_id == user_id,
+                UserInventory.item_id == item_id,
+            )
+        )
+        ownership_result = await db.execute(ownership_stmt)
+        existing = ownership_result.scalar_one_or_none()
+
+        if existing:
+            logger.info(
+                "Item already owned, skip granting",
+                user_id=str(user_id),
+                item_id=str(item_id),
+                item_name=item.name,
+            )
+            return {
+                "success": True,
+                "already_owned": True,
+                "item": {
+                    "id": str(item.id),
+                    "name": item.name,
+                    "item_type": item.item_type,
+                    "image_path": item.image_path,
+                    "rarity": item.rarity,
+                },
+                "message": "Item already owned",
+            }
+
+        # Add to inventory
+        inventory_item = UserInventory(
+            user_id=user_id,
+            item_id=item_id,
+            is_equipped=False,
+        )
+        db.add(inventory_item)
+
+        await db.commit()
+
+        logger.info(
+            "Item granted to user",
+            user_id=str(user_id),
+            item_id=str(item_id),
+            item_name=item.name,
+            source=source,
+        )
+
+        return {
+            "success": True,
+            "already_owned": False,
+            "item": {
+                "id": str(item.id),
+                "name": item.name,
+                "item_type": item.item_type,
+                "image_path": item.image_path,
+                "rarity": item.rarity,
+            },
+            "message": "Item granted successfully",
         }
 
     @staticmethod

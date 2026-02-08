@@ -54,6 +54,7 @@ class CourseMapService:
         mode: str,
         total_commitment_minutes: int,
         user_id: UUID | None = None,
+        language: str = "en",
     ) -> dict[str, Any]:
         """Generate a course map DAG using LLM.
 
@@ -65,6 +66,7 @@ class CourseMapService:
             mode: Learning mode (Deep|Fast|Light).
             total_commitment_minutes: Total time budget.
             user_id: Optional authenticated user ID to associate with the map.
+            language: Language code for LLM output (ISO 639-1, e.g. "en", "zh").
 
         Returns:
             Dict containing course_map_id, map_meta, and nodes.
@@ -78,6 +80,7 @@ class CourseMapService:
             topic=topic,
             level=level,
             mode=mode,
+            language=language,
             total_minutes=total_commitment_minutes,
         )
 
@@ -90,6 +93,7 @@ class CourseMapService:
             verified_concept=verified_concept,
             mode=mode,
             total_commitment_minutes=total_commitment_minutes,
+            language=language,
         )
         full_prompt = f"{prompt_text}\n\n# User Input\n{context}"
 
@@ -120,6 +124,7 @@ class CourseMapService:
             focus=focus,
             verified_concept=verified_concept,
             mode=mode,
+            language=language,
             total_commitment_minutes=total_commitment_minutes,
             map_meta=dag_data.get("map_meta", {}),
             nodes=dag_data.get("nodes", []),
@@ -148,6 +153,7 @@ class CourseMapService:
         verified_concept: str,
         mode: str,
         total_commitment_minutes: int,
+        language: str = "en",
     ) -> str:
         """Build context string for DAG prompt.
 
@@ -158,11 +164,13 @@ class CourseMapService:
             verified_concept: Verified concept.
             mode: Learning mode.
             total_commitment_minutes: Time budget.
+            language: Language code for LLM output.
 
         Returns:
             Formatted context string.
         """
         return json.dumps({
+            "language": language,
             "topic": topic,
             "level": level,
             "focus": focus,

@@ -132,6 +132,51 @@ async def _ensure_profile_exists(user_id: UUID) -> None:
             )
 
 
+async def _ensure_user_stats_exists(user_id: UUID) -> None:
+    """Create a user_stats row if it doesn't exist yet.
+
+    Ensures all users have a UserStats record with initial values of 0,
+    so they always have a global rank (even if they haven't studied yet).
+
+    Uses its own isolated DB session to avoid polluting the request-scoped
+    session with commits/rollbacks that would break subsequent business logic.
+
+    Args:
+        user_id: The user UUID.
+    """
+    from app.domain.models.user_stats import UserStats
+
+    session_factory = get_session_factory()
+    async with session_factory() as db:
+        result = await db.execute(select(UserStats).where(UserStats.user_id == user_id))
+        if result.scalar_one_or_none() is not None:
+            return  # UserStats already exists
+
+        try:
+            user_stats = UserStats(
+                user_id=user_id,
+                total_study_seconds=0,
+                completed_courses_count=0,
+                mastered_nodes_count=0,
+            )
+            db.add(user_stats)
+            await db.commit()
+            logger.info("Auto-created user_stats for new user", user_id=str(user_id))
+        except IntegrityError:
+            # Race condition: another request created the user_stats concurrently
+            await db.rollback()
+            logger.info("UserStats already created by concurrent request", user_id=str(user_id))
+        except Exception:
+            await db.rollback()
+            logger.error(
+                "Failed to auto-create user_stats",
+                user_id=str(user_id),
+                exc_info=True,
+            )
+            # Don't raise exception here, just log it
+            # UserStats can be created later when user performs learning activities
+
+
 async def get_current_user_id(
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_scheme),
 ) -> UUID:
@@ -174,6 +219,7 @@ async def get_current_user_id(
         )
 
     await _ensure_profile_exists(user_id)
+    await _ensure_user_stats_exists(user_id)
     return user_id
 
 
@@ -204,4 +250,5 @@ async def get_optional_user_id(
         return None
 
     await _ensure_profile_exists(user_id)
+    await _ensure_user_stats_exists(user_id)
     return user_id

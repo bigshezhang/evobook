@@ -158,7 +158,9 @@ class OnboardingService:
         user_message: str | None,
         user_choice: str | None,
         initial_topic: str | None = None,
+        discovery_preset: dict[str, Any] | None = None,
         user_id: UUID | None = None,
+        language: str = "en",
     ) -> dict[str, Any]:
         """Process user input and return next response.
 
@@ -167,13 +169,17 @@ class OnboardingService:
             user_message: Free-form user message.
             user_choice: Selected option from previous response.
             initial_topic: Pre-selected topic to skip Phase 1 (Exploration).
+            discovery_preset: Discovery course seed context for context injection.
             user_id: Optional authenticated user ID to associate with the session.
+            language: Language code for LLM output (ISO 639-1, e.g. "en", "zh").
 
         Returns:
             Chat response dict with type "chat" or "finish".
         """
         # 1. Load or create session
         state = await self._load_or_create_state(session_id, user_id=user_id)
+        self._language = language
+        self._discovery_preset = discovery_preset
 
         # 1.5. If initial_topic provided for new session, skip to calibration phase
         if initial_topic and state.phase == OnboardingPhase.EXPLORATION and not state.topic:
@@ -240,6 +246,7 @@ class OnboardingService:
         if response_data.get("type") == "finish":
             return {
                 "type": "finish",
+                "message": response_data.get("message", ""),
                 "data": response_data.get("data", {}),
                 "session_id": state.session_id,
             }
@@ -365,7 +372,7 @@ class OnboardingService:
         """
         prompt_text = PromptRegistry.get_prompt(PromptName.ONBOARDING)
 
-        # Build conversation context
+        # Build conversation context (includes language instruction)
         context = self._build_conversation_context(state)
 
         # Combine prompt with context
@@ -388,7 +395,9 @@ class OnboardingService:
         Returns:
             Formatted context string.
         """
+        language = getattr(self, "_language", "en")
         lines = [
+            f"Language: {language}",
             f"Phase: {state.phase.value}",
             f"Topic: {state.topic or 'Not set'}",
             f"Level: {state.level or 'Not set'}",
@@ -396,9 +405,24 @@ class OnboardingService:
             f"Focus: {state.focus or 'Not set'}",
             f"Mode: {state.mode or 'Not set'}",
             f"Source: {state.source or 'Not set'}",
-            "",
-            "# Conversation History",
         ]
+
+        # Inject discovery preset context if available
+        discovery_preset = getattr(self, "_discovery_preset", None)
+        if discovery_preset:
+            lines.append("")
+            lines.append("# Discovery Course Context (Pre-selected)")
+            lines.append(f"User is interested in: {discovery_preset.get('topic', 'N/A')}")
+            lines.append(f"Suggested Level: {discovery_preset.get('suggested_level', 'N/A')}")
+            lines.append(f"Key Concepts: {discovery_preset.get('key_concepts', 'N/A')}")
+            lines.append(f"Learning Goal: {discovery_preset.get('focus', 'N/A')}")
+            if discovery_preset.get('verified_concept'):
+                lines.append(f"Verified Concept to explore: {discovery_preset['verified_concept']}")
+            lines.append("")
+            lines.append("Start by confirming this interest and validating their current level.")
+
+        lines.append("")
+        lines.append("# Conversation History")
 
         for entry in state.history[-10:]:  # Limit to last 10 entries
             role = entry.get("role", "unknown")

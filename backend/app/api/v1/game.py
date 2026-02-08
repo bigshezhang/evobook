@@ -14,8 +14,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.auth import get_current_user_id
 from app.core.error_codes import ERROR_INTERNAL, ERROR_INVALID_UUID
 from app.core.exceptions import AppException
+from app.core.logging import get_logger
 from app.domain.services.game_service import GameService
 from app.infrastructure.database import get_db_session
+
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/game", tags=["game"])
 
@@ -74,10 +77,41 @@ class ClaimRewardResponse(BaseModel):
     message: str = Field(..., description="Response message")
 
 
+class ClaimGiftRequest(BaseModel):
+    """Claim gift reward request."""
+
+    source_details: dict[str, Any] | None = Field(
+        default=None,
+        description="Optional source details (course_map_id, tile_position, etc.)"
+    )
+
+
+class GiftItemInfo(BaseModel):
+    """Gift item information."""
+
+    id: str = Field(..., description="Item UUID")
+    name: str = Field(..., description="Item display name")
+    item_type: str = Field(..., description="Item type (clothes/furniture)")
+    image_path: str = Field(..., description="Path to item image")
+    rarity: str = Field(..., description="Item rarity")
+
+
+class ClaimGiftResponse(BaseModel):
+    """Claim gift reward response."""
+
+    success: bool = Field(..., description="Whether the gift was claimed")
+    reward_type: str = Field(..., description="'item' or 'gold' (fallback)")
+    gold_amount: int | None = Field(default=None, description="Gold amount if fallback")
+    item: GiftItemInfo | None = Field(default=None, description="Item info if item reward")
+    message: str = Field(..., description="Response message")
+
+
 class EarnExpRequest(BaseModel):
     """Earn EXP request."""
 
     exp_amount: int = Field(..., description="Amount of EXP to earn", gt=0)
+    gold_reward: int = Field(default=0, description="Base gold reward to give (always applied)", ge=0)
+    dice_reward: int = Field(default=0, description="Base dice roll reward to give (always applied)", ge=0)
     source: str = Field(..., description="Source of EXP (e.g., 'learning_reward', 'quiz_completion')")
     source_details: dict[str, Any] | None = Field(
         default=None,
@@ -85,11 +119,11 @@ class EarnExpRequest(BaseModel):
     )
 
 
-class LevelUpRewards(BaseModel):
-    """Level up rewards."""
+class RewardsSummary(BaseModel):
+    """Total rewards summary (base + level-up bonus)."""
 
-    gold: int = Field(..., description="Gold reward amount")
-    dice_rolls: int = Field(..., description="Dice rolls reward amount")
+    gold: int = Field(..., description="Total gold earned (base + level-up bonus)")
+    dice_rolls: int = Field(..., description="Total dice rolls earned (base + level-up bonus)")
 
 
 class EarnExpResponse(BaseModel):
@@ -100,9 +134,9 @@ class EarnExpResponse(BaseModel):
     current_exp: int = Field(..., description="Current EXP in current level")
     current_level: int = Field(..., description="Current level")
     level_up: bool = Field(..., description="Whether user leveled up")
-    rewards: LevelUpRewards | None = Field(
-        default=None,
-        description="Level up rewards (gold and dice_rolls) if leveled up"
+    rewards: RewardsSummary = Field(
+        ...,
+        description="Total rewards earned (base + level-up bonus, always present)"
     )
 
 
@@ -213,6 +247,46 @@ async def claim_reward(
         )
 
 
+@router.post("/claim-gift", response_model=ClaimGiftResponse)
+async def claim_gift(
+    request: ClaimGiftRequest,
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
+    db: Annotated[AsyncSession, Depends(get_db_session)],
+) -> dict[str, Any]:
+    """Claim a gift reward from the travel board.
+
+    Randomly grants an unowned item. If the user owns all items,
+    falls back to a gold reward.
+
+    Args:
+        request: Gift claim request with optional source details.
+        user_id: Authenticated user ID from JWT.
+        db: Database session.
+
+    Returns:
+        Gift reward details (item info or fallback gold).
+    """
+    try:
+        return await GameService.claim_gift_reward(
+            user_id=user_id,
+            db=db,
+            source_details=request.source_details,
+        )
+    except AppException:
+        raise
+    except Exception as e:
+        logger.error(
+            "Unexpected error claiming gift reward",
+            user_id=str(user_id),
+            error=str(e),
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail={"code": ERROR_INTERNAL, "message": str(e)},
+        )
+
+
 @router.post("/earn-exp", response_model=EarnExpResponse)
 async def earn_exp(
     request: EarnExpRequest,
@@ -240,6 +314,8 @@ async def earn_exp(
         return await GameService.earn_exp(
             user_id=user_id,
             amount=request.exp_amount,
+            gold_reward=request.gold_reward,
+            dice_reward=request.dice_reward,
             source=request.source,
             db=db,
             source_details=request.source_details,

@@ -56,6 +56,12 @@ class CourseMap(Base):
         nullable=False,
         comment="Deep | Fast | Light",
     )
+    language: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        server_default="en",
+        comment="User's preferred language (ISO 639-1, e.g. en, zh)",
+    )
     total_commitment_minutes: Mapped[int] = mapped_column(
         Integer,
         nullable=False,

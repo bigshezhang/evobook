@@ -88,14 +88,9 @@ class NodeContent(Base):
         Index("idx_node_contents_course_node", "course_map_id", "node_id"),
         Index("idx_node_contents_type", "content_type"),
         Index("idx_node_contents_generation_status", "generation_status"),
-        # Unique constraint for cache lookup — prevents duplicate rows
-        UniqueConstraint(
-            "course_map_id",
-            "node_id",
-            "content_type",
-            "question_key",
-            name="uq_node_contents_cache_key",
-        ),
+        # Note: Partial unique indexes are created in migration files
+        # - uq_node_contents_knowledge_card: (course_map_id, node_id, content_type) WHERE question_key IS NULL
+        # - uq_node_contents_with_question: (course_map_id, node_id, content_type, question_key) WHERE question_key IS NOT NULL
     )
 
     def __repr__(self) -> str:
