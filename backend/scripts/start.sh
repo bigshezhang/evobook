@@ -194,25 +194,10 @@ do_start() {
         log_info "Dependencies up to date"
     fi
 
-    # 5. 检查前端是否需要构建（智能构建）
-    local need_build=0
-    local hash_file="$FRONTEND_DIR/dist/.build_hash"
-    local current_hash
-    current_hash=$( (find "$FRONTEND_DIR" -maxdepth 1 \( -name "*.ts" -o -name "*.tsx" -o -name "*.json" -o -name ".env" \) -exec md5sum {} + 2>/dev/null; \
-                     find "$FRONTEND_DIR/components" "$FRONTEND_DIR/views" "$FRONTEND_DIR/utils" \
-                       \( -name "*.ts" -o -name "*.tsx" -o -name "*.css" \) -exec md5sum {} + 2>/dev/null) \
-                   | sort | md5sum | cut -d' ' -f1)
-
-    if [ ! -d "$FRONTEND_DIR/dist" ]; then
-        need_build=1
-    elif [ ! -f "$hash_file" ] || [ "$(cat "$hash_file" 2>/dev/null)" != "$current_hash" ]; then
-        need_build=1
-    fi
-
-    # 6. 并行启动：后端 + 前端构建
+    # 5. 并行启动：后端 + 前端构建
     log_step "Starting services in parallel..."
     
-    # 6.1 启动后端（后台）
+    # 5.1 启动后端（后台）
     log_info "Launching backend..."
     screen -dmS "$SCREEN_BACKEND" bash -c "
         cd $BACKEND_DIR
@@ -224,29 +209,21 @@ do_start() {
             --access-log
     "
 
-    # 6.2 构建前端（并行，如果需要）
-    if [ $need_build -eq 1 ]; then
-        log_info "Building frontend (in parallel)..."
-        (
-            export PATH="/root/.nvm/versions/node/v22.15.0/bin:$PATH"
-            export BACKEND_URL="http://localhost:${BACKEND_PORT}"
-            cd "$FRONTEND_DIR"
-            npx vite build 2>&1 | tail -5
-            echo "$current_hash" > "$hash_file"
-        ) &
-        BUILD_PID=$!
-    else
-        log_info "Frontend source unchanged, skipping build"
-        BUILD_PID=""
-    fi
+    # 5.2 构建前端（并行，始终全量构建）
+    log_info "Building frontend (in parallel)..."
+    (
+        export PATH="/root/.nvm/versions/node/v22.15.0/bin:$PATH"
+        export BACKEND_URL="http://localhost:${BACKEND_PORT}"
+        cd "$FRONTEND_DIR"
+        npx vite build 2>&1 | tail -5
+    ) &
+    BUILD_PID=$!
 
-    # 6.3 等待构建完成（如果有）
-    if [ -n "$BUILD_PID" ]; then
-        wait $BUILD_PID
-        log_info "Frontend build completed"
-    fi
+    # 5.3 等待构建完成
+    wait $BUILD_PID
+    log_info "Frontend build completed"
 
-    # 6.4 启动前端服务
+    # 6. 启动前端服务
     log_info "Launching frontend..."
     screen -dmS "$SCREEN_FRONTEND" bash -c "
         export PATH=\"/root/.nvm/versions/node/v22.15.0/bin:\$PATH\"
