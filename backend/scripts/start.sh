@@ -191,7 +191,29 @@ do_start() {
         exit 1
     fi
 
-    # 5. 构建并启动前端 (screen)
+    # 5. 检查并安装前端依赖
+    log_step "Checking frontend dependencies..."
+    if [ ! -d "$FRONTEND_DIR/node_modules" ]; then
+        log_warn "node_modules not found, installing dependencies..."
+        (
+            export PATH="/root/.nvm/versions/node/v22.15.0/bin:$PATH"
+            cd "$FRONTEND_DIR"
+            npm install
+        )
+        log_info "Dependencies installed"
+    elif [ "$FRONTEND_DIR/package.json" -nt "$FRONTEND_DIR/node_modules" ]; then
+        log_warn "package.json changed, updating dependencies..."
+        (
+            export PATH="/root/.nvm/versions/node/v22.15.0/bin:$PATH"
+            cd "$FRONTEND_DIR"
+            npm install
+        )
+        log_info "Dependencies updated"
+    else
+        log_info "Dependencies up to date"
+    fi
+
+    # 6. 构建并启动前端 (screen)
     #    先 build 生产包，再用 vite preview 提供服务
     #    通过 BACKEND_URL 环境变量告诉 vite 代理目标
     #    智能构建：源码无变更时跳过，秒级启动
@@ -226,6 +248,7 @@ do_start() {
         log_info "Frontend build completed"
     fi
 
+    # 7. 启动前端服务
     log_step "Starting frontend on port $FRONTEND_PORT..."
     screen -dmS "$SCREEN_FRONTEND" bash -c "
         export PATH=\"/root/.nvm/versions/node/v22.15.0/bin:\$PATH\"
