@@ -172,26 +172,7 @@ do_start() {
         exit 1
     fi
 
-    # 4. 启动后端 (screen)
-    log_step "Starting backend on port $BACKEND_PORT..."
-    screen -dmS "$SCREEN_BACKEND" bash -c "
-        cd $BACKEND_DIR
-        exec .venv/bin/uvicorn app.main:app \
-            --host 0.0.0.0 \
-            --port $BACKEND_PORT \
-            --workers $BACKEND_WORKERS \
-            --log-level info \
-            --access-log
-    "
-
-    if wait_for_service "http://localhost:${BACKEND_PORT}/healthz" "Backend" 30; then
-        log_info "Backend is running on port $BACKEND_PORT"
-    else
-        log_error "Backend failed to start. Check: screen -r $SCREEN_BACKEND"
-        exit 1
-    fi
-
-    # 5. 检查并安装前端依赖
+    # 4. 检查并安装前端依赖（必须在构建前完成）
     log_step "Checking frontend dependencies..."
     if [ ! -d "$FRONTEND_DIR/node_modules" ]; then
         log_warn "node_modules not found, installing dependencies..."
@@ -213,14 +194,9 @@ do_start() {
         log_info "Dependencies up to date"
     fi
 
-    # 6. 构建并启动前端 (screen)
-    #    先 build 生产包，再用 vite preview 提供服务
-    #    通过 BACKEND_URL 环境变量告诉 vite 代理目标
-    #    智能构建：源码无变更时跳过，秒级启动
+    # 5. 检查前端是否需要构建（智能构建）
     local need_build=0
     local hash_file="$FRONTEND_DIR/dist/.build_hash"
-
-    # 计算源码哈希（源文件 + 配置）
     local current_hash
     current_hash=$( (find "$FRONTEND_DIR" -maxdepth 1 \( -name "*.ts" -o -name "*.tsx" -o -name "*.json" -o -name ".env" \) -exec md5sum {} + 2>/dev/null; \
                      find "$FRONTEND_DIR/components" "$FRONTEND_DIR/views" "$FRONTEND_DIR/utils" \
@@ -229,27 +205,49 @@ do_start() {
 
     if [ ! -d "$FRONTEND_DIR/dist" ]; then
         need_build=1
-        log_step "No build found, building frontend..."
     elif [ ! -f "$hash_file" ] || [ "$(cat "$hash_file" 2>/dev/null)" != "$current_hash" ]; then
         need_build=1
-        log_step "Source changed, rebuilding frontend..."
-    else
-        log_info "Frontend source unchanged, skipping build"
     fi
 
+    # 6. 并行启动：后端 + 前端构建
+    log_step "Starting services in parallel..."
+    
+    # 6.1 启动后端（后台）
+    log_info "Launching backend..."
+    screen -dmS "$SCREEN_BACKEND" bash -c "
+        cd $BACKEND_DIR
+        exec .venv/bin/uvicorn app.main:app \
+            --host 0.0.0.0 \
+            --port $BACKEND_PORT \
+            --workers $BACKEND_WORKERS \
+            --log-level info \
+            --access-log
+    "
+
+    # 6.2 构建前端（并行，如果需要）
     if [ $need_build -eq 1 ]; then
+        log_info "Building frontend (in parallel)..."
         (
             export PATH="/root/.nvm/versions/node/v22.15.0/bin:$PATH"
             export BACKEND_URL="http://localhost:${BACKEND_PORT}"
             cd "$FRONTEND_DIR"
             npx vite build 2>&1 | tail -5
-        )
-        echo "$current_hash" > "$hash_file"
+            echo "$current_hash" > "$hash_file"
+        ) &
+        BUILD_PID=$!
+    else
+        log_info "Frontend source unchanged, skipping build"
+        BUILD_PID=""
+    fi
+
+    # 6.3 等待构建完成（如果有）
+    if [ -n "$BUILD_PID" ]; then
+        wait $BUILD_PID
         log_info "Frontend build completed"
     fi
 
-    # 7. 启动前端服务
-    log_step "Starting frontend on port $FRONTEND_PORT..."
+    # 6.4 启动前端服务
+    log_info "Launching frontend..."
     screen -dmS "$SCREEN_FRONTEND" bash -c "
         export PATH=\"/root/.nvm/versions/node/v22.15.0/bin:\$PATH\"
         export BACKEND_URL=\"http://localhost:${BACKEND_PORT}\"
@@ -257,14 +255,38 @@ do_start() {
         exec npx vite preview --host 0.0.0.0 --port $FRONTEND_PORT
     "
 
-    if wait_for_service "http://localhost:${FRONTEND_PORT}/" "Frontend" 15; then
+    # 7. 并行等待服务就绪
+    log_step "Waiting for services to be ready..."
+    
+    # 并行等待
+    wait_for_service "http://localhost:${BACKEND_PORT}/healthz" "Backend" 30 &
+    BE_WAIT_PID=$!
+    wait_for_service "http://localhost:${FRONTEND_PORT}/" "Frontend" 15 &
+    FE_WAIT_PID=$!
+
+    # 等待两个服务都就绪
+    local be_ok=0
+    local fe_ok=0
+    
+    if wait $BE_WAIT_PID; then
+        be_ok=1
+        log_info "Backend is running on port $BACKEND_PORT"
+    else
+        log_error "Backend failed to start. Check: screen -r $SCREEN_BACKEND"
+    fi
+
+    if wait $FE_WAIT_PID; then
+        fe_ok=1
         log_info "Frontend is running on port $FRONTEND_PORT"
     else
         log_error "Frontend failed to start. Check: screen -r $SCREEN_FRONTEND"
+    fi
+
+    if [ $be_ok -eq 0 ] || [ $fe_ok -eq 0 ]; then
         exit 1
     fi
 
-    # 6. 打印摘要
+    # 8. 打印摘要
     echo ""
     echo -e "${GREEN}========================================${NC}"
     echo -e "${GREEN}${BOLD}  EvoBook is running!${NC}"
