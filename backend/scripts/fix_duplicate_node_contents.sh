@@ -8,7 +8,7 @@ echo "=== 清理重复的 node_contents 记录 ==="
 
 psql "postgresql://postgres:postgres@localhost:5432/evobook" <<'EOF'
 -- 显示清理前的统计
-SELECT 
+SELECT
     '清理前' as stage,
     COUNT(*) as total_records,
     COUNT(DISTINCT (course_map_id, node_id, content_type, COALESCE(question_key, ''))) as unique_combinations,
@@ -17,11 +17,11 @@ FROM node_contents;
 
 -- 清理重复记录（保留最新的）
 WITH ranked_contents AS (
-  SELECT 
+  SELECT
     id,
     ROW_NUMBER() OVER (
       PARTITION BY course_map_id, node_id, content_type, COALESCE(question_key, '')
-      ORDER BY 
+      ORDER BY
         -- 优先保留有内容的记录
         CASE WHEN content_json IS NOT NULL AND content_json != '{}' THEN 0 ELSE 1 END,
         -- 然后按时间排序
@@ -35,7 +35,7 @@ WHERE id IN (
 );
 
 -- 显示清理后的统计
-SELECT 
+SELECT
     '清理后' as stage,
     COUNT(*) as total_records,
     COUNT(DISTINCT (course_map_id, node_id, content_type, COALESCE(question_key, ''))) as unique_combinations,
@@ -43,7 +43,7 @@ SELECT
 FROM node_contents;
 
 -- 显示各课程的内容统计
-SELECT 
+SELECT
     cm.id::text as course_id,
     cm.topic,
     COUNT(*) as content_count,

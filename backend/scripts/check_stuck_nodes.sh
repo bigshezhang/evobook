@@ -26,7 +26,7 @@ echo ""
 # Query 1: Count by status
 echo "1. Node counts by generation status:"
 psql "$DB_URL_SYNC" -c "
-SELECT 
+SELECT
     generation_status,
     COUNT(*) as count
 FROM node_contents
@@ -38,12 +38,12 @@ echo ""
 # Query 2: List stuck nodes
 echo "2. Nodes in 'generating' or 'pending' status:"
 psql "$DB_URL_SYNC" -c "
-SELECT 
+SELECT
     course_map_id,
     node_id,
     generation_status,
     generation_started_at,
-    CASE 
+    CASE
         WHEN generation_started_at IS NOT NULL THEN
             EXTRACT(EPOCH FROM (NOW() - generation_started_at)) / 60
         ELSE NULL
@@ -57,7 +57,7 @@ echo ""
 # Query 3: Summary by course
 echo "3. Summary by course:"
 psql "$DB_URL_SYNC" -c "
-SELECT 
+SELECT
     course_map_id,
     COUNT(*) as total_nodes,
     SUM(CASE WHEN generation_status = 'completed' THEN 1 ELSE 0 END) as completed,

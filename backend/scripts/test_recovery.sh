@@ -96,18 +96,18 @@ POLL_INTERVAL=5
 while [ $ELAPSED -lt $MAX_WAIT ]; do
     sleep $POLL_INTERVAL
     ELAPSED=$((ELAPSED + POLL_INTERVAL))
-    
+
     PROGRESS=$(curl -s -X GET "${API_URL}/course-map/${COURSE_MAP_ID}/progress")
     OVERALL_STATUS=$(echo "$PROGRESS" | python3 -c "import sys, json; print(json.load(sys.stdin)['overall_status'])" 2>/dev/null || echo "unknown")
     LEARN_PROGRESS=$(echo "$PROGRESS" | python3 -c "import sys, json; print(json.load(sys.stdin)['learn_progress'])" 2>/dev/null || echo "0")
-    
+
     echo "  [$ELAPSED s] Status: $OVERALL_STATUS, Progress: $(python3 -c "print(f'{float('$LEARN_PROGRESS') * 100:.1f}%')")"
-    
+
     if [ "$OVERALL_STATUS" = "completed" ]; then
         print_success "Generation completed!"
         break
     fi
-    
+
     if [ "$OVERALL_STATUS" = "partial_failed" ]; then
         print_error "Generation partially failed"
         break

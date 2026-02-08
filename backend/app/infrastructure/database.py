@@ -15,7 +15,7 @@ from app.config import get_settings
 
 class Base(DeclarativeBase):
     """SQLAlchemy declarative base for all models."""
-    
+
     pass
 
 
@@ -26,7 +26,7 @@ _async_session_factory: async_sessionmaker[AsyncSession] | None = None
 
 def get_engine() -> AsyncEngine:
     """Get or create the database engine.
-    
+
     Returns:
         Configured async database engine.
     """
@@ -45,7 +45,7 @@ def get_engine() -> AsyncEngine:
 
 def get_session_factory() -> async_sessionmaker[AsyncSession]:
     """Get or create the session factory.
-    
+
     Returns:
         Configured async session factory.
     """
@@ -62,7 +62,7 @@ def get_session_factory() -> async_sessionmaker[AsyncSession]:
 
 async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
     """Dependency for getting database sessions.
-    
+
     Yields:
         Database session that auto-closes on exit.
     """
@@ -76,7 +76,7 @@ async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
 
 async def init_db() -> None:
     """Initialize database tables.
-    
+
     Note: Use Alembic for production migrations.
     This is mainly for testing purposes.
     """
@@ -87,9 +87,9 @@ async def init_db() -> None:
 
 def get_async_session_maker() -> async_sessionmaker[AsyncSession]:
     """Get the async session maker for background tasks.
-    
+
     This is an alias for get_session_factory() for compatibility.
-    
+
     Returns:
         Configured async session factory.
     """

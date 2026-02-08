@@ -126,7 +126,7 @@ if (
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Startup
     setup_logging(...)
-    
+
     # Execute recovery logic
     try:
         session_factory = get_session_factory()
@@ -138,9 +138,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     except Exception as e:
         logger.error("Recovery failed", exc_info=True)
         # Don't block application startup
-    
+
     yield
-    
+
     # Shutdown
     logger.info("Application shutting down")
 ```
@@ -215,7 +215,7 @@ cd /Users/lazyman/Desktop/evobook_be
        "total_commitment_minutes": 60
      }'
    ```
-   
+
    Save the `course_map_id` from response.
 
 3. **Wait 5 seconds** (let generation start)
@@ -224,7 +224,7 @@ cd /Users/lazyman/Desktop/evobook_be
    ```bash
    curl http://localhost:8000/api/v1/course-map/{course_map_id}/progress
    ```
-   
+
    Should show status `generating` or `pending`.
 
 5. **Kill the server** (Ctrl+C)
@@ -247,7 +247,7 @@ cd /Users/lazyman/Desktop/evobook_be
    ```bash
    curl http://localhost:8000/api/v1/course-map/{course_map_id}/progress
    ```
-   
+
    Should show generation continuing and eventually completing.
 
 #### Test 2: Manual Recovery Endpoint
@@ -297,7 +297,7 @@ cd /Users/lazyman/Desktop/evobook_be
    WHERE course_map_id = '{course_map_id}'
    ORDER BY node_id;
    ```
-   
+
    All should still be `completed`.
 
 ### Test Scenarios
@@ -315,7 +315,7 @@ cd /Users/lazyman/Desktop/evobook_be
 ### Check for stuck nodes:
 
 ```sql
-SELECT 
+SELECT
     course_map_id,
     node_id,
     generation_status,
@@ -330,7 +330,7 @@ ORDER BY generation_started_at;
 
 ```sql
 UPDATE node_contents
-SET 
+SET
     generation_status = 'pending',
     generation_started_at = NULL
 WHERE generation_status = 'generating';

@@ -95,7 +95,7 @@ class ContentGenerationService:
                 async def generate_node_with_own_session(node: dict[str, Any]):
                     """Wrapper to create independent DB session for each node generation."""
                     from app.infrastructure.database import get_async_session_maker
-                    
+
                     session_maker = get_async_session_maker()
                     async with session_maker() as node_db:
                         # Create a temporary service instance with its own DB session
@@ -107,7 +107,7 @@ class ContentGenerationService:
                             llm_client=self.llm,
                             db_session=node_db,
                         )
-                        
+
                         await temp_service._generate_single_node(
                             course_map_id=course_map_id,
                             node=node,

@@ -171,7 +171,7 @@ class RecoveryService:
             # Import here to avoid circular dependency
             from app.domain.services.content_generation_service import ContentGenerationService
             from app.domain.services.node_content_service import NodeContentService
-            
+
             session_maker = get_async_session_maker()
             async with session_maker() as task_db:
                 # Create a new service instance with its own DB session
@@ -184,7 +184,7 @@ class RecoveryService:
                     db_session=task_db,
                 )
                 task_generation_service.node_content_service = node_content_service
-                
+
                 await task_generation_service.generate_all_learn_nodes(
                     course_map_id=course_map_id,
                     nodes=course_map.nodes,

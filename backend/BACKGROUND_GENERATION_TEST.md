@@ -175,11 +175,11 @@ npm run dev
 
 ```sql
 -- 查看 node_contents 记录
-SELECT 
-    node_id, 
-    node_type, 
-    generation_status, 
-    generation_started_at, 
+SELECT
+    node_id,
+    node_type,
+    generation_status,
+    generation_started_at,
     generation_completed_at,
     generation_error
 FROM node_contents
@@ -187,10 +187,10 @@ WHERE course_map_id = 'your-course-map-id'
 ORDER BY node_id;
 
 -- 统计生成状态
-SELECT 
-    generation_status, 
-    COUNT(*) 
-FROM node_contents 
+SELECT
+    generation_status,
+    COUNT(*)
+FROM node_contents
 WHERE course_map_id = 'your-course-map-id'
 GROUP BY generation_status;
 ```
@@ -283,10 +283,10 @@ curl -X GET "http://localhost:8000/api/v1/course-map/YOUR_COURSE_MAP_ID/progress
 
 ## 验收标准
 
-✅ 用户创建课程后，立即返回 course_map_id  
-✅ 后台开始生成所有 learn 节点内容  
-✅ 前端 KnowledgeTree 显示生成进度（蓝色边框 + 旋转图标）  
-✅ 节点生成完成后，可以点击学习  
-✅ Quiz 节点不显示生成状态（保持原有的即时生成逻辑）  
-✅ 数据库中 node_contents 表有正确的状态记录  
+✅ 用户创建课程后，立即返回 course_map_id
+✅ 后台开始生成所有 learn 节点内容
+✅ 前端 KnowledgeTree 显示生成进度（蓝色边框 + 旋转图标）
+✅ 节点生成完成后，可以点击学习
+✅ Quiz 节点不显示生成状态（保持原有的即时生成逻辑）
+✅ 数据库中 node_contents 表有正确的状态记录
 ✅ 单个节点失败不影响其他节点
