@@ -33,6 +33,10 @@ export default defineConfig(({ mode }) => {
         allowedHosts: ['evobook.arunningstar.com'],
         proxy: proxyConfig,
       },
+      // 生产环境移除 console 和 debugger
+      esbuild: {
+        drop: mode === 'production' ? ['console', 'debugger'] : [],
+      },
       plugins: [react()],
       define: {
         'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
@@ -71,14 +75,8 @@ export default defineConfig(({ mode }) => {
         assetsInlineLimit: 4096, // 4KB
         // 启用 CSS 代码分割
         cssCodeSplit: true,
-        // 压缩配置
-        minify: 'terser',
-        terserOptions: {
-          compress: {
-            drop_console: mode === 'production', // 生产环境移除 console
-            drop_debugger: true,
-          },
-        },
+        // 压缩配置（使用内置 esbuild，比 terser 快 20-40 倍）
+        minify: 'esbuild',
         // 资源大小警告阈值
         chunkSizeWarningLimit: 1000, // 1MB
       },
