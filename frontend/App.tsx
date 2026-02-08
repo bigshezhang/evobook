@@ -29,7 +29,6 @@ import LoginView from './views/auth/LoginView';
 import WelcomeView from './views/onboarding/WelcomeView';
 import InterestSelection from './views/onboarding/InterestSelection';
 import AssessmentChat from './views/onboarding/AssessmentChat';
-import NicknameSetup from './views/onboarding/NicknameSetup';
 import CompanionSelection from './views/onboarding/CompanionSelection';
 import NotificationPermission from './views/onboarding/NotificationPermission';
 import GeneratingCourse from './views/onboarding/GeneratingCourse';
@@ -141,7 +140,6 @@ const AppInternals: React.FC = () => {
         <Route path="/" element={<ProtectedRoute><RootRedirect /></ProtectedRoute>} />
         <Route path="/interests" element={<ProtectedRoute><InterestSelection /></ProtectedRoute>} />
         <Route path="/assessment" element={<ProtectedRoute><AssessmentChatWithKey /></ProtectedRoute>} />
-        <Route path="/nickname-setup" element={<ProtectedRoute><NicknameSetup /></ProtectedRoute>} />
         <Route path="/companion" element={<ProtectedRoute><CompanionSelection /></ProtectedRoute>} />
         <Route path="/notifications" element={<ProtectedRoute><NotificationPermission /></ProtectedRoute>} />
         <Route path="/generating" element={<ProtectedRoute><GeneratingCourse /></ProtectedRoute>} />

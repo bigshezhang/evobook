@@ -158,8 +158,8 @@ const AssessmentChat: React.FC = () => {
         localStorage.setItem(STORAGE_KEYS.ONBOARDING_DATA, JSON.stringify(response.data));
         // Clear the selected topic as it's no longer needed
         localStorage.removeItem(STORAGE_KEY_SELECTED_TOPIC);
-        // Navigate to nickname setup (next step in onboarding flow)
-        navigate('/nickname-setup');
+        // Navigate to companion selection (next step in onboarding flow)
+        navigate('/companion');
       }, 1500);
     }
   };
