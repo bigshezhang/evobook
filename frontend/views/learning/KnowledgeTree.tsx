@@ -69,11 +69,20 @@ const KnowledgeTree: React.FC = () => {
       try {
         setIsLoading(true);
 
-        // Load all user courses for navigation
-        const coursesData = await getUserCourses();
-        setAllCourses(coursesData.courses);
+        // Fire all independent API calls in parallel
+        const [coursesData, courseDetailData, progressData, genProgressData] =
+          await Promise.all([
+            getUserCourses(),
+            getCourseDetail(cidFromUrl),
+            getNodeProgress(cidFromUrl),
+            getGenerationProgress(cidFromUrl).catch((genErr) => {
+              console.warn('Failed to load generation progress:', genErr);
+              return null; // Don't fail the whole load if generation progress fails
+            }),
+          ]);
 
-        // Find current course index
+        // Process courses navigation data
+        setAllCourses(coursesData.courses);
         const currentIndex = coursesData.courses.findIndex(
           (c) => c.course_map_id === cidFromUrl
         );
@@ -81,25 +90,19 @@ const KnowledgeTree: React.FC = () => {
           setCurrentCourseIndex(currentIndex);
         }
 
-        // Load course data
-        const courseData = await getCourseDetail(cidFromUrl);
+        // Process course detail
         setCourseData({
-          course_map_id: courseData.course_map_id,
-          map_meta: courseData.map_meta as MapMeta,
-          nodes: courseData.nodes as DAGNode[],
+          course_map_id: courseDetailData.course_map_id,
+          map_meta: courseDetailData.map_meta as MapMeta,
+          nodes: courseDetailData.nodes as DAGNode[],
         });
 
-        // Load node progress from backend
-        const progressData = await getNodeProgress(cidFromUrl);
+        // Process node progress
         setNodeProgress(progressData.progress);
 
-        // Load generation progress
-        try {
-          const genProgress = await getGenerationProgress(cidFromUrl);
-          setNodeGenerationStatus(genProgress.nodes_status);
-        } catch (genErr) {
-          console.warn('Failed to load generation progress:', genErr);
-          // Don't fail the whole load if generation progress fails
+        // Process generation progress (may be null if fetch failed)
+        if (genProgressData) {
+          setNodeGenerationStatus(genProgressData.nodes_status);
         }
 
       } catch (e) {
@@ -289,12 +292,41 @@ const KnowledgeTree: React.FC = () => {
     }
   };
 
-  // Render loading state
+  // Render loading skeleton (preserves Header + BottomNav so the page feels instant)
   if (isLoading) {
     return (
-      <div className="flex flex-col h-screen bg-[#F8F9FD] items-center justify-center">
-        <div className="animate-spin w-12 h-12 border-4 border-secondary border-t-transparent rounded-full"></div>
-        <p className="mt-4 text-slate-500 font-medium">Loading course data...</p>
+      <div className="flex flex-col h-screen bg-[#F8F9FD] relative">
+        <Header
+          title="Learning"
+          showBack={false}
+          rightAction={
+            <div className="flex items-center gap-2 pr-2">
+              <span className="material-symbols-outlined text-secondary" style={{ fontVariationSettings: "'FILL' 1" }}>school</span>
+              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-secondary">EvoBook</span>
+            </div>
+          }
+        />
+        <div className="flex-1 overflow-y-auto no-scrollbar pb-40">
+          {/* Banner skeleton */}
+          <div className="px-6 mb-4 mt-4">
+            <div className="bg-slate-200 animate-pulse rounded-[28px] h-[100px]" />
+          </div>
+          {/* Node skeleton */}
+          <div className="flex flex-col items-center gap-12 px-6 mt-6 py-6">
+            <div className="w-48 h-[72px] bg-slate-200 animate-pulse rounded-xl" />
+            <div className="flex gap-4 justify-center">
+              <div className="w-36 h-[72px] bg-slate-200 animate-pulse rounded-xl" />
+              <div className="w-36 h-[72px] bg-slate-200 animate-pulse rounded-xl" />
+            </div>
+            <div className="w-48 h-[72px] bg-slate-200 animate-pulse rounded-xl" />
+            <div className="flex gap-4 justify-center">
+              <div className="w-36 h-[72px] bg-slate-200 animate-pulse rounded-xl" />
+              <div className="w-36 h-[72px] bg-slate-200 animate-pulse rounded-xl" />
+            </div>
+            <div className="w-48 h-[72px] bg-slate-200 animate-pulse rounded-xl" />
+          </div>
+        </div>
+        <BottomNav activeTab="learning" />
       </div>
     );
   }

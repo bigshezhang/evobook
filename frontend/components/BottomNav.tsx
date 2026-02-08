@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { buildLearningPath, getActiveCourse } from '../utils/api';
 import { ROUTES, ROUTE_GROUPS } from '../utils/routes';
@@ -11,6 +11,7 @@ interface BottomNavProps {
 const BottomNav: React.FC<BottomNavProps> = ({ activeTab }) => {
   const navigate = useNavigate();
   const location = useLocation();
+  const [learningLoading, setLearningLoading] = useState(false);
 
   const getActiveTab = () => {
     const path = location.pathname;
@@ -20,23 +21,26 @@ const BottomNav: React.FC<BottomNavProps> = ({ activeTab }) => {
     return activeTab || 'courses';
   };
 
-  const handleLearningClick = async () => {
+  const handleLearningClick = useCallback(async () => {
+    // Already on a learning tab page — no need to re-fetch
+    if ((ROUTE_GROUPS.LEARNING_TAB as readonly string[]).includes(location.pathname)) return;
+
+    setLearningLoading(true);
     try {
       const { course_map_id } = await getActiveCourse();
 
       if (course_map_id) {
-        // 有活跃课程，跳转到知识树
         navigate(buildLearningPath(ROUTES.KNOWLEDGE_TREE, { cid: course_map_id }));
       } else {
-        // 没有课程，跳转到课程列表
         navigate(ROUTES.COURSES);
       }
     } catch (error) {
       console.error('Failed to get active course:', error);
-      // 出错时跳转到课程列表
       navigate(ROUTES.COURSES);
+    } finally {
+      setLearningLoading(false);
     }
-  };
+  }, [location.pathname, navigate]);
 
   const current = getActiveTab();
 
@@ -53,9 +57,14 @@ const BottomNav: React.FC<BottomNavProps> = ({ activeTab }) => {
       {/* Learning Management */}
       <button
         onClick={handleLearningClick}
-        className={`flex-1 h-14 flex items-center justify-center rounded-full transition-all duration-300 mx-1 ${current === 'learning' ? 'bg-white text-primary' : 'text-white/40 hover:text-white'}`}
+        disabled={learningLoading}
+        className={`flex-1 h-14 flex items-center justify-center rounded-full transition-all duration-300 mx-1 ${current === 'learning' || learningLoading ? 'bg-white text-primary' : 'text-white/40 hover:text-white'}`}
       >
-        <span className="material-symbols-rounded text-[26px]" style={{ fontVariationSettings: `'FILL' ${current === 'learning' ? 1 : 0}` }}>school</span>
+        {learningLoading ? (
+          <span className="inline-block w-5 h-5 border-2 border-gray-300 border-t-primary rounded-full animate-spin" />
+        ) : (
+          <span className="material-symbols-rounded text-[26px]" style={{ fontVariationSettings: `'FILL' ${current === 'learning' ? 1 : 0}` }}>school</span>
+        )}
       </button>
 
       {/* Game */}

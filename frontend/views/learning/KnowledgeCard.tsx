@@ -605,6 +605,9 @@ const KnowledgeCard: React.FC = () => {
     };
   }, [cidFromUrl, nidFromUrl]);
 
+  // Ref for main scrollable container
+  const mainRef = React.useRef<HTMLElement>(null);
+
   // Page transition animation state
   const [isPageTransitioning, setIsPageTransitioning] = useState(false);
   const previousNodeId = React.useRef<number | null>(null);
@@ -681,7 +684,7 @@ const KnowledgeCard: React.FC = () => {
       setTimeout(() => {
         const nextPage = currentPage + 1;
         setCurrentPage(nextPage);
-        window.scrollTo({ top: 0, behavior: 'auto' }); // 使用 auto 避免动画冲突
+        mainRef.current?.scrollTo({ top: 0, behavior: 'auto' }); // 滚动 main 容器回顶部
 
         // 立即触发淡入
         setIsPageTransitioning(false);
@@ -705,7 +708,7 @@ const KnowledgeCard: React.FC = () => {
       // 等动画完成后切换页码
       setTimeout(() => {
         setCurrentPage(prev => prev - 1);
-        window.scrollTo({ top: 0, behavior: 'auto' });
+        mainRef.current?.scrollTo({ top: 0, behavior: 'auto' }); // 滚动 main 容器回顶部
 
         // 立即触发淡入
         setIsPageTransitioning(false);
@@ -725,10 +728,9 @@ const KnowledgeCard: React.FC = () => {
 
     // Auto-scroll to bottom
     setTimeout(() => {
-      const mainContainer = document.querySelector('main');
-      if (mainContainer) {
-        mainContainer.scrollTo({
-          top: mainContainer.scrollHeight,
+      if (mainRef.current) {
+        mainRef.current.scrollTo({
+          top: mainRef.current.scrollHeight,
           behavior: 'smooth'
         });
       }
@@ -768,7 +770,7 @@ const KnowledgeCard: React.FC = () => {
   return (
     <div className="relative flex flex-col h-screen bg-white dark:bg-background-dark font-sans overflow-hidden">
       {/* Top Header - Back Button + Progress Status from HTML template */}
-      <header className="pt-12 px-5 pb-3 flex items-center justify-between w-full z-30 border-b border-black/[0.03] dark:border-white/[0.05] bg-white/80 backdrop-blur-md">
+      <header className="pt-4 px-5 pb-3 flex items-center justify-between w-full z-30 border-b border-black/[0.03] dark:border-white/[0.05] bg-white/80 backdrop-blur-md">
         <div className="flex items-center gap-3">
           <button
             onClick={() => navigate(buildLearningPath(ROUTES.KNOWLEDGE_TREE, { cid: courseMapId }))}
@@ -810,6 +812,7 @@ const KnowledgeCard: React.FC = () => {
 
       {/* Main Content Area - Layout & Rich Text blocks from HTML template */}
       <main
+        ref={mainRef}
         className="flex-1 overflow-y-auto no-scrollbar px-6 pt-6 pb-48 transition-all duration-200 ease-out"
         style={{
           opacity: isPageTransitioning ? 0 : 1,

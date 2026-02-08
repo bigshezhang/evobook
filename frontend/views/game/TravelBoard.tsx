@@ -434,7 +434,7 @@ const TravelBoard: React.FC = () => {
                   )
                 ) : (
                   <img
-                    src={`/compressed_output/furniture_processed/${eventModal.giftItem.image_path}`}
+                    src={`/compressed_output/furniture/${eventModal.giftItem.image_path}`}
                     alt={eventModal.giftItem.name}
                     className="w-full h-full object-contain p-2"
                   />
