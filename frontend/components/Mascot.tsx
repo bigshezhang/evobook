@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   getMascotResourcePath,
   getMascotVideoSources,
@@ -33,26 +33,42 @@ const Mascot: React.FC<MascotProps> = ({
   src,
   autoPlay = true
 }) => {
-  // 获取当前角色和服装，优先使用 props，否则从 localStorage 读取
-  const activeCharacter = character || getSelectedCharacter();
-  const activeOutfit = outfit || getSelectedOutfit();
+  // 响应式状态：角色和服装（优先使用 props，否则从 localStorage 读取）
+  const [resolvedCharacter, setResolvedCharacter] = useState<MascotCharacter>(
+    character || getSelectedCharacter()
+  );
+  const [resolvedOutfit, setResolvedOutfit] = useState<MascotOutfit>(
+    outfit || getSelectedOutfit()
+  );
 
   const [currentSrc, setCurrentSrc] = useState<string>(src || '');
   const [videoSources, setVideoSources] = useState<VideoSource[]>([]);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [hasError, setHasError] = useState(false);
 
-  // 监听全局状态变化
+  // 用 ref 跟踪 timeout，确保正确清理
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // 当 props 变化时，同步到 resolved 状态
+  useEffect(() => {
+    if (character) setResolvedCharacter(character);
+  }, [character]);
+
+  useEffect(() => {
+    if (outfit) setResolvedOutfit(outfit);
+  }, [outfit]);
+
+  // 监听全局状态变化，直接更新 resolved 状态（避免闭包过期）
   useEffect(() => {
     const handleCharacterChange = () => {
       if (!character) {
-        updateResource();
+        setResolvedCharacter(getSelectedCharacter());
       }
     };
 
     const handleOutfitChange = () => {
       if (!outfit) {
-        updateResource();
+        setResolvedOutfit(getSelectedOutfit());
       }
     };
 
@@ -63,10 +79,11 @@ const Mascot: React.FC<MascotProps> = ({
       window.removeEventListener('mascot-character-changed', handleCharacterChange);
       window.removeEventListener('mascot-outfit-changed', handleOutfitChange);
     };
-  }, [character, outfit, scene]);
+  }, [character, outfit]);
 
-  const updateResource = () => {
-    if (src) return; // 如果有自定义 src，不自动更新
+  // 资源更新函数：根据当前 resolved 状态计算资源路径
+  const updateResource = useCallback(() => {
+    if (src) return;
 
     try {
       const resourceType = getResourceType(scene);
@@ -74,33 +91,44 @@ const Mascot: React.FC<MascotProps> = ({
       setIsTransitioning(true);
       setHasError(false);
 
-      const timer = setTimeout(() => {
+      // 清理之前的 timeout，避免多个 timeout 竞争
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+      }
+
+      timerRef.current = setTimeout(() => {
         if (resourceType === 'video') {
           // 视频场景：生成多格式 source 列表
-          const sources = getMascotVideoSources(activeCharacter, scene, activeOutfit);
+          const sources = getMascotVideoSources(resolvedCharacter, scene, resolvedOutfit);
           setVideoSources(sources);
           // currentSrc 用作 key 触发重新渲染
           setCurrentSrc(sources[sources.length - 1]?.src || '');
         } else {
           // 图片场景：单路径
-          const newPath = getMascotResourcePath(activeCharacter, scene, activeOutfit);
+          const newPath = getMascotResourcePath(resolvedCharacter, scene, resolvedOutfit);
           setVideoSources([]);
           setCurrentSrc(newPath);
         }
         setIsTransitioning(false);
+        timerRef.current = null;
       }, 200);
-
-      return () => clearTimeout(timer);
     } catch (error) {
       console.error('Failed to load mascot resource:', error);
       setHasError(true);
       setCurrentSrc('');
     }
-  };
+  }, [resolvedCharacter, resolvedOutfit, scene, src]);
 
+  // 当 resolved 状态变化时，更新资源
   useEffect(() => {
     updateResource();
-  }, [activeCharacter, activeOutfit, scene, src]);
+    return () => {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, [updateResource]);
 
   const videoRef = useRef<HTMLVideoElement>(null);
 

@@ -20,10 +20,10 @@ const AssessmentChat: React.FC = () => {
   const [searchParams] = useSearchParams();
   // 设置页面主题色（状态栏颜色）- 浅蓝灰色
   useThemeColor('#F8F9FD');
-  
+
   // Get language from context
   const language = useLanguage();
-  
+
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [options, setOptions] = useState<string[]>([]);

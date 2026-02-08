@@ -18,7 +18,7 @@ import {
 } from '../../utils/api';
 import { heartbeatManager } from '../../utils/learningHeartbeat';
 import { useLanguage } from '../../utils/LanguageContext';
-import { getSelectedCharacter } from '../../utils/mascotUtils';
+
 import { ROUTES } from '../../utils/routes';
 import { useThemeColor, PAGE_THEME_COLORS } from '../../utils/themeColor';
 
@@ -60,9 +60,6 @@ const QuizView: React.FC = () => {
   // Quiz data from API (loaded after clicking start)
   const [quizData, setQuizData] = useState<QuizGenerateResponse | null>(null);
   const [userAnswers, setUserAnswers] = useState<UserAnswer[]>([]);
-
-  // 获取当前角色（用于 Mascot 组件）
-  const currentCharacter = getSelectedCharacter();
 
   // Start/stop heartbeat when entering/leaving the quiz page
   useEffect(() => {
@@ -322,7 +319,7 @@ const QuizView: React.FC = () => {
         <div className="flex-1 overflow-y-auto no-scrollbar px-8 pb-28 text-center">
           <div className="animate-in fade-in zoom-in slide-in-from-bottom-8 duration-700 flex flex-col items-center max-w-sm mx-auto pt-8">
             <div className="-mt-2 mb-4 relative w-[160px] h-[160px] mx-auto">
-              <Mascot character={currentCharacter} scene="onboarding" outfit="default" width="100%" className="drop-shadow-2xl relative z-10" />
+              <Mascot scene="onboarding" width="100%" className="drop-shadow-2xl relative z-10" />
             </div>
 
             <p className="text-[10px] font-black uppercase tracking-[0.4em] text-secondary mb-3">Assessment Ready</p>

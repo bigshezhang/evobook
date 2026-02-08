@@ -7,7 +7,8 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from './supabase';
 import { getProfile } from './api';
-import { setSelectedCharacter } from './mascotUtils';
+import { setSelectedCharacter, setSelectedOutfit } from './mascotUtils';
+import type { MascotOutfit } from './mascotUtils';
 import type { User, Session } from '@supabase/supabase-js';
 
 // ── Types ──────────────────────────────────────────────
@@ -37,9 +38,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const syncUserProfile = async () => {
       try {
         const profile = await getProfile();
-        // Sync mascot to localStorage if it exists in backend
+        // Sync mascot character to localStorage if it exists in backend
         if (profile.mascot) {
           setSelectedCharacter(profile.mascot as any);
+        }
+        // Sync outfit to localStorage if it exists in backend
+        if (profile.current_outfit) {
+          setSelectedOutfit(profile.current_outfit as MascotOutfit);
         }
       } catch (error) {
         // Ignore errors during profile sync (user might not have profile yet)
