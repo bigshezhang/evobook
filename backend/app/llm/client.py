@@ -225,6 +225,7 @@ class LLMClient:
                 api_base=self._settings.litellm_base_url,
                 api_key=self._settings.litellm_api_key,
                 timeout=self._settings.llm_timeout,
+                custom_llm_provider="openai",  # Force OpenAI-compatible API
             )
 
             content = response.choices[0].message.content
