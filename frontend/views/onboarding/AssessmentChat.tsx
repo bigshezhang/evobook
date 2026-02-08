@@ -27,7 +27,11 @@ const AssessmentChat: React.FC = () => {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  // Track how many messages have been rendered to only animate new ones
+  const renderedMsgCountRef = useRef(0);
+  // Debounce timer for smooth scrolling
+  const scrollTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
   // Discovery preset from URL
   const discoveryPresetId = searchParams.get('preset');
@@ -127,10 +131,30 @@ const AssessmentChat: React.FC = () => {
     };
   }, []);
 
-  // Scroll to bottom when messages update
+  // Debounced scroll-to-bottom: avoids jitter from concurrent layout changes
+  const scrollToBottom = useCallback(() => {
+    if (scrollTimerRef.current) {
+      clearTimeout(scrollTimerRef.current);
+    }
+    scrollTimerRef.current = setTimeout(() => {
+      const container = messagesContainerRef.current;
+      if (!container) return;
+      container.scrollTo({
+        top: container.scrollHeight,
+        behavior: 'smooth',
+      });
+    }, 80);
+  }, []);
+
+  // Scroll when any content changes (messages, loading, options)
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    scrollToBottom();
+  }, [messages, loading, options, scrollToBottom]);
+
+  // Update rendered message count AFTER paint so new messages get animation
+  useEffect(() => {
+    renderedMsgCountRef.current = messages.length;
+  }, [messages.length]);
 
   // Initialize session on mount - reset state first to prevent flash
   useEffect(() => {
@@ -297,7 +321,7 @@ const AssessmentChat: React.FC = () => {
       </header>
 
       {/* Messages Area */}
-      <main className="flex-1 overflow-y-auto px-6 py-6 flex flex-col gap-4 no-scrollbar">
+      <main ref={messagesContainerRef} className="flex-1 overflow-y-auto px-6 py-6 flex flex-col gap-4 no-scrollbar">
         {/* Error Banner */}
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm font-medium">
@@ -306,31 +330,35 @@ const AssessmentChat: React.FC = () => {
         )}
 
         {/* Messages */}
-        {messages.map((message, index) => (
-          <div
-            key={index}
-            className={`flex flex-col gap-2 max-w-[85%] ${
-              message.role === 'user' ? 'self-end' : 'self-start'
-            }`}
-          >
+        {messages.map((message, index) => {
+          // Only animate messages that weren't rendered in the previous paint
+          const isNew = index >= renderedMsgCountRef.current;
+          return (
             <div
-              className={`relative p-4 rounded-bubble shadow-soft border border-white/50 ${
-                message.role === 'user'
-                  ? 'bg-charcoal text-white rounded-tr-none'
-                  : 'bg-white text-[#1a1b23] rounded-tl-none'
-              }`}
+              key={index}
+              className={`flex flex-col gap-2 max-w-[85%] ${
+                message.role === 'user' ? 'self-end' : 'self-start'
+              } ${isNew ? 'animate-bubble-in' : ''}`}
             >
-              <p className="text-[15px] font-semibold whitespace-pre-wrap">{message.content}</p>
-              {message.role === 'assistant' && index === 0 && (
-                <div className="absolute -right-2 -top-2 w-6 h-6 rounded-full three-d-element opacity-80"></div>
-              )}
+              <div
+                className={`relative p-4 rounded-bubble shadow-soft border border-white/50 ${
+                  message.role === 'user'
+                    ? 'bg-charcoal text-white rounded-tr-none'
+                    : 'bg-white text-[#1a1b23] rounded-tl-none'
+                }`}
+              >
+                <p className="text-[15px] font-semibold whitespace-pre-wrap">{message.content}</p>
+                {message.role === 'assistant' && index === 0 && (
+                  <div className="absolute -right-2 -top-2 w-6 h-6 rounded-full three-d-element opacity-80"></div>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
 
         {/* Loading indicator */}
         {loading && (
-          <div className="flex flex-col gap-2 max-w-[85%] self-start">
+          <div className="flex flex-col gap-2 max-w-[85%] self-start animate-bubble-in">
             <div className="relative bg-white p-4 rounded-bubble rounded-tl-none shadow-soft border border-white/50">
               <div className="flex gap-1">
                 <span className="w-2 h-2 bg-gray-300 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
@@ -343,12 +371,12 @@ const AssessmentChat: React.FC = () => {
 
         {/* Options */}
         {options.length > 0 && !loading && (
-          <div className="relative bg-white p-5 rounded-bubble shadow-soft flex flex-col gap-3 border border-white/50 mt-2">
+          <div className="relative bg-white p-5 rounded-bubble shadow-soft flex flex-col gap-3 border border-white/50 mt-2 animate-bubble-in">
             <span className="text-[10px] font-black text-primary uppercase tracking-widest">{text.selectOption}</span>
             <div className="flex flex-wrap gap-2">
-              {options.map((option, index) => (
+              {options.map((option, idx) => (
                 <button
-                  key={index}
+                  key={idx}
                   onClick={() => handleOptionClick(option)}
                   disabled={loading}
                   className={`px-4 py-2.5 rounded-full text-sm font-bold transition-all ${
@@ -363,8 +391,6 @@ const AssessmentChat: React.FC = () => {
             </div>
           </div>
         )}
-
-        <div ref={messagesEndRef} />
       </main>
 
       {/* Input Area */}

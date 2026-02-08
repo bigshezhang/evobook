@@ -143,22 +143,22 @@ const KnowledgeTree: React.FC = () => {
 
   // Show guide for first-time users after data loads
   useEffect(() => {
-    // Check if forced to show guide via URL parameter
+    if (isLoading || error || !courseData) return;
+
     const forceShowGuide = searchParams.get('showGuide') === 'true';
-    
-    if (!isLoading && !error && courseData && nodeProgress.length > 0) {
-      // Small delay to ensure DOM is ready
-      const timer = setTimeout(() => {
-        setShowGuide(true);
-      }, 500);
-      return () => clearTimeout(timer);
-    } else if (forceShowGuide && !isLoading && !error && courseData) {
-      // Force show guide even if nodeProgress is empty
-      const timer = setTimeout(() => {
-        setShowGuide(true);
-      }, 500);
+
+    if (forceShowGuide) {
+      // Forced via URL (e.g., from Profile "View Tutorial" button)
+      const timer = setTimeout(() => setShowGuide(true), 500);
       return () => clearTimeout(timer);
     }
+
+    // Only auto-show guide when nodeProgress is loaded
+    if (nodeProgress.length === 0) return;
+
+    // Let the KnowledgeTreeGuide component check profile internally
+    const timer = setTimeout(() => setShowGuide(true), 500);
+    return () => clearTimeout(timer);
   }, [isLoading, error, courseData, nodeProgress, searchParams]);
 
   // Poll generation progress for nodes that are still generating

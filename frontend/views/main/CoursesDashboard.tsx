@@ -198,7 +198,7 @@ const CoursesDashboard: React.FC = () => {
   return (
     <div className="flex flex-col min-h-screen bg-white pb-32 overflow-x-hidden font-sans">
       {/* Header Section */}
-      <header className="px-6 pt-12 pb-0">
+      <header className="px-6 pt-4 pb-0">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-[32px] font-black tracking-tight text-primary">Courses</h1>
           <div className="flex items-center gap-3">

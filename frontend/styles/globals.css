@@ -238,3 +238,19 @@ body {
 .animate-fade-out-left {
   animation: fade-out-left 0.8s ease-out forwards !important;
 }
+
+/* Chat bubble slide-up entrance animation */
+@keyframes bubble-slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-bubble-in {
+  animation: bubble-slide-up 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+}

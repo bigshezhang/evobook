@@ -156,16 +156,18 @@ const KnowledgeTreeGuide: React.FC<KnowledgeTreeGuideProps> = ({
     actions: {
       primary: {
         label: 'Start Learning',
-        onClick: () => {
-          // Find and click the first available node
+        onClick: async () => {
+          // Find the first available node
           const nodeElement = document.querySelector<HTMLButtonElement>(
             firstAvailableNodeId
               ? `[data-node-id="${firstAvailableNodeId}"]`
               : '[data-dag-container] button:not([disabled])'
           );
           if (nodeElement) {
-            handleComplete(false); // Don't show toast when starting learning
-            setTimeout(() => nodeElement.click(), 300);
+            // Must await completion before clicking the node,
+            // otherwise the onComplete navigate races with the node navigation
+            await handleComplete(false);
+            nodeElement.click();
           } else {
             handleNext();
           }
