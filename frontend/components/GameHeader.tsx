@@ -1,10 +1,13 @@
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 
 const GameHeader: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const [gold, setGold] = useState(12450);
+  const [showGoldChange, setShowGoldChange] = useState<number | null>(null);
+  const [goldAnimating, setGoldAnimating] = useState(false);
 
   const tabs = [
     { label: 'Travel', path: '/game' },
@@ -13,15 +16,50 @@ const GameHeader: React.FC = () => {
 
   const currentTab = tabs.find(t => t.path === location.pathname)?.label || 'Travel';
 
+  // 监听金币变化事件
+  useEffect(() => {
+    const handleGoldChange = (e: CustomEvent) => {
+      console.log('💰 GameHeader received gold-changed event:', e.detail);
+      const amount = e.detail.amount;
+      setGold(prev => prev + amount);
+      setShowGoldChange(amount);
+      setGoldAnimating(true);
+      
+      console.log('💰 Gold animation state set to true');
+      
+      setTimeout(() => {
+        setShowGoldChange(null);
+        console.log('💰 Float-up animation ended');
+      }, 1000);
+      
+      setTimeout(() => {
+        setGoldAnimating(false);
+        console.log('💰 Bounce animation ended');
+      }, 600);
+    };
+
+    window.addEventListener('gold-changed' as any, handleGoldChange as any);
+    console.log('💰 GameHeader: gold-changed listener registered');
+    return () => window.removeEventListener('gold-changed' as any, handleGoldChange as any);
+  }, []);
+
   return (
     <header className="sticky top-0 z-[110] bg-white/95 backdrop-blur-sm border-b border-slate-100 flex flex-col pt-6 pb-3">
       {/* Stats Section - Permanently at the Top */}
       <div className="px-6 py-1 flex items-center justify-between mb-1">
         <div className="flex items-center gap-2">
           {/* Gold */}
-          <div className="flex items-center gap-2 bg-black text-white px-3 py-1.5 rounded-2xl shadow-md border border-white/10">
+          <div className="relative flex items-center gap-2 bg-black text-white px-3 py-1.5 rounded-2xl shadow-md border border-white/10">
             <span className="text-lg">💰</span>
-            <span className="font-black text-xs">12,450</span>
+            <span className={`font-black text-xs ${goldAnimating ? 'animate-coin-bounce' : ''}`}>
+              {gold.toLocaleString()}
+            </span>
+            {/* 飘出的增加数字 */}
+            {showGoldChange && showGoldChange > 0 && (
+              <span className="absolute -top-6 right-0 text-green-500 font-black text-sm animate-float-up pointer-events-none">
+                +{showGoldChange}
+              </span>
+            )}
           </div>
           {/* Level */}
           <div className="flex items-center gap-2 bg-black text-white px-3 py-1.5 rounded-2xl shadow-md border border-white/10">

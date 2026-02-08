@@ -23,11 +23,16 @@ const TravelBoard: React.FC = () => {
   const [isMoving, setIsMoving] = useState(false);
   const [currentStep, setCurrentStep] = useState(0); 
   const [isJumping, setIsJumping] = useState(false);
-  const [eventModal, setEventModal] = useState<{ type: string; title: string; desc: string } | null>(null);
+  const [eventModal, setEventModal] = useState<{ type: string; title: string; desc: string; reward?: number } | null>(null);
   const [activeCourseId, setActiveCourseId] = useState<string | null>(null);
   
   const [path, setPath] = useState<TileData[]>([]);
   const pathRef = useRef<TileData[]>([]);
+
+  // 骰子动画状态
+  const [rollsLeft, setRollsLeft] = useState(15);
+  const [showRollChange, setShowRollChange] = useState<number | null>(null);
+  const [rollAnimating, setRollAnimating] = useState(false);
 
   const TILE_H = 120; 
   const GAP = 40;    
@@ -90,19 +95,35 @@ const TravelBoard: React.FC = () => {
   };
 
   const handleRoll = () => {
-    if (isRolling || isMoving) return;
-    setIsRolling(true);
-    setRollResult(null);
+    if (isRolling || isMoving || rollsLeft <= 0) return;
     
+    console.log('🎲 Rolling dice, rolls left before:', rollsLeft);
+    
+    // 先扣减骰子次数并触发动画（让用户先看到 -1 动画）
+    setRollsLeft(prev => prev - 1);
+    setShowRollChange(-1);
+    setRollAnimating(true);
+    
+    console.log('🎲 Animation triggered: shake + float');
+    
+    setTimeout(() => setShowRollChange(null), 800);
+    setTimeout(() => setRollAnimating(false), 500);
+    
+    // 延迟 600ms 后再显示掷骰遮罩，让 -1 动画先播放完
     setTimeout(() => {
-      const result = Math.floor(Math.random() * 3) + 1; 
-      setRollResult(result);
+      setIsRolling(true);
+      setRollResult(null);
       
       setTimeout(() => {
-        setIsRolling(false);
-        startTravel(result);
-      }, 1200);
-    }, 1000);
+        const result = Math.floor(Math.random() * 4) + 1; // 1-4 均衡概率
+        setRollResult(result);
+        
+        setTimeout(() => {
+          setIsRolling(false);
+          startTravel(result);
+        }, 1200);
+      }, 1000);
+    }, 600);
   };
 
   const startTravel = async (steps: number) => {
@@ -132,17 +153,25 @@ const TravelBoard: React.FC = () => {
       switch (finalTile.type) {
         case 'gold':
           const goldAmount = Math.floor(Math.random() * 151) + 50; // 50-200金币
+          console.log('💰 Gold reward triggered:', goldAmount);
+          
+          // 先只显示弹窗，金币动画在弹窗关闭后触发
           setEventModal({ 
             type: 'gold', 
             title: 'Coins Found!', 
-            desc: `You gained +${goldAmount} Gold` 
+            desc: `You gained +${goldAmount} Gold`,
+            reward: goldAmount
           });
           break;
         case 'roll':
+          console.log('🎲 Roll reward triggered, rolls left before:', rollsLeft);
+          
+          // 先只显示弹窗，骰子动画在弹窗关闭后触发
           setEventModal({ 
             type: 'roll', 
             title: 'Extra Roll!', 
-            desc: 'You gained +1 Dice Roll' 
+            desc: 'You gained +1 Dice Roll',
+            reward: 1
           });
           break;
         case 'gift':
@@ -176,15 +205,28 @@ const TravelBoard: React.FC = () => {
           <div className="flex items-center gap-4">
             <div 
               onClick={handleRoll}
-              className={`w-16 h-16 claymorphic-dice rounded-[20px] flex items-center justify-center transition-all ${isMoving || isRolling ? 'grayscale opacity-50' : 'active:scale-90 cursor-pointer'}`}
+              className={`w-16 h-16 claymorphic-dice rounded-[20px] flex items-center justify-center transition-all ${isMoving || isRolling || rollsLeft <= 0 ? 'grayscale opacity-50' : 'active:scale-90 cursor-pointer'}`}
             >
               <div className="grid grid-cols-2 gap-2">
                 {[...Array(4)].map((_, i) => <div key={i} className="w-2.5 h-2.5 dice-dot rounded-full"></div>)}
               </div>
             </div>
-            <div className="flex flex-col">
-              <span className="text-3xl font-black text-slate-900 leading-none">15</span>
+            <div className="flex flex-col relative">
+              <span className={`text-3xl font-black text-slate-900 leading-none ${rollAnimating ? 'animate-shake-number' : ''}`}>
+                {rollsLeft}
+              </span>
               <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">rolls left</span>
+              
+              {/* 飘出的变化数字 */}
+              {showRollChange !== null && (
+                <span className={`absolute -top-2 -right-6 font-black text-lg pointer-events-none ${
+                  showRollChange > 0 
+                    ? 'text-green-500 animate-float-up' 
+                    : 'text-red-400 animate-fade-out-left'
+                }`}>
+                  {showRollChange > 0 ? `+${showRollChange}` : showRollChange}
+                </span>
+              )}
             </div>
           </div>
           <button 
@@ -311,7 +353,30 @@ const TravelBoard: React.FC = () => {
             <h3 className="text-2xl font-black text-slate-900 mb-2">{eventModal.title}</h3>
             <p className="text-slate-400 font-bold mb-8 text-center">{eventModal.desc}</p>
             <button 
-              onClick={() => setEventModal(null)}
+              onClick={() => {
+                const modal = eventModal;
+                setEventModal(null);
+                
+                // 弹窗关闭后，延迟一小会儿再触发动画，确保弹窗已消失
+                if (modal) {
+                  setTimeout(() => {
+                    if (modal.type === 'gold' && modal.reward) {
+                      // 触发金币增加动画
+                      window.dispatchEvent(new CustomEvent('gold-changed', { detail: { amount: modal.reward } }));
+                      console.log('💰 Dispatched gold-changed event after modal closed:', modal.reward);
+                    } else if (modal.type === 'roll') {
+                      // 触发骰子增加动画
+                      setRollsLeft(prev => prev + 1);
+                      setShowRollChange(1);
+                      setRollAnimating(true);
+                      console.log('🎲 Roll +1 animation triggered after modal closed');
+                      
+                      setTimeout(() => setShowRollChange(null), 800);
+                      setTimeout(() => setRollAnimating(false), 500);
+                    }
+                  }, 200);
+                }
+              }}
               className="w-full py-5 bg-black text-white rounded-full font-black uppercase tracking-widest shadow-xl active:scale-95 transition-transform"
             >
               {eventModal.type === 'gift' ? 'Claim Reward' : 'Collect'}
