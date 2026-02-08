@@ -345,7 +345,7 @@ const KnowledgeCard: React.FC = () => {
   const [searchParams] = useSearchParams();
   // 设置页面主题色（状态栏颜色）
   useThemeColor(PAGE_THEME_COLORS.WHITE);
-  
+
   const cidFromUrl = searchParams.get('cid');
   const nidFromUrl = searchParams.get('nid');
 
@@ -365,7 +365,7 @@ const KnowledgeCard: React.FC = () => {
   // Course map ID for server-side caching
   const [courseMapId, setCourseMapId] = useState<string | undefined>(cidFromUrl || undefined);
 
-  // Course metadata loaded from localStorage
+  // Course metadata loaded from backend API
   const [courseName, setCourseName] = useState('Loading...');
   const [courseContext, setCourseContext] = useState('');
   const [moduleInfo, setModuleInfo] = useState('Module');

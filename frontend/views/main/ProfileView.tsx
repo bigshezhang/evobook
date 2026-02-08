@@ -4,9 +4,10 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../utils/AuthContext';
 import Header from '../../components/Header';
 import BottomNav from '../../components/BottomNav';
-import { getProfileStats, ProfileStats, getInviteCode, InviteCodeData, getUserCourses, CourseListItem, getProfile, updateProfile, Profile } from '../../utils/api';
+import { getProfileStats, ProfileStats, getInviteCode, InviteCodeData, getUserCourses, CourseListItem, getProfile, updateProfile, Profile, getActiveCourse } from '../../utils/api';
 import { getSelectedCharacter } from '../../utils/mascotUtils';
 import { CHARACTER_MAPPING } from '../../utils/mascotConfig';
+import { resetAllStores } from '../../utils/stores';
 import { QRCodeSVG } from 'qrcode.react';
 import { toPng } from 'html-to-image';
 import { ROUTES } from '../../utils/routes';
@@ -34,6 +35,7 @@ const ProfileView: React.FC = () => {
   const [showEditNickname, setShowEditNickname] = useState(false);
   const [editingNickname, setEditingNickname] = useState('');
   const [savingNickname, setSavingNickname] = useState(false);
+  const [startingTutorial, setStartingTutorial] = useState(false);
 
   // 检测屏幕尺寸 - 同时考虑高度和宽度
   useEffect(() => {
@@ -174,6 +176,30 @@ const ProfileView: React.FC = () => {
   const handleDownload = async () => {
     try {
       const blob = await generatePosterBlob();
+      const file = new File([blob], `evobook-invite-${inviteData?.invite_code || 'poster'}.png`, { type: 'image/png' });
+
+      // 在移动设备上优先使用 Web Share API（更好的用户体验）
+      // iOS Safari 全屏模式下，分享可以直接保存到照片，而下载会弹窗预览
+      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+      if (isMobile && navigator.share && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({
+            files: [file],
+            title: 'EvoBook Invite',
+          });
+          showToast('Image shared successfully!');
+          return;
+        } catch (shareError: any) {
+          // 用户取消分享或分享失败，继续尝试下载方式
+          if (shareError.name === 'AbortError') {
+            return; // 用户取消，不显示错误
+          }
+          console.log('Share failed, trying download fallback:', shareError);
+        }
+      }
+
+      // 降级方案：传统下载方式
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -237,6 +263,36 @@ const ProfileView: React.FC = () => {
       }
 
       document.body.removeChild(textArea);
+    }
+  };
+
+  // Handle restart tutorial
+  const handleRestartTutorial = async () => {
+    try {
+      setStartingTutorial(true);
+      
+      // Remove 'knowledge_tree' from guides_completed
+      if (profile?.guides_completed) {
+        const updatedGuides = profile.guides_completed.filter(
+          (guideId) => guideId !== 'knowledge_tree'
+        );
+        await updateProfile({
+          guides_completed: updatedGuides,
+        });
+      }
+
+      // Get active/current course and navigate to it with showGuide parameter
+      const activeCourse = await getActiveCourse();
+      if (activeCourse.course_map_id) {
+        navigate(`${ROUTES.KNOWLEDGE_TREE}?cid=${activeCourse.course_map_id}&showGuide=true`);
+      } else {
+        showToast('No courses found. Complete onboarding first.', 'error');
+      }
+    } catch (error) {
+      console.error('Failed to restart tutorial:', error);
+      showToast('Failed to start tutorial', 'error');
+    } finally {
+      setStartingTutorial(false);
     }
   };
 
@@ -438,8 +494,22 @@ const ProfileView: React.FC = () => {
             </button>
             <div className="h-px bg-slate-100/50 mx-5 my-1"></div>
             <button
+              onClick={handleRestartTutorial}
+              disabled={startingTutorial}
+              className="w-full flex items-center justify-between py-4 px-5 hover:bg-blue-50 rounded-2xl transition-colors disabled:opacity-50"
+            >
+              <div className="flex items-center gap-4">
+                <span className="material-symbols-outlined text-blue-500 text-xl" style={{ fontVariationSettings: "'FILL' 1" }}>school</span>
+                <span className="text-[15px] font-black text-slate-800">
+                  {startingTutorial ? 'Starting...' : 'View Tutorial'}
+                </span>
+              </div>
+              <span className="material-symbols-outlined text-blue-200 text-xl">play_circle</span>
+            </button>
+            <div className="h-px bg-slate-100/50 mx-5 my-1"></div>
+            <button
               onClick={async () => {
-                localStorage.clear();
+                resetAllStores();
                 await signOut();
                 navigate(ROUTES.LOGIN, { replace: true });
               }}

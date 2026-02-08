@@ -4,7 +4,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import Header from '../../components/Header';
 import SuccessFeedbackPill from '../../components/SuccessFeedbackPill';
 import { getCourseDetail, buildLearningPath } from '../../utils/api';
-import { STORAGE_KEYS } from '../../utils/constants';
+import { useAppStore } from '../../utils/stores';
 import { ROUTES } from '../../utils/routes';
 import { useThemeColor, PAGE_THEME_COLORS } from '../../utils/themeColor';
 
@@ -53,13 +53,12 @@ const CourseDetail: React.FC = () => {
 
   const handleSetMainCourse = () => {
     setIsMainCourse(true);
-    // 模拟修改用户数据表中的主页面课程设置
-    localStorage.setItem(STORAGE_KEYS.MAIN_COURSE, 'Neural Networks');
+    useAppStore.getState().setMainCourse('Neural Networks');
     setShowSuccess(true);
   };
 
   const handleConfirm = () => {
-    localStorage.setItem(STORAGE_KEYS.ONBOARDING_COMPLETED, 'true');
+    useAppStore.getState().setOnboardingCompleted(true);
     navigate(buildLearningPath(ROUTES.KNOWLEDGE_TREE, { cid: cidFromUrl }));
   };
 

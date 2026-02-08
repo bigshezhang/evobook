@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { generateCourseMap, STORAGE_KEYS, BUSINESS_CONFIG, FinishData, Mode, buildLearningPath } from '../../utils/api';
+import { generateCourseMap, BUSINESS_CONFIG, FinishData, Mode, buildLearningPath } from '../../utils/api';
+import { useAppStore } from '../../utils/stores';
 import { ROUTES } from '../../utils/routes';
 import { useThemeColor, PAGE_THEME_COLORS } from '../../utils/themeColor';
 
@@ -35,16 +36,14 @@ const GeneratingCourse: React.FC = () => {
       if (abortController.signal.aborted) return;
 
       try {
-        // Read onboarding data from localStorage
-        const onboardingDataStr = localStorage.getItem(STORAGE_KEYS.ONBOARDING_DATA);
-        if (!onboardingDataStr) {
-          console.error('No onboarding data found in localStorage');
+        // Read onboarding data from store
+        const onboardingData = useAppStore.getState().onboardingData;
+        if (!onboardingData) {
+          console.error('No onboarding data found in store');
           setState({ status: 'error', progress: 0, errorMessage: 'Please complete onboarding first' });
           setTimeout(() => navigate(ROUTES.ASSESSMENT), 2000);
           return;
         }
-
-        const onboardingData: FinishData = JSON.parse(onboardingDataStr);
         setTopicName(onboardingData.topic);
 
         // Animate progress
@@ -80,7 +79,7 @@ const GeneratingCourse: React.FC = () => {
         setState({ status: 'success', progress: 100 });
 
         // Mark onboarding as completed
-        localStorage.setItem(STORAGE_KEYS.ONBOARDING_COMPLETED, 'true');
+        useAppStore.getState().setOnboardingCompleted(true);
 
         // Navigate to knowledge tree after brief delay
         setTimeout(() => navigate(buildLearningPath(ROUTES.KNOWLEDGE_TREE, { cid: response.course_map_id })), 800);

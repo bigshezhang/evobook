@@ -51,11 +51,16 @@ export default defineConfig(({ mode }) => {
         // 代码分割优化
         rollupOptions: {
           output: {
-            manualChunks: {
-              // 将 React 相关库单独打包
-              'react-vendor': ['react', 'react-dom', 'react-router-dom'],
-              // 将工具库单独打包
-              'utils': ['./utils/api', './utils/mascotUtils', './utils/mascotConfig'],
+            manualChunks(id) {
+              // Vendor: React ecosystem
+              if (id.includes('node_modules/react') || id.includes('node_modules/react-dom') || id.includes('node_modules/react-router')) {
+                return 'react-vendor';
+              }
+              // Shared utilities (only for statically-imported modules)
+              if (id.includes('/utils/api') || id.includes('/utils/mascotUtils') || id.includes('/utils/mascotConfig')) {
+                return 'utils';
+              }
+              // Let dynamic imports (lazy routes) produce their own chunks
             },
             // 资源文件命名
             assetFileNames: (assetInfo) => {

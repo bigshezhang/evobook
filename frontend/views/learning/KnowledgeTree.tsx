@@ -3,6 +3,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import Header from '../../components/Header';
 import BottomNav from '../../components/BottomNav';
+import KnowledgeTreeGuide from '../../components/Guide/KnowledgeTreeGuide';
 import {
   getCourseDetail,
   getNodeProgress,
@@ -57,6 +58,9 @@ const KnowledgeTree: React.FC = () => {
   // Course navigation state
   const [allCourses, setAllCourses] = useState<CourseListItem[]>([]);
   const [currentCourseIndex, setCurrentCourseIndex] = useState<number>(0);
+
+  // Guide state
+  const [showGuide, setShowGuide] = useState(false);
 
   useEffect(() => {
     const loadCourseData = async () => {
@@ -115,6 +119,26 @@ const KnowledgeTree: React.FC = () => {
 
     loadCourseData();
   }, [cidFromUrl]);
+
+  // Show guide for first-time users after data loads
+  useEffect(() => {
+    // Check if forced to show guide via URL parameter
+    const forceShowGuide = searchParams.get('showGuide') === 'true';
+    
+    if (!isLoading && !error && courseData && nodeProgress.length > 0) {
+      // Small delay to ensure DOM is ready
+      const timer = setTimeout(() => {
+        setShowGuide(true);
+      }, 500);
+      return () => clearTimeout(timer);
+    } else if (forceShowGuide && !isLoading && !error && courseData) {
+      // Force show guide even if nodeProgress is empty
+      const timer = setTimeout(() => {
+        setShowGuide(true);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [isLoading, error, courseData, nodeProgress, searchParams]);
 
   // Poll generation progress for nodes that are still generating
   useEffect(() => {
@@ -480,7 +504,7 @@ const KnowledgeTree: React.FC = () => {
       <div className="flex-1 overflow-y-auto no-scrollbar pb-40">
         {/* Course Progress Banner with Navigation */}
         <div className="px-6 mb-4 relative mt-4">
-          <div className={`${bannerColor} rounded-[28px] p-6 text-white shadow-xl relative overflow-hidden transition-colors duration-500`}>
+          <div data-course-banner className={`${bannerColor} rounded-[28px] p-6 text-white shadow-xl relative overflow-hidden transition-colors duration-500`}>
             {/* Content Container */}
             <div className="relative z-10 flex items-center gap-4">
               {/* Left Arrow */}
@@ -571,6 +595,7 @@ const KnowledgeTree: React.FC = () => {
                     return (
                       <button
                         key={node.id}
+                        data-node-id={node.id}
                         ref={(el) => {
                           if (el) nodeRefs.current.set(node.id, el);
                           else nodeRefs.current.delete(node.id);
@@ -620,6 +645,33 @@ const KnowledgeTree: React.FC = () => {
       </div>
 
       <BottomNav activeTab="learning" />
+
+      {/* Knowledge Tree Guide */}
+      {showGuide && (
+        <KnowledgeTreeGuide
+          onComplete={() => {
+            setShowGuide(false);
+            // Remove showGuide parameter from URL but keep cid
+            if (searchParams.has('showGuide')) {
+              const cid = searchParams.get('cid');
+              navigate(cid ? `?cid=${cid}` : '', { replace: true });
+            }
+          }}
+          onSkip={() => {
+            setShowGuide(false);
+            // Remove showGuide parameter from URL but keep cid
+            if (searchParams.has('showGuide')) {
+              const cid = searchParams.get('cid');
+              navigate(cid ? `?cid=${cid}` : '', { replace: true });
+            }
+          }}
+          hasMultipleCourses={allCourses.length > 1}
+          firstAvailableNodeId={
+            courseData?.nodes.find((node) => getNodeState(node.id) === 'current')?.id
+          }
+          forceShow={searchParams.get('showGuide') === 'true'}
+        />
+      )}
     </div>
   );
 };

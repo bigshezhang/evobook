@@ -1,14 +1,11 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { onboardingNext, isChatResponse, isFinishResponse, type OnboardingResponse, STORAGE_KEYS } from '../../utils/api';
-import { STORAGE_KEY_SELECTED_TOPIC } from './InterestSelection';
+import { onboardingNext, isChatResponse, isFinishResponse, type OnboardingResponse } from '../../utils/api';
 import { getSelectedCharacter, type MascotCharacter } from '../../utils/mascotUtils';
+import { useAppStore } from '../../utils/stores';
 import { ROUTES } from '../../utils/routes';
 import { useThemeColor, PAGE_THEME_COLORS } from '../../utils/themeColor';
 import { useLanguage } from '../../utils/LanguageContext';
-
-// Storage key for session data
-export const STORAGE_KEY_SESSION_ID = 'evo_assessment_session_id';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -84,8 +81,8 @@ const AssessmentChat: React.FC = () => {
 
   // Function to clear all session-related data
   const clearSessionData = useCallback(() => {
-    localStorage.removeItem(STORAGE_KEY_SESSION_ID);
-    localStorage.removeItem(STORAGE_KEY_SELECTED_TOPIC);
+    useAppStore.getState().setAssessmentSessionId(null);
+    useAppStore.getState().setSelectedTopic(null);
   }, []);
 
   // Function to reset component state
@@ -110,11 +107,11 @@ const AssessmentChat: React.FC = () => {
   }, [clearSessionData, resetState, navigate]);
 
   useEffect(() => {
-    const completed = localStorage.getItem(STORAGE_KEYS.ONBOARDING_COMPLETED) === 'true';
+    const completed = useAppStore.getState().onboardingCompleted;
     setIsOnboarding(!completed);
 
-    // Read selected topic from localStorage
-    const topic = localStorage.getItem(STORAGE_KEY_SELECTED_TOPIC);
+    // Read selected topic from store
+    const topic = useAppStore.getState().selectedTopic;
     if (topic) {
       setSelectedTopic(topic);
     }
@@ -152,7 +149,7 @@ const AssessmentChat: React.FC = () => {
       setError(null);
       try {
         // Read selected topic for initial context
-        const topic = localStorage.getItem(STORAGE_KEY_SELECTED_TOPIC);
+        const topic = useAppStore.getState().selectedTopic;
 
         // Pass initial_topic to skip Phase 1 if topic is pre-selected
         // Backend will start at calibration phase directly
@@ -195,13 +192,13 @@ const AssessmentChat: React.FC = () => {
 
       // Save data and navigate after a brief delay
       setTimeout(() => {
-        localStorage.setItem(STORAGE_KEYS.ONBOARDING_DATA, JSON.stringify(response.data));
+        useAppStore.getState().setOnboardingData(response.data);
         // Clear the selected topic as it's no longer needed
-        localStorage.removeItem(STORAGE_KEY_SELECTED_TOPIC);
+        useAppStore.getState().setSelectedTopic(null);
 
         // Check if user has completed onboarding before
         // If yes, skip companion setup and go straight to generating
-        const hasCompletedOnboarding = localStorage.getItem(STORAGE_KEYS.ONBOARDING_COMPLETED) === 'true';
+        const hasCompletedOnboarding = useAppStore.getState().onboardingCompleted;
 
         if (hasCompletedOnboarding) {
           // Returning user: skip personal setup, go straight to course generation

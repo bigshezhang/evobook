@@ -732,6 +732,7 @@ export interface Profile {
   display_name: string | null;
   mascot: string | null;
   onboarding_completed: boolean;
+  guides_completed: string[];
   gold_balance: number;
   dice_rolls_count: number;
   level: number;
@@ -746,6 +747,7 @@ export interface ProfileUpdateRequest {
   display_name?: string | null;
   mascot?: string | null;
   onboarding_completed?: boolean | null;
+  guides_completed?: string[];
 }
 
 /**

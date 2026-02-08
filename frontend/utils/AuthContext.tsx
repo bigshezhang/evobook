@@ -1,17 +1,18 @@
 /**
- * React context for Supabase authentication state.
+ * Authentication hook backed by Zustand store.
  *
- * Wrapping the app with <AuthProvider> gives every descendant access to the
- * current user / session via the useAuth() hook.
+ * Formerly a React Context; now a thin wrapper around useAuthStore.
+ * The useAuth() hook signature is preserved for backward compatibility
+ * so all consumers continue to work without modification.
+ *
+ * Auth listener initialization is handled by initAuthListener() in
+ * authStore.ts, called once in App.tsx.
  */
-import React, { createContext, useContext, useEffect, useState } from 'react';
-import { supabase } from './supabase';
-import { getProfile } from './api';
-import { setSelectedCharacter, setSelectedOutfit } from './mascotUtils';
-import type { MascotOutfit } from './mascotUtils';
+
+import { useAuthStore } from './stores/authStore';
 import type { User, Session } from '@supabase/supabase-js';
 
-// ── Types ──────────────────────────────────────────────
+// ── Types (unchanged) ──────────────────────────────────
 
 interface AuthContextValue {
   user: User | null;
@@ -22,88 +23,16 @@ interface AuthContextValue {
   signOut: () => Promise<void>;
 }
 
-// ── Context ────────────────────────────────────────────
-
-const AuthContext = createContext<AuthContextValue | undefined>(undefined);
-
-// ── Provider ───────────────────────────────────────────
-
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    // Helper to sync user profile from backend
-    const syncUserProfile = async () => {
-      try {
-        const profile = await getProfile();
-        // Sync mascot character to localStorage if it exists in backend
-        if (profile.mascot) {
-          setSelectedCharacter(profile.mascot as any);
-        }
-        // Sync outfit to localStorage if it exists in backend
-        if (profile.current_outfit) {
-          setSelectedOutfit(profile.current_outfit as MascotOutfit);
-        }
-      } catch (error) {
-        // Ignore errors during profile sync (user might not have profile yet)
-        console.debug('Profile sync skipped:', error);
-      }
-    };
-
-    // 1. Fetch the session that may already exist (e.g. from a stored refresh token)
-    supabase.auth.getSession().then(({ data: { session: currentSession } }) => {
-      setSession(currentSession);
-      setUser(currentSession?.user ?? null);
-
-      // Sync profile if user is logged in
-      if (currentSession?.user) {
-        syncUserProfile();
-      }
-
-      setLoading(false);
-    });
-
-    // 2. Subscribe to auth state changes (login, logout, token refresh, etc.)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, newSession) => {
-        setSession(newSession);
-        setUser(newSession?.user ?? null);
-
-        // Sync profile when user logs in
-        if (newSession?.user) {
-          syncUserProfile();
-        }
-
-        setLoading(false);
-      },
-    );
-
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, []);
-
-  const signOut = async () => {
-    await supabase.auth.signOut();
-    setUser(null);
-    setSession(null);
-  };
-
-  return (
-    <AuthContext.Provider value={{ user, session, loading, signOut }}>
-      {children}
-    </AuthContext.Provider>
-  );
-};
-
-// ── Hook ───────────────────────────────────────────────
+// ── Hook (signature unchanged) ─────────────────────────
 
 export function useAuth(): AuthContextValue {
-  const ctx = useContext(AuthContext);
-  if (ctx === undefined) {
-    throw new Error('useAuth must be used within an <AuthProvider>');
-  }
-  return ctx;
+  const user = useAuthStore((s) => s.user);
+  const session = useAuthStore((s) => s.session);
+  const loading = useAuthStore((s) => s.loading);
+  const signOut = useAuthStore((s) => s.signOut);
+
+  return { user, session, loading, signOut };
 }
+
+// Re-export initAuthListener so App.tsx can call it
+export { initAuthListener } from './stores/authStore';

@@ -1,39 +1,54 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { Suspense, useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
-import { AuthProvider, useAuth } from './utils/AuthContext';
-import { LanguageProvider } from './utils/LanguageContext';
+import { useAuth, initAuthListener } from './utils/AuthContext';
 import { storeInviteCode, processPendingInvite } from './utils/inviteHandler';
 import { getUserCourses } from './utils/api';
-import { STORAGE_KEYS } from './utils/constants';
+import { useAppStore, resetAllStores } from './utils/stores';
 import { ROUTES } from './utils/routes';
 import SuccessFeedbackPill from './components/SuccessFeedbackPill';
+import { lazyWithPreload } from './utils/lazyImport';
 
-// Auth Views
-import LoginView from './views/auth/LoginView';
+// ── Lazy-loaded view components ─────────────────────────
+// Auth
+const LoginView = lazyWithPreload(() => import('./views/auth/LoginView'));
 
-// Views
-import WelcomeView from './views/onboarding/WelcomeView';
-import InterestSelection from './views/onboarding/InterestSelection';
-import AssessmentChat from './views/onboarding/AssessmentChat';
-import CompanionSelection from './views/onboarding/CompanionSelection';
-import NotificationPermission from './views/onboarding/NotificationPermission';
-import GeneratingCourse from './views/onboarding/GeneratingCourse';
-import CourseDetail from './views/learning/CourseDetail';
-import KnowledgeTree from './views/learning/KnowledgeTree';
-import CoursesDashboard from './views/main/CoursesDashboard';
-import DiscoveryList from './views/main/DiscoveryList';
-import ProfileView from './views/main/ProfileView';
-import KnowledgeCard from './views/learning/KnowledgeCard';
-import QuizView from './views/learning/QuizView';
-import QuizHistoryList from './views/learning/QuizHistoryList';
-import QuizAttemptDetail from './views/learning/QuizAttemptDetail';
-import QADetailModal from './views/learning/QADetailModal';
+// Onboarding
+const WelcomeView = lazyWithPreload(() => import('./views/onboarding/WelcomeView'));
+const InterestSelection = lazyWithPreload(() => import('./views/onboarding/InterestSelection'));
+const AssessmentChat = lazyWithPreload(() => import('./views/onboarding/AssessmentChat'));
+const CompanionSelection = lazyWithPreload(() => import('./views/onboarding/CompanionSelection'));
+const NotificationPermission = lazyWithPreload(() => import('./views/onboarding/NotificationPermission'));
+const GeneratingCourse = lazyWithPreload(() => import('./views/onboarding/GeneratingCourse'));
 
-// Game Views
-import GameLayout from './views/game/GameLayout';
-import TravelBoard from './views/game/TravelBoard';
-import OutfitView from './views/game/OutfitView';
+// Learning
+const CourseDetail = lazyWithPreload(() => import('./views/learning/CourseDetail'));
+const KnowledgeTree = lazyWithPreload(() => import('./views/learning/KnowledgeTree'));
+const KnowledgeCard = lazyWithPreload(() => import('./views/learning/KnowledgeCard'));
+const QuizView = lazyWithPreload(() => import('./views/learning/QuizView'));
+const QuizHistoryList = lazyWithPreload(() => import('./views/learning/QuizHistoryList'));
+const QuizAttemptDetail = lazyWithPreload(() => import('./views/learning/QuizAttemptDetail'));
+const QADetailModal = lazyWithPreload(() => import('./views/learning/QADetailModal'));
+
+// Main
+const CoursesDashboard = lazyWithPreload(() => import('./views/main/CoursesDashboard'));
+const DiscoveryList = lazyWithPreload(() => import('./views/main/DiscoveryList'));
+const ProfileView = lazyWithPreload(() => import('./views/main/ProfileView'));
+
+// Game
+const GameLayout = lazyWithPreload(() => import('./views/game/GameLayout'));
+const TravelBoard = lazyWithPreload(() => import('./views/game/TravelBoard'));
+const OutfitView = lazyWithPreload(() => import('./views/game/OutfitView'));
+
+// ── Initialize auth listener once at module level ──────
+initAuthListener();
+
+// ── Loading fallback for Suspense ────────────────────────
+const PageLoadingSpinner: React.FC = () => (
+  <div className="flex items-center justify-center h-screen bg-white">
+    <span className="inline-block w-10 h-10 border-4 border-gray-200 border-t-secondary rounded-full animate-spin" />
+  </div>
+);
 
 // ── ProtectedRoute ─────────────────────────────────────
 // Shows a loading spinner while auth is being checked, then either renders
@@ -92,11 +107,11 @@ const AppInternals: React.FC = () => {
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
 
-  // Handle reset parameter - clears localStorage and navigates to root
+  // Handle reset parameter - clears all stores and navigates to root
   useEffect(() => {
     const resetParam = searchParams.get('reset');
     if (resetParam === '1') {
-      localStorage.clear();
+      resetAllStores();
       navigate(ROUTES.ROOT, { replace: true });
     }
   }, [searchParams, navigate]);
@@ -136,40 +151,42 @@ const AppInternals: React.FC = () => {
 
   return (
     <>
-      <Routes>
-        {/* Public route — login / signup */}
-        <Route path={ROUTES.LOGIN} element={<LoginView />} />
+      <Suspense fallback={<PageLoadingSpinner />}>
+        <Routes>
+          {/* Public route — login / signup */}
+          <Route path={ROUTES.LOGIN} element={<LoginView />} />
 
-        {/* Onboarding Flow */}
-        <Route path={ROUTES.ROOT} element={<ProtectedRoute><RootRedirect /></ProtectedRoute>} />
-        <Route path={ROUTES.INTERESTS} element={<ProtectedRoute><InterestSelection /></ProtectedRoute>} />
-        <Route path={ROUTES.ASSESSMENT} element={<ProtectedRoute><AssessmentChatWithKey /></ProtectedRoute>} />
-        <Route path={ROUTES.COMPANION} element={<ProtectedRoute><CompanionSelection /></ProtectedRoute>} />
-        <Route path={ROUTES.NOTIFICATIONS} element={<ProtectedRoute><NotificationPermission /></ProtectedRoute>} />
-        <Route path={ROUTES.GENERATING} element={<ProtectedRoute><GeneratingCourse /></ProtectedRoute>} />
+          {/* Onboarding Flow */}
+          <Route path={ROUTES.ROOT} element={<ProtectedRoute><RootRedirect /></ProtectedRoute>} />
+          <Route path={ROUTES.INTERESTS} element={<ProtectedRoute><InterestSelection /></ProtectedRoute>} />
+          <Route path={ROUTES.ASSESSMENT} element={<ProtectedRoute><AssessmentChatWithKey /></ProtectedRoute>} />
+          <Route path={ROUTES.COMPANION} element={<ProtectedRoute><CompanionSelection /></ProtectedRoute>} />
+          <Route path={ROUTES.NOTIFICATIONS} element={<ProtectedRoute><NotificationPermission /></ProtectedRoute>} />
+          <Route path={ROUTES.GENERATING} element={<ProtectedRoute><GeneratingCourse /></ProtectedRoute>} />
 
-        {/* Main Learning Flow */}
-        <Route path={ROUTES.COURSE_DETAIL} element={<ProtectedRoute><CourseDetail /></ProtectedRoute>} />
-        <Route path={ROUTES.KNOWLEDGE_TREE} element={<ProtectedRoute><KnowledgeTree /></ProtectedRoute>} />
-        <Route path={ROUTES.KNOWLEDGE_CARD} element={<ProtectedRoute><KnowledgeCardWithKey /></ProtectedRoute>} />
-        <Route path={ROUTES.QUIZ} element={<ProtectedRoute><QuizView /></ProtectedRoute>} />
-        <Route path={ROUTES.QUIZ_HISTORY} element={<ProtectedRoute><QuizHistoryList /></ProtectedRoute>} />
-        <Route path={ROUTES.QUIZ_ATTEMPT} element={<ProtectedRoute><QuizAttemptDetail /></ProtectedRoute>} />
-        <Route path={ROUTES.QA_DETAIL} element={<ProtectedRoute><QADetailRouteView /></ProtectedRoute>} />
+          {/* Main Learning Flow */}
+          <Route path={ROUTES.COURSE_DETAIL} element={<ProtectedRoute><CourseDetail /></ProtectedRoute>} />
+          <Route path={ROUTES.KNOWLEDGE_TREE} element={<ProtectedRoute><KnowledgeTree /></ProtectedRoute>} />
+          <Route path={ROUTES.KNOWLEDGE_CARD} element={<ProtectedRoute><KnowledgeCardWithKey /></ProtectedRoute>} />
+          <Route path={ROUTES.QUIZ} element={<ProtectedRoute><QuizView /></ProtectedRoute>} />
+          <Route path={ROUTES.QUIZ_HISTORY} element={<ProtectedRoute><QuizHistoryList /></ProtectedRoute>} />
+          <Route path={ROUTES.QUIZ_ATTEMPT} element={<ProtectedRoute><QuizAttemptDetail /></ProtectedRoute>} />
+          <Route path={ROUTES.QA_DETAIL} element={<ProtectedRoute><QADetailRouteView /></ProtectedRoute>} />
 
-        {/* Game Flow - 使用嵌套路由共享 GameLayout，避免切换时 GameHeader 重新挂载 */}
-        <Route path="/game" element={<ProtectedRoute><GameLayout /></ProtectedRoute>}>
-          <Route index element={<TravelBoard />} />
-          <Route path="outfit" element={<OutfitView />} />
-        </Route>
+          {/* Game Flow - nested routes share GameLayout to avoid GameHeader remount */}
+          <Route path="/game" element={<ProtectedRoute><GameLayout /></ProtectedRoute>}>
+            <Route index element={<TravelBoard />} />
+            <Route path="outfit" element={<OutfitView />} />
+          </Route>
 
-        {/* Main Navigation Tabs */}
-        <Route path={ROUTES.COURSES} element={<ProtectedRoute><CoursesDashboard /></ProtectedRoute>} />
-        <Route path={`${ROUTES.DISCOVERY}/:category`} element={<ProtectedRoute><DiscoveryList /></ProtectedRoute>} />
-        <Route path={ROUTES.PROFILE} element={<ProtectedRoute><ProfileView /></ProtectedRoute>} />
+          {/* Main Navigation Tabs */}
+          <Route path={ROUTES.COURSES} element={<ProtectedRoute><CoursesDashboard /></ProtectedRoute>} />
+          <Route path={`${ROUTES.DISCOVERY}/:category`} element={<ProtectedRoute><DiscoveryList /></ProtectedRoute>} />
+          <Route path={ROUTES.PROFILE} element={<ProtectedRoute><ProfileView /></ProtectedRoute>} />
 
-        <Route path="*" element={<Navigate to={ROUTES.ROOT} />} />
-      </Routes>
+          <Route path="*" element={<Navigate to={ROUTES.ROOT} />} />
+        </Routes>
+      </Suspense>
 
       <SuccessFeedbackPill
         isOpen={showToast}
@@ -189,8 +206,8 @@ const RootRedirect: React.FC = () => {
   React.useEffect(() => {
     const checkUserCourses = async () => {
       try {
-        // Check localStorage first for quick decision
-        const onboardingDone = localStorage.getItem(STORAGE_KEYS.ONBOARDING_COMPLETED) === 'true';
+        // Check store first for quick decision
+        const onboardingDone = useAppStore.getState().onboardingCompleted;
 
         if (onboardingDone) {
           // User has completed onboarding before, go to courses
@@ -204,7 +221,7 @@ const RootRedirect: React.FC = () => {
 
         if (data.courses && data.courses.length > 0) {
           // User has courses, mark onboarding as done and go to dashboard
-          localStorage.setItem(STORAGE_KEYS.ONBOARDING_COMPLETED, 'true');
+          useAppStore.getState().setOnboardingCompleted(true);
           setHasCourses(true);
         } else {
           // New user, show onboarding
@@ -239,30 +256,29 @@ const RootRedirect: React.FC = () => {
 
 const App: React.FC = () => {
   useEffect(() => {
-    // iOS Safari 全屏优化
+    // iOS Safari fullscreen optimization
     const setupIOSFullscreen = () => {
-      // 1. 防止下拉刷新
+      // 1. Prevent pull-to-refresh
       document.body.addEventListener('touchmove', (e) => {
         if (e.touches.length > 1) {
           e.preventDefault();
         }
       }, { passive: false });
 
-      // 2. 滚动到顶部时隐藏地址栏
+      // 2. Scroll to top to hide address bar
       const hideAddressBar = () => {
         if (window.scrollY === 0) {
           window.scrollTo(0, 1);
         }
       };
 
-      // 3. 页面加载完成后隐藏地址栏
+      // 3. Hide address bar after page load
       window.addEventListener('load', hideAddressBar);
       document.addEventListener('DOMContentLoaded', hideAddressBar);
 
-      // 4. iOS 设备检测并设置全屏高度
+      // 4. iOS device detection and viewport height setup
       const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
       if (isIOS) {
-        // 设置视口高度为实际可视高度
         const setViewportHeight = () => {
           const vh = window.innerHeight * 0.01;
           document.documentElement.style.setProperty('--vh', `${vh}px`);
@@ -284,15 +300,11 @@ const App: React.FC = () => {
   }, []);
 
   return (
-    <AuthProvider>
-      <LanguageProvider>
-        <BrowserRouter>
-          <div className="max-w-lg mx-auto min-h-screen bg-white shadow-xl relative overflow-x-hidden">
-            <AppInternals />
-          </div>
-        </BrowserRouter>
-      </LanguageProvider>
-    </AuthProvider>
+    <BrowserRouter>
+      <div className="max-w-lg mx-auto min-h-screen bg-white shadow-xl relative overflow-x-hidden">
+        <AppInternals />
+      </div>
+    </BrowserRouter>
   );
 };
 

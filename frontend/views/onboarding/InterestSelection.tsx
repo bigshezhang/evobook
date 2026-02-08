@@ -1,13 +1,9 @@
 
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { STORAGE_KEYS } from '../../utils/constants';
+import { useAppStore } from '../../utils/stores';
 import { ROUTES } from '../../utils/routes';
 import { useThemeColor, PAGE_THEME_COLORS } from '../../utils/themeColor';
-
-// Re-export for backward compatibility
-export const STORAGE_KEY_SELECTED_TOPIC = STORAGE_KEYS.SELECTED_TOPIC;
-const STORAGE_KEY_SESSION_ID = STORAGE_KEYS.ASSESSMENT_SESSION_ID;
 
 const interests = [
   { id: 'ai', label: 'AI', icon: 'smart_toy', color: 'bg-violet-200' },
@@ -88,10 +84,10 @@ const InterestSelection: React.FC = () => {
 
     // CRITICAL: Clear any existing session data before starting a new assessment
     // This ensures a fresh start and prevents flash of old content
-    localStorage.removeItem(STORAGE_KEY_SESSION_ID);
+    useAppStore.getState().setAssessmentSessionId(null);
 
-    // Save selected topic to localStorage for AssessmentChat to read
-    localStorage.setItem(STORAGE_KEY_SELECTED_TOPIC, topic);
+    // Save selected topic to store for AssessmentChat to read
+    useAppStore.getState().setSelectedTopic(topic);
 
     // Navigate to AssessmentChat
     navigate(ROUTES.ASSESSMENT);
