@@ -389,9 +389,8 @@ const QuizView: React.FC = () => {
           }
           navigate(buildLearningPath('/knowledge-tree', { cid: courseMapId }));
         }} 
-        correctCount={quizStats.correct}
-        totalCount={quizStats.total}
-        goldEarned={quizStats.gold}
+        diceRolls={2}
+        expEarned={50}
       />
     </div>
   );

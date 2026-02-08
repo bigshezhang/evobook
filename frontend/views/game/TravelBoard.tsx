@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import GameHeader from '../../components/GameHeader';
 import BottomNav from '../../components/BottomNav';
 import Mascot from '../../components/Mascot';
-import { buildLearningPath, getStoredCourseMapId } from '../../utils/api';
+import { buildLearningPath, getActiveCourse } from '../../utils/api';
 
 type TileType = 'gold' | 'xp' | 'roll' | 'normal' | 'star' | 'gift' | 'map';
 
@@ -23,6 +23,7 @@ const TravelBoard: React.FC = () => {
   const [currentStep, setCurrentStep] = useState(0); 
   const [isJumping, setIsJumping] = useState(false);
   const [eventModal, setEventModal] = useState<{ type: string; title: string; desc: string } | null>(null);
+  const [activeCourseId, setActiveCourseId] = useState<string | null>(null);
   
   const [path, setPath] = useState<TileData[]>([]);
   const pathRef = useRef<TileData[]>([]);
@@ -33,7 +34,17 @@ const TravelBoard: React.FC = () => {
 
   useEffect(() => {
     generateMoreTiles(50);
+    loadActiveCourse();
   }, []);
+
+  const loadActiveCourse = async () => {
+    try {
+      const { course_map_id } = await getActiveCourse();
+      setActiveCourseId(course_map_id);
+    } catch (error) {
+      console.error('Failed to load active course:', error);
+    }
+  };
 
   const generateMoreTiles = (count: number) => {
     const types: TileType[] = ['normal', 'gold', 'map', 'gift', 'star', 'roll', 'xp', 'normal'];
@@ -129,7 +140,13 @@ const TravelBoard: React.FC = () => {
             </div>
           </div>
           <button 
-            onClick={() => navigate(buildLearningPath('/knowledge-tree', { cid: getStoredCourseMapId() }))}
+            onClick={() => {
+              if (activeCourseId) {
+                navigate(buildLearningPath('/knowledge-tree', { cid: activeCourseId }));
+              } else {
+                navigate('/courses');
+              }
+            }}
             className="flex items-center gap-2 bg-black text-white px-5 py-3 rounded-full shadow-xl active:scale-95 transition-all"
           >
             <span className="material-symbols-outlined text-[18px]">auto_stories</span>

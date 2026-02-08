@@ -130,7 +130,7 @@ const OutfitView: React.FC = () => {
         </div>
 
         <div className="flex-1 overflow-y-auto no-scrollbar pb-28">
-          <div className={`grid gap-4 p-1 ${category === 'Clothes' ? 'grid-cols-3' : 'grid-cols-2'}`}>
+          <div className={`grid gap-3 p-1 ${category === 'Clothes' ? 'grid-cols-3' : 'grid-cols-2'}`}>
             {items.map(item => {
               // 检查当前衣服是否正在穿着
               const isUsed = item.outfit && item.outfit === currentOutfit;
@@ -145,16 +145,24 @@ const OutfitView: React.FC = () => {
                       setSelectedOutfit(item.outfit);
                     }
                   }}
-                  className={`bg-slate-50/50 rounded-[32px] p-3 border-2 flex flex-col items-center justify-center relative transition-all duration-200 cursor-pointer active:scale-95 ${
-                    category === 'Clothes' ? 'aspect-square' : 'aspect-video'
-                  } ${
+                  className={`bg-slate-50/50 rounded-[24px] p-2 border-2 flex flex-col items-center justify-center relative transition-all duration-200 cursor-pointer active:scale-95 aspect-square ${
                     item.owned ? 'border-primary/20 bg-white shadow-sm' : 'border-transparent'
                   }`}
                 >
-                  {item.owned && <div className="absolute top-3 right-3 w-2.5 h-2.5 bg-primary rounded-full shadow-lg ring-2 ring-white"></div>}
+                  {/* Mine: 显示拥有标记 */}
+                  {activeSubTab === 'Mine' && item.owned && (
+                    <div className="absolute top-2 right-2 w-2.5 h-2.5 bg-primary rounded-full shadow-lg ring-2 ring-white"></div>
+                  )}
                   
                   {/* 显示商品内容 */}
-                  <div className="w-full h-full flex items-center justify-center">
+                  <div className="w-full h-full flex items-center justify-center relative">
+                    {/* Shop: 显示价格标签 */}
+                    {activeSubTab === 'Shop' && item.price > 0 && (
+                      <div className="absolute top-0 right-0 bg-black/80 backdrop-blur-sm px-2 py-1 rounded-full flex items-center gap-0.5 shadow-lg z-10">
+                        <span className="material-symbols-outlined text-amber-400 text-[14px]" style={{ fontVariationSettings: "'FILL' 1" }}>toll</span>
+                        <span className="text-[10px] font-black text-white">{item.price}</span>
+                      </div>
+                    )}
                     {item.outfit ? (
                       item.outfit === 'default' ? (
                         // "啥也不穿"显示 X 图标
@@ -225,7 +233,7 @@ const OutfitView: React.FC = () => {
             <h2 className="text-2xl font-black text-slate-900 mb-2 text-center">{selectedItem.name}</h2>
             {selectedItem.price > 0 && (
               <div className="flex items-center gap-1.5 mb-6">
-                <span className="material-symbols-outlined text-amber-500 text-lg" style={{ fontVariationSettings: "'FILL' 1" }}>monetization_on</span>
+                <span className="material-symbols-outlined text-amber-500 text-lg" style={{ fontVariationSettings: "'FILL' 1" }}>toll</span>
                 <span className="text-lg font-black text-amber-700">{selectedItem.price}</span>
               </div>
             )}

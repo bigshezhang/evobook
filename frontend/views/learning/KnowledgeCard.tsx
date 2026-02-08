@@ -4,6 +4,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import ClarificationSection, { QAItem } from './ClarificationSection';
+import RewardModal from '../../components/RewardModal';
 import { 
   getClarification,
   getKnowledgeCard,
@@ -824,30 +825,13 @@ const KnowledgeCard: React.FC = () => {
       <div className="absolute bottom-40 -left-20 w-64 h-64 bg-accent-purple/10 blur-[80px] rounded-full pointer-events-none -z-10"></div>
 
       {/* Completion Modal */}
-      {showComplete && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center px-6 bg-black/40 backdrop-blur-sm animate-in fade-in duration-300">
-          <div className="w-full max-w-[380px] bg-white dark:bg-card-dark rounded-[40px] p-10 flex flex-col items-center text-center shadow-2xl animate-in zoom-in duration-300">
-            <div className="w-20 h-20 bg-amber-100 dark:bg-amber-100/10 rounded-3xl flex items-center justify-center mb-6">
-              <span className="material-symbols-rounded text-amber-500 text-5xl">stars</span>
-            </div>
-            <h2 className="text-2xl font-black text-slate-900 dark:text-white mb-2 tracking-tight uppercase italic">Goal Reached!</h2>
-            <p className="text-slate-500 text-sm mb-6 font-medium px-4">You've finished this section. Great job staying focused!</p>
-            <button 
-              onClick={() => navigate('/game')}
-              className="w-full py-4 bg-black dark:bg-white dark:text-black text-white rounded-full font-black text-[15px] shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2"
-            >
-              Go to Travel
-              <span className="material-symbols-rounded text-[18px]">sports_esports</span>
-            </button>
-            <button 
-              onClick={() => navigate(buildLearningPath('/knowledge-tree', { cid: courseMapId }))}
-              className="w-full py-3 mt-3 bg-transparent text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 rounded-full font-semibold text-[14px] active:scale-95 transition-all"
-            >
-              Back to learn
-            </button>
-          </div>
-        </div>
-      )}
+      <RewardModal
+        isOpen={showComplete}
+        onClose={() => navigate(buildLearningPath('/knowledge-tree', { cid: courseMapId }))}
+        onGoToGame={() => navigate('/game')}
+        diceRolls={2}
+        expEarned={50}
+      />
     </div>
   );
 };
