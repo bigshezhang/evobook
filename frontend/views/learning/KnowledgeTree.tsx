@@ -534,13 +534,13 @@ const KnowledgeTree: React.FC = () => {
                   <button
                     onClick={handlePreviousCourse}
                     disabled={currentCourseIndex === 0}
-                    className={`w-full h-full rounded-full flex items-center justify-center transition-all ${
+                    className={`w-full h-full rounded-full flex items-center justify-center transition-all bg-white/20 backdrop-blur-sm ${
                       currentCourseIndex === 0
-                        ? 'opacity-30 cursor-not-allowed'
-                        : 'bg-white/20 hover:bg-white/30 active:scale-95 backdrop-blur-sm'
+                        ? 'opacity-40 cursor-not-allowed'
+                        : 'hover:bg-white/30 active:scale-95'
                     }`}
                   >
-                    <span className="material-symbols-rounded text-white text-xl sm:text-2xl" style={{ fontVariationSettings: "'FILL' 0, 'wght' 300" }}>arrow_back_ios_new</span>
+                    <span className="material-symbols-rounded text-white text-[18px] sm:text-[22px] flex items-center justify-center -ml-1" style={{ fontVariationSettings: "'FILL' 0, 'wght' 300" }}>arrow_back_ios_new</span>
                   </button>
                 )}
               </div>
@@ -570,13 +570,13 @@ const KnowledgeTree: React.FC = () => {
                   <button
                     onClick={handleNextCourse}
                     disabled={currentCourseIndex === allCourses.length - 1}
-                    className={`w-full h-full rounded-full flex items-center justify-center transition-all ${
+                    className={`w-full h-full rounded-full flex items-center justify-center transition-all bg-white/20 backdrop-blur-sm ${
                       currentCourseIndex === allCourses.length - 1
-                        ? 'opacity-30 cursor-not-allowed'
-                        : 'bg-white/20 hover:bg-white/30 active:scale-95 backdrop-blur-sm'
+                        ? 'opacity-40 cursor-not-allowed'
+                        : 'hover:bg-white/30 active:scale-95'
                     }`}
                   >
-                    <span className="material-symbols-rounded text-white text-xl sm:text-2xl" style={{ fontVariationSettings: "'FILL' 0, 'wght' 300" }}>arrow_forward_ios</span>
+                    <span className="material-symbols-rounded text-white text-[18px] sm:text-[22px] flex items-center justify-center -mr-1" style={{ fontVariationSettings: "'FILL' 0, 'wght' 300" }}>arrow_forward_ios</span>
                   </button>
                 )}
               </div>
