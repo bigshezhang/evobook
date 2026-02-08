@@ -48,6 +48,7 @@ class ProfileResponse(BaseModel):
     display_name: str | None = None
     mascot: str | None = None
     onboarding_completed: bool
+    guides_completed: list[str] = Field(default_factory=list, description="List of completed guide IDs")
     gold_balance: int = Field(default=0, description="Gold balance")
     dice_rolls_count: int = Field(default=15, description="Dice rolls count")
     level: int = Field(default=1, description="User level")
@@ -65,6 +66,9 @@ class ProfileUpdateRequest(BaseModel):
     mascot: str | None = Field(default=None, description="Selected mascot identifier")
     onboarding_completed: bool | None = Field(
         default=None, description="Whether onboarding is completed"
+    )
+    guides_completed: list[str] | None = Field(
+        default=None, description="List of completed guide IDs"
     )
 
 
