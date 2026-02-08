@@ -4,18 +4,20 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, '.', '');
+    // 后端地址：优先读环境变量，脚本可通过 BACKEND_URL 覆盖
+    const backendUrl = process.env.BACKEND_URL || 'http://localhost:8000';
     return {
       server: {
         port: 3000,
         host: '0.0.0.0',
         proxy: {
           '/api': {
-            target: 'http://localhost:8000',
+            target: backendUrl,
             changeOrigin: true,
             secure: false,
           },
           '/healthz': {
-            target: 'http://localhost:8000',
+            target: backendUrl,
             changeOrigin: true,
             secure: false,
           },
