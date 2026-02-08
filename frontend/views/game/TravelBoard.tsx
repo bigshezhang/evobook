@@ -29,7 +29,7 @@ const TravelBoard: React.FC = () => {
   const pathRef = useRef<TileData[]>([]);
 
   const TILE_H = 120; 
-  const GAP = 80;    
+  const GAP = 40;    
   const STEP_UNIT = TILE_H + GAP; 
 
   useEffect(() => {
@@ -161,9 +161,9 @@ const TravelBoard: React.FC = () => {
           <div 
             className="absolute w-full h-full transition-transform duration-500 ease-out"
             style={{ 
-              top: 'calc(50% + 10px)',
+              top: 'calc(50% + 80px)',
               transformStyle: 'preserve-3d',
-              transform: `rotateX(45deg) translateY(${currentStep * STEP_UNIT}px)`
+              transform: `rotateX(20deg) translateY(${currentStep * STEP_UNIT}px)`
             }}
           >
             {visibleTiles.map((tile) => {
