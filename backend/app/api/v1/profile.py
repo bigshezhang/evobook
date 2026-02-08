@@ -99,6 +99,8 @@ class ProfileStatsResponse(BaseModel):
     global_rank: int | None = Field(..., description="全局排名（从 1 开始），如果无数据则为 None")
     rank_percentile: int | None = Field(..., description="百分位（0-100），如果无数据则为 None")
     total_users: int = Field(..., description="系统中有学习时长统计的总用户数")
+    invite_code: str = Field(..., description="用户邀请码（6位字母）")
+    successful_invites_count: int = Field(..., description="成功邀请人数")
 
 
 # ---------------------------------------------------------------------------
@@ -341,8 +343,15 @@ async def get_profile_stats(
 
         # 3. 获取排名数据
         ranking = await RankingService.get_user_rank(user_id=user_id, db=db)
+        
+        # 4. 获取邀请码数据
+        from app.domain.services.invite_service import InviteService
+        invite_data = await InviteService.get_or_create_invite_code(
+            user_id=user_id,
+            db=db
+        )
 
-        # 4. 构建响应
+        # 5. 构建响应
         if stats:
             total_study_seconds = stats.total_study_seconds
             completed_courses_count = stats.completed_courses_count
@@ -366,6 +375,8 @@ async def get_profile_stats(
             "global_rank": ranking["global_rank"],
             "rank_percentile": ranking["rank_percentile"],
             "total_users": ranking["total_users"],
+            "invite_code": invite_data["invite_code"],
+            "successful_invites_count": invite_data["successful_invites_count"],
         }
 
     except AppException:

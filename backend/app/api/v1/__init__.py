@@ -6,6 +6,7 @@ from app.api.v1.course_map import router as course_map_router
 from app.api.v1.game import router as game_router
 from app.api.v1.health import router as health_router
 from app.api.v1.inventory import router as inventory_router
+from app.api.v1.invite import router as invite_router
 from app.api.v1.learning_session import router as learning_session_router
 from app.api.v1.node_content import router as node_content_router
 from app.api.v1.node_progress import router as node_progress_router
@@ -27,3 +28,4 @@ router.include_router(learning_session_router)
 router.include_router(game_router)
 router.include_router(shop_router)
 router.include_router(inventory_router)
+router.include_router(invite_router)

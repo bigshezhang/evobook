@@ -51,6 +51,12 @@ class Settings(BaseSettings):
         description="Supabase project URL (e.g. https://xxxx.supabase.co)",
     )
     
+    # Frontend/App Base URL for invite links
+    app_base_url: str = Field(
+        default="https://evobook.app",
+        description="Frontend base URL for generating invite links (e.g. https://evobook.app or http://localhost:3000 for local dev)",
+    )
+    
     # LLM Client settings
     mock_llm: bool = Field(
         default=False,
