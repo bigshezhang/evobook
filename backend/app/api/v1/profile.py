@@ -84,6 +84,8 @@ class LearningActivitiesResponse(BaseModel):
 class ProfileStatsResponse(BaseModel):
     """用户学习统计响应。"""
 
+    user_name: str = Field(..., description="用户显示名称")
+    joined_date: str = Field(..., description="注册时间（ISO 8601 格式）")
     total_study_hours: int = Field(..., description="总学习时长（小时，向上取整）")
     total_study_seconds: int = Field(..., description="总学习时长（秒）")
     completed_courses_count: int = Field(..., description="已完成课程数（100% 完成的课程数量）")
@@ -295,6 +297,7 @@ async def get_profile_stats(
     """获取用户学习统计数据。
     
     包括：
+    - 用户名称和注册时间
     - 总学习时长（小时和秒）
     - 已完成课程数
     - 已掌握节点数
@@ -309,18 +312,31 @@ async def get_profile_stats(
     
     Raises:
         401: 未认证
+        404: 用户 Profile 不存在
         500: 内部错误
     """
     try:
-        # 1. 获取用户统计数据
+        # 1. 获取用户 Profile（包含 display_name 和 created_at）
+        from app.domain.models.profile import Profile
+        profile_stmt = select(Profile).where(Profile.id == user_id)
+        profile_result = await db.execute(profile_stmt)
+        profile = profile_result.scalar_one_or_none()
+        
+        if profile is None:
+            raise HTTPException(
+                status_code=404,
+                detail={"code": "PROFILE_NOT_FOUND", "message": "User profile not found"},
+            )
+        
+        # 2. 获取用户统计数据
         stats_stmt = select(UserStats).where(UserStats.user_id == user_id)
         stats_result = await db.execute(stats_stmt)
         stats = stats_result.scalar_one_or_none()
         
-        # 2. 获取排名数据
+        # 3. 获取排名数据
         ranking = await RankingService.get_user_rank(user_id=user_id, db=db)
         
-        # 3. 构建响应
+        # 4. 构建响应
         if stats:
             total_study_seconds = stats.total_study_seconds
             completed_courses_count = stats.completed_courses_count
@@ -335,6 +351,8 @@ async def get_profile_stats(
         total_study_hours = math.ceil(total_study_seconds / 3600)
         
         return {
+            "user_name": profile.display_name or "EvoBook Learner",
+            "joined_date": profile.created_at.isoformat(),
             "total_study_hours": total_study_hours,
             "total_study_seconds": total_study_seconds,
             "completed_courses_count": completed_courses_count,
@@ -345,6 +363,8 @@ async def get_profile_stats(
         }
     
     except AppException:
+        raise
+    except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(

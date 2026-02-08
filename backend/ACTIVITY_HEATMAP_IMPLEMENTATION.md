@@ -13,7 +13,7 @@
 - **时区处理**：后端存储 UTC，前端按浏览器时区聚合显示
 - **强度规则**：
   - 浅色 (light): 1-4 个 nodes 完成
-  - 中色 (medium): 5-9 个 nodes 完成  
+  - 中色 (medium): 5-9 个 nodes 完成
   - 深色 (deep): 10+ 个 nodes 完成
 - **显示范围**：最近 36 天（保持 12 列 × 3 行布局）
 
@@ -53,7 +53,7 @@ uv run alembic upgrade head
 ```python
 class LearningActivity(Base):
     __tablename__ = "learning_activities"
-    
+
     id: Mapped[UUID]
     user_id: Mapped[UUID]
     course_map_id: Mapped[UUID]
@@ -74,7 +74,7 @@ class ActivityService:
         user_id, course_map_id, node_id,
         activity_type, extra_data=None, db=None
     ) -> LearningActivity
-    
+
     @staticmethod
     async def get_user_activities(
         user_id, days, db
@@ -166,7 +166,7 @@ export async function getLearningActivities(
 
 颜色映射：
 ```tsx
-const bgColor = 
+const bgColor =
   day.intensity === 'deep' ? 'bg-secondary' :
   day.intensity === 'medium' ? 'bg-secondary/60' :
   day.intensity === 'light' ? 'bg-accent-purple/40' :

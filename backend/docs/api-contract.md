@@ -337,6 +337,51 @@
 
 ---
 
+## Profile Stats
+
+### GET /api/v1/profile/stats
+
+获取用户学习统计数据，包括用户名称、注册时间、学习时长、完成课程数和全局排名。
+
+**Headers:**
+```
+Authorization: Bearer {access_token}
+```
+
+**Response:**
+```json
+{
+  "user_name": "Alex Rivers",
+  "joined_date": "2024-01-15T08:30:00.000000Z",
+  "total_study_hours": 2,
+  "total_study_seconds": 5460,
+  "completed_courses_count": 1,
+  "mastered_nodes_count": 12,
+  "global_rank": 42,
+  "rank_percentile": 95,
+  "total_users": 1000
+}
+```
+
+| 字段 | 类型 | 说明 |
+|-----|------|------|
+| `user_name` | string | 用户显示名称 |
+| `joined_date` | string | 注册时间（ISO 8601 格式） |
+| `total_study_hours` | int | 总学习时长（小时，向上取整） |
+| `total_study_seconds` | int | 总学习时长（秒） |
+| `completed_courses_count` | int | 已完成课程数 |
+| `mastered_nodes_count` | int | 已掌握节点数 |
+| `global_rank` | int \| null | 全局排名（从 1 开始），无数据时为 null |
+| `rank_percentile` | int \| null | 百分位（0-100），无数据时为 null |
+| `total_users` | int | 系统中有学习时长统计的总用户数 |
+
+**错误响应：**
+- `401`: 未认证
+- `404`: 用户 Profile 不存在
+- `500`: 内部错误
+
+---
+
 ## Error Response (Global)
 
 所有错误统一返回以下 JSON 格式：

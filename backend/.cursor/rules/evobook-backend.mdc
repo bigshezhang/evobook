@@ -4,6 +4,7 @@ alwaysApply: true
 # EvoBook 后端落地规则（FastAPI + Postgres + LiteLLM）— 不做 SSE
 
 ## 0. 目标（不可协商）
+不要随便写 markdown 文档！
 在 `evobook_be/` 仓库中实现 EvoBook 后端，使已实现的前端 UI（目前只是画样式/空接口）能够跑通完整链路：
 1) Onboarding 对话（Prompt: onboarding）→ 输出用户画像 finish data
 2) 课程路径生成 DAG（Prompt: dag）→ 输出 DAG 节点（含 estimated_minutes 且总和=总投入时间）

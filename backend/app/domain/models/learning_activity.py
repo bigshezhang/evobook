@@ -12,7 +12,7 @@ from app.infrastructure.database import Base
 
 class LearningActivity(Base):
     """Tracks individual learning activities for activity heatmap.
-    
+
     Each record represents a completed activity (node, quiz, knowledge card)
     with UTC timestamp. Frontend will handle timezone conversion for display.
     """

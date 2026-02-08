@@ -80,7 +80,7 @@ def upgrade() -> None:
             comment='Record creation timestamp',
         ),
     )
-    
+
     # Create indexes for efficient queries
     op.create_index(
         'idx_learning_activities_user_time',
@@ -105,6 +105,6 @@ def downgrade() -> None:
     op.drop_index('idx_learning_activities_type', table_name='learning_activities')
     op.drop_index('idx_learning_activities_user_course', table_name='learning_activities')
     op.drop_index('idx_learning_activities_user_time', table_name='learning_activities')
-    
+
     # Drop table
     op.drop_table('learning_activities')

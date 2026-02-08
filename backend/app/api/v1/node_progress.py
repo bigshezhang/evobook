@@ -128,7 +128,7 @@ async def batch_update_node_progress(
             updates=updates,
             db=db,
         )
-        
+
         # Record learning activities for all completed nodes
         for item in request.updates:
             if item.status == "completed":
@@ -140,9 +140,9 @@ async def batch_update_node_progress(
                     extra_data=None,
                     db=db,
                 )
-        
+
         await db.commit()
-        
+
         return {"progress": progress}
     except AppException:
         raise
@@ -181,7 +181,7 @@ async def update_node_progress(
             status=request.status,
             db=db,
         )
-        
+
         # Record learning activity when node is completed
         if request.status == "completed":
             await ActivityService.record_activity(
@@ -193,7 +193,7 @@ async def update_node_progress(
                 db=db,
             )
             await db.commit()
-        
+
         return result
     except AppException:
         raise
