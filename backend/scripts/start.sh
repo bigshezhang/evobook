@@ -16,7 +16,7 @@ set -euo pipefail
 # ============================================================
 BACKEND_PORT=8001
 FRONTEND_PORT=3002
-BACKEND_WORKERS=2
+BACKEND_WORKERS=1
 
 # ============================================================
 # 路径 (自动推导，一般不用改)
@@ -151,7 +151,7 @@ do_start() {
     # 2. 运行数据库迁移
     log_step "Running database migrations..."
     cd "$BACKEND_DIR"
-    if uv run alembic upgrade head 2>&1 | tail -3; then
+    if .venv/bin/alembic upgrade head 2>&1 | tail -3; then
         log_info "Database migrations completed"
     else
         log_warn "Migration may have issues, check logs"
@@ -175,9 +175,8 @@ do_start() {
     # 4. 启动后端 (screen)
     log_step "Starting backend on port $BACKEND_PORT..."
     screen -dmS "$SCREEN_BACKEND" bash -c "
-        source /root/.local/bin/env 2>/dev/null || true
         cd $BACKEND_DIR
-        exec uv run uvicorn app.main:app \
+        exec .venv/bin/uvicorn app.main:app \
             --host 0.0.0.0 \
             --port $BACKEND_PORT \
             --workers $BACKEND_WORKERS \
@@ -195,14 +194,37 @@ do_start() {
     # 5. 构建并启动前端 (screen)
     #    先 build 生产包，再用 vite preview 提供服务
     #    通过 BACKEND_URL 环境变量告诉 vite 代理目标
-    log_step "Building frontend for production..."
-    (
-        export PATH="/root/.nvm/versions/node/v22.15.0/bin:$PATH"
-        export BACKEND_URL="http://localhost:${BACKEND_PORT}"
-        cd "$FRONTEND_DIR"
-        npx vite build 2>&1 | tail -5
-    )
-    log_info "Frontend build completed"
+    #    智能构建：源码无变更时跳过，秒级启动
+    local need_build=0
+    local hash_file="$FRONTEND_DIR/dist/.build_hash"
+
+    # 计算源码哈希（源文件 + 配置）
+    local current_hash
+    current_hash=$( (find "$FRONTEND_DIR" -maxdepth 1 \( -name "*.ts" -o -name "*.tsx" -o -name "*.json" -o -name ".env" \) -exec md5sum {} + 2>/dev/null; \
+                     find "$FRONTEND_DIR/components" "$FRONTEND_DIR/views" "$FRONTEND_DIR/utils" \
+                       \( -name "*.ts" -o -name "*.tsx" -o -name "*.css" \) -exec md5sum {} + 2>/dev/null) \
+                   | sort | md5sum | cut -d' ' -f1)
+
+    if [ ! -d "$FRONTEND_DIR/dist" ]; then
+        need_build=1
+        log_step "No build found, building frontend..."
+    elif [ ! -f "$hash_file" ] || [ "$(cat "$hash_file" 2>/dev/null)" != "$current_hash" ]; then
+        need_build=1
+        log_step "Source changed, rebuilding frontend..."
+    else
+        log_info "Frontend source unchanged, skipping build"
+    fi
+
+    if [ $need_build -eq 1 ]; then
+        (
+            export PATH="/root/.nvm/versions/node/v22.15.0/bin:$PATH"
+            export BACKEND_URL="http://localhost:${BACKEND_PORT}"
+            cd "$FRONTEND_DIR"
+            npx vite build 2>&1 | tail -5
+        )
+        echo "$current_hash" > "$hash_file"
+        log_info "Frontend build completed"
+    fi
 
     log_step "Starting frontend on port $FRONTEND_PORT..."
     screen -dmS "$SCREEN_FRONTEND" bash -c "
