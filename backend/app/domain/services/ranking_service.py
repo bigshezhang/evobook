@@ -6,47 +6,42 @@ and percentiles based on total study time.
 
 from uuid import UUID
 
-from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.core.logging import get_logger
-from app.domain.models.user_stats import UserStats
+from app.domain.repositories.user_stats_repository import UserStatsRepository
 
 logger = get_logger(__name__)
 
 
 class RankingService:
-    """排名服务，计算用户全局排名。"""
+    """Service for computing user global rank."""
 
-    @staticmethod
-    async def get_user_rank(user_id: UUID, db: AsyncSession) -> dict:
-        """计算用户的全局排名。
-
-        排名规则：
-        - 按 total_study_seconds 降序排序
-        - 相同时长的用户排名相同
-        - 排名从 1 开始
+    def __init__(self, user_stats_repo: UserStatsRepository) -> None:
+        """Initialize ranking service.
 
         Args:
-            user_id: 用户 ID
-            db: 数据库会话
+            user_stats_repo: Repository for user stats data access.
+        """
+        self.user_stats_repo = user_stats_repo
+
+    async def get_user_rank(self, user_id: UUID) -> dict:
+        """Calculate user's global rank.
+
+        Ranking rules:
+        - Sorted by total_study_seconds descending
+        - Users with the same study time have the same rank
+        - Rank starts from 1
+
+        Args:
+            user_id: User UUID.
 
         Returns:
-            {
-                "global_rank": int | None,  # 排名（从 1 开始），如果用户无统计数据则为 None
-                "rank_percentile": int | None,  # 百分位（0-100），如果用户无统计数据则为 None
-                "total_users": int  # 系统中有学习时长统计的总用户数
-            }
+            Dict with global_rank, rank_percentile, total_users.
         """
-        # 1. 获取该用户的学习时长
-        user_stmt = select(UserStats).where(UserStats.user_id == user_id)
-        user_result = await db.execute(user_stmt)
-        user_stats = user_result.scalar_one_or_none()
+        # 1. Get user's study time
+        user_stats = await self.user_stats_repo.find_by_user_id(user_id)
 
-        # 2. 获取系统中有统计数据的总用户数
-        count_stmt = select(func.count()).select_from(UserStats)
-        count_result = await db.execute(count_stmt)
-        total_users = count_result.scalar()
+        # 2. Get total user count
+        total_users = await self.user_stats_repo.count_total_users()
 
         if not user_stats or total_users == 0:
             logger.info(
@@ -62,19 +57,13 @@ class RankingService:
 
         user_study_seconds = user_stats.total_study_seconds
 
-        # 3. 计算有多少用户的学习时长大于当前用户（即排名更高）
-        rank_stmt = select(func.count()).select_from(UserStats).where(
-            UserStats.total_study_seconds > user_study_seconds
-        )
-        rank_result = await db.execute(rank_stmt)
-        users_ahead = rank_result.scalar()
+        # 3. Count users with more study time
+        users_ahead = await self.user_stats_repo.count_users_ahead(user_study_seconds)
 
-        # 当前用户的排名 = 排名更高的用户数 + 1
+        # Current user's rank = users ahead + 1
         global_rank = users_ahead + 1
 
-        # 4. 计算百分位：百分位 = (total_users - rank + 1) / total_users * 100
-        # 例如：总共 100 人，排名第 10，百分位 = (100 - 10 + 1) / 100 * 100 = 91
-        # 即：超过了 91% 的用户
+        # 4. Calculate percentile
         rank_percentile = int(((total_users - global_rank + 1) / total_users) * 100)
 
         logger.info(

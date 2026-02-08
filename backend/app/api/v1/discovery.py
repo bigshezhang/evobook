@@ -8,17 +8,17 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.error_codes import ERROR_INTERNAL, ERROR_NOT_FOUND
 from app.core.logging import get_logger
-from app.domain.models.discovery_course import DiscoveryCourse
+from app.domain.repositories.discovery_course_repository import DiscoveryCourseRepository
 from app.infrastructure.database import get_db_session
+from app.api.routes import DISCOVERY_PREFIX
 
 logger = get_logger(__name__)
 
-router = APIRouter(prefix="/discovery", tags=["discovery"])
+router = APIRouter(prefix=DISCOVERY_PREFIX, tags=["discovery"])
 
 
 class DiscoveryCourseResponse(BaseModel):
@@ -64,20 +64,8 @@ async def list_discovery_courses(
         List of discovery courses with total count.
     """
     try:
-        # Build query
-        stmt = select(DiscoveryCourse).where(DiscoveryCourse.is_active == True)
-
-        if category:
-            stmt = stmt.where(DiscoveryCourse.category == category)
-
-        # Order by display_order within category
-        stmt = stmt.order_by(
-            DiscoveryCourse.category,
-            DiscoveryCourse.display_order,
-        )
-
-        result = await db.execute(stmt)
-        courses = result.scalars().all()
+        discovery_repo = DiscoveryCourseRepository(db)
+        courses = await discovery_repo.find_active(category=category)
 
         # Convert to response format
         course_list = [
@@ -138,13 +126,8 @@ async def start_discovery_course(
         HTTPException: If course not found or error occurs.
     """
     try:
-        # Find course
-        stmt = select(DiscoveryCourse).where(
-            DiscoveryCourse.preset_id == preset_id,
-            DiscoveryCourse.is_active == True,
-        )
-        result = await db.execute(stmt)
-        course = result.scalar_one_or_none()
+        discovery_repo = DiscoveryCourseRepository(db)
+        course = await discovery_repo.find_active_by_preset_id(preset_id)
 
         if course is None:
             logger.warning(
@@ -160,13 +143,8 @@ async def start_discovery_course(
             )
 
         # Increment start_count
-        stmt = (
-            update(DiscoveryCourse)
-            .where(DiscoveryCourse.preset_id == preset_id)
-            .values(start_count=DiscoveryCourse.start_count + 1)
-        )
-        await db.execute(stmt)
-        await db.commit()
+        await discovery_repo.increment_start_count(preset_id)
+        await discovery_repo.commit()
 
         logger.info(
             "Discovery course started",
@@ -213,12 +191,8 @@ async def get_discovery_course(
         HTTPException: If course not found.
     """
     try:
-        stmt = select(DiscoveryCourse).where(
-            DiscoveryCourse.preset_id == preset_id,
-            DiscoveryCourse.is_active == True,
-        )
-        result = await db.execute(stmt)
-        course = result.scalar_one_or_none()
+        discovery_repo = DiscoveryCourseRepository(db)
+        course = await discovery_repo.find_active_by_preset_id(preset_id)
 
         if course is None:
             raise HTTPException(

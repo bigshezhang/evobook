@@ -9,17 +9,18 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
-from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.core.auth import get_optional_user_id, get_current_user_id
 from app.domain.models.quiz_attempt import QuizAttempt
+from app.domain.repositories.quiz_attempt_repository import QuizAttemptRepository
 from app.domain.services.quiz_service import QuizService
 from app.infrastructure.database import get_db_session
 from app.llm.client import LLMClient
+from app.api.routes import QUIZ_PREFIX
 
-router = APIRouter(prefix="/quiz", tags=["quiz"])
+router = APIRouter(prefix=QUIZ_PREFIX, tags=["quiz"])
 
 
 # --- Request/Response Models ---
@@ -192,6 +193,7 @@ async def submit_quiz(
         HTTPException: 401 if user is not authenticated.
     """
     # Create quiz attempt record
+    quiz_repo = QuizAttemptRepository(db)
     attempt = QuizAttempt(
         user_id=user_id,
         course_map_id=request.course_map_id,
@@ -200,9 +202,9 @@ async def submit_quiz(
         score=request.score,
     )
 
-    db.add(attempt)
-    await db.commit()
-    await db.refresh(attempt)
+    await quiz_repo.create(attempt)
+    await quiz_repo.commit()
+    await quiz_repo.refresh(attempt)
 
     return QuizSubmitResponse(
         attempt_id=attempt.id,
@@ -235,18 +237,8 @@ async def get_quiz_history(
         HTTPException: 401 if user is not authenticated.
     """
     # Query attempts for this user, course_map, and node
-    stmt = (
-        select(QuizAttempt)
-        .where(
-            QuizAttempt.user_id == user_id,
-            QuizAttempt.course_map_id == course_map_id,
-            QuizAttempt.node_id == node_id,
-        )
-        .order_by(desc(QuizAttempt.created_at))
-    )
-
-    result = await db.execute(stmt)
-    attempts = result.scalars().all()
+    quiz_repo = QuizAttemptRepository(db)
+    attempts = await quiz_repo.find_by_user_course_node(user_id, course_map_id, node_id)
 
     # Build summary list
     summaries = [
@@ -286,13 +278,8 @@ async def get_quiz_attempt_detail(
         HTTPException: 404 if attempt not found or not owned by user.
     """
     # Query the attempt
-    stmt = select(QuizAttempt).where(
-        QuizAttempt.id == attempt_id,
-        QuizAttempt.user_id == user_id,
-    )
-
-    result = await db.execute(stmt)
-    attempt = result.scalar_one_or_none()
+    quiz_repo = QuizAttemptRepository(db)
+    attempt = await quiz_repo.find_by_id_and_user(attempt_id, user_id)
 
     if not attempt:
         raise HTTPException(

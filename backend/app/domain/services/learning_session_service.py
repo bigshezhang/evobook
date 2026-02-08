@@ -7,61 +7,67 @@ and managing accumulated study time per node.
 from datetime import datetime, timezone
 from uuid import UUID
 
-from sqlalchemy import select
-from sqlalchemy.dialects.postgresql import insert as pg_insert
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.core.logging import get_logger
-from app.domain.models.course_map import CourseMap
 from app.domain.models.learning_activity import LearningActivity
-from app.domain.models.user_stats import UserStats
+from app.domain.repositories.course_map_repository import CourseMapRepository
+from app.domain.repositories.learning_activity_repository import LearningActivityRepository
+from app.domain.repositories.user_stats_repository import UserStatsRepository
 
 logger = get_logger(__name__)
 
-# 心跳间隔（秒）
+# Heartbeat interval (seconds)
 HEARTBEAT_INTERVAL_SECONDS = 30
 
 
 class LearningSessionService:
-    """学习会话服务，处理心跳包和学习时长统计。"""
+    """Learning session service, handles heartbeats and study time tracking."""
 
-    @staticmethod
+    def __init__(
+        self,
+        course_map_repo: CourseMapRepository,
+        learning_activity_repo: LearningActivityRepository,
+        user_stats_repo: UserStatsRepository,
+    ) -> None:
+        """Initialize learning session service.
+
+        Args:
+            course_map_repo: Repository for course map data access.
+            learning_activity_repo: Repository for learning activity data access.
+            user_stats_repo: Repository for user stats data access.
+        """
+        self.course_map_repo = course_map_repo
+        self.learning_activity_repo = learning_activity_repo
+        self.user_stats_repo = user_stats_repo
+
     async def process_heartbeat(
+        self,
         user_id: UUID,
         course_map_id: UUID,
         node_id: int,
-        db: AsyncSession,
     ) -> dict:
-        """处理学习心跳包。
+        """Process a learning heartbeat.
 
-        业务逻辑：
-        1. 校验 course_map 是否存在且属于该用户
-        2. 从 course_map.dag_structure 中校验 node 是否存在
-        3. 检查该 node 累计时长是否超限（estimated_minutes * 2）
-        4. 原子性更新 user_stats.total_study_seconds += 30（使用 ON CONFLICT UPSERT）
-        5. 更新该 node 的累计时长到 learning_activities.extra_data
-        6. 返回 acknowledged + total_study_seconds
+        Business logic:
+        1. Verify course_map exists and belongs to this user
+        2. Verify node exists in the course_map DAG
+        3. Check if node accumulated time exceeds limit (estimated_minutes * 2)
+        4. Atomically update user_stats.total_study_seconds += 30
+        5. Update node accumulated time in learning_activities
+        6. Return acknowledged + total_study_seconds
 
         Args:
-            user_id: 用户 ID
-            course_map_id: 课程 ID
-            node_id: 节点 ID
-            db: 数据库会话
+            user_id: User UUID.
+            course_map_id: Course map UUID.
+            node_id: Node ID.
 
         Returns:
-            {
-                "acknowledged": bool,
-                "total_study_seconds": int,
-                "reason": str | None  # 如果 acknowledged=False
-            }
+            Dict with acknowledged, total_study_seconds, reason.
         """
-        # 1. 校验课程是否存在且属于该用户
-        course_stmt = select(CourseMap).where(
-            CourseMap.id == course_map_id,
-            CourseMap.user_id == user_id,
+        # 1. Verify course map exists and belongs to user
+        course_map = await self.course_map_repo.find_by_id_and_user(
+            course_map_id=course_map_id,
+            user_id=user_id,
         )
-        course_result = await db.execute(course_stmt)
-        course_map = course_result.scalar_one_or_none()
 
         if not course_map:
             logger.warning(
@@ -75,7 +81,7 @@ class LearningSessionService:
                 "reason": "COURSE_NOT_FOUND",
             }
 
-        # 2. 校验 node 是否存在于 DAG 中
+        # 2. Verify node exists in DAG
         nodes = course_map.nodes or []
         target_node = next((n for n in nodes if n.get("id") == node_id), None)
 
@@ -92,19 +98,17 @@ class LearningSessionService:
                 "reason": "NODE_NOT_FOUND",
             }
 
-        # 3. 获取该 node 的累计时长和预估时长
+        # 3. Check time limit for this node
         estimated_minutes = target_node.get("estimated_minutes", 0)
-        time_limit_seconds = estimated_minutes * 2 * 60  # 超限阈值：2 倍预估时长
+        time_limit_seconds = estimated_minutes * 2 * 60
 
-        accumulated_seconds = await LearningSessionService.get_node_accumulated_seconds(
+        accumulated_seconds = await self._get_node_accumulated_seconds(
             user_id=user_id,
             course_map_id=course_map_id,
             node_id=node_id,
-            db=db,
         )
 
         if accumulated_seconds >= time_limit_seconds > 0:
-            # 超限，不再计入学习时长
             logger.info(
                 "Heartbeat acknowledged but not counted: time limit reached",
                 user_id=str(user_id),
@@ -113,10 +117,7 @@ class LearningSessionService:
                 accumulated_seconds=accumulated_seconds,
                 time_limit_seconds=time_limit_seconds,
             )
-            # 返回当前总时长（不增加）
-            stats_stmt = select(UserStats).where(UserStats.user_id == user_id)
-            stats_result = await db.execute(stats_stmt)
-            stats = stats_result.scalar_one_or_none()
+            stats = await self.user_stats_repo.find_by_user_id(user_id)
             current_total = stats.total_study_seconds if stats else 0
 
             return {
@@ -125,39 +126,26 @@ class LearningSessionService:
                 "reason": "TIME_LIMIT_REACHED",
             }
 
-        # 4. 原子性更新 user_stats.total_study_seconds += 30
+        # 4. Atomically update user_stats.total_study_seconds
         now = datetime.now(tz=timezone.utc)
-        upsert_stmt = pg_insert(UserStats).values(
+        await self.user_stats_repo.upsert_add_study_seconds(
             user_id=user_id,
-            total_study_seconds=HEARTBEAT_INTERVAL_SECONDS,
-            completed_courses_count=0,
-            mastered_nodes_count=0,
-            updated_at=now,
+            seconds=HEARTBEAT_INTERVAL_SECONDS,
+            now=now,
         )
-        upsert_stmt = upsert_stmt.on_conflict_do_update(
-            constraint="user_stats_pkey",
-            set_={
-                "total_study_seconds": UserStats.total_study_seconds + HEARTBEAT_INTERVAL_SECONDS,
-                "updated_at": now,
-            },
-        )
-        await db.execute(upsert_stmt)
 
-        # 5. 更新该 node 的累计时长
-        await LearningSessionService.update_node_accumulated_time(
+        # 5. Update node accumulated time
+        await self._update_node_accumulated_time(
             user_id=user_id,
             course_map_id=course_map_id,
             node_id=node_id,
             seconds_to_add=HEARTBEAT_INTERVAL_SECONDS,
-            db=db,
         )
 
-        await db.commit()
+        await self.user_stats_repo.commit()
 
-        # 6. 获取更新后的总时长
-        stats_stmt = select(UserStats).where(UserStats.user_id == user_id)
-        stats_result = await db.execute(stats_stmt)
-        stats = stats_result.scalar_one()
+        # 6. Fetch updated total
+        stats = await self.user_stats_repo.find_by_user_id(user_id)
 
         logger.info(
             "Heartbeat processed successfully",
@@ -173,83 +161,62 @@ class LearningSessionService:
             "reason": None,
         }
 
-    @staticmethod
-    async def get_node_accumulated_seconds(
+    async def _get_node_accumulated_seconds(
+        self,
         user_id: UUID,
         course_map_id: UUID,
         node_id: int,
-        db: AsyncSession,
     ) -> int:
-        """获取用户在某个 node 的累计学习时长（秒）。
-
-        从 learning_activities 表的 extra_data.accumulated_seconds 读取。
-        如果没有记录，返回 0。
+        """Get accumulated study seconds for a node.
 
         Args:
-            user_id: 用户 ID
-            course_map_id: 课程 ID
-            node_id: 节点 ID
-            db: 数据库会话
+            user_id: User UUID.
+            course_map_id: Course map UUID.
+            node_id: Node ID.
 
         Returns:
-            累计学习时长（秒）
+            Accumulated seconds (0 if no record).
         """
-        stmt = select(LearningActivity).where(
-            LearningActivity.user_id == user_id,
-            LearningActivity.course_map_id == course_map_id,
-            LearningActivity.node_id == node_id,
-            LearningActivity.activity_type == "node_in_progress",
+        activity = await self.learning_activity_repo.find_node_in_progress(
+            user_id=user_id,
+            course_map_id=course_map_id,
+            node_id=node_id,
         )
-        result = await db.execute(stmt)
-        activity = result.scalar_one_or_none()
 
         if not activity or not activity.extra_data:
             return 0
 
         return activity.extra_data.get("accumulated_seconds", 0)
 
-    @staticmethod
-    async def update_node_accumulated_time(
+    async def _update_node_accumulated_time(
+        self,
         user_id: UUID,
         course_map_id: UUID,
         node_id: int,
         seconds_to_add: int,
-        db: AsyncSession,
     ) -> None:
-        """更新某个 node 的累计学习时长。
-
-        如果该 node 还没有 learning_activity 记录（用户尚未完成），
-        创建一个 activity_type="node_in_progress" 的记录。
-
-        更新 extra_data = {"accumulated_seconds": old_value + seconds_to_add}
+        """Update accumulated study time for a node.
 
         Args:
-            user_id: 用户 ID
-            course_map_id: 课程 ID
-            node_id: 节点 ID
-            seconds_to_add: 要增加的秒数
-            db: 数据库会话
+            user_id: User UUID.
+            course_map_id: Course map UUID.
+            node_id: Node ID.
+            seconds_to_add: Seconds to add.
         """
         now = datetime.now(tz=timezone.utc)
 
-        # 查找现有记录
-        stmt = select(LearningActivity).where(
-            LearningActivity.user_id == user_id,
-            LearningActivity.course_map_id == course_map_id,
-            LearningActivity.node_id == node_id,
-            LearningActivity.activity_type == "node_in_progress",
+        activity = await self.learning_activity_repo.find_node_in_progress(
+            user_id=user_id,
+            course_map_id=course_map_id,
+            node_id=node_id,
         )
-        result = await db.execute(stmt)
-        activity = result.scalar_one_or_none()
 
         if activity:
-            # 更新现有记录
             current_seconds = activity.extra_data.get("accumulated_seconds", 0) if activity.extra_data else 0
             new_seconds = current_seconds + seconds_to_add
             activity.extra_data = {"accumulated_seconds": new_seconds}
-            activity.completed_at = now  # 更新最后活跃时间
+            activity.completed_at = now
         else:
-            # 创建新记录
             activity = LearningActivity(
                 user_id=user_id,
                 course_map_id=course_map_id,
@@ -258,6 +225,6 @@ class LearningSessionService:
                 completed_at=now,
                 extra_data={"accumulated_seconds": seconds_to_add},
             )
-            db.add(activity)
+            await self.learning_activity_repo.create(activity)
 
-        await db.flush()
+        await self.learning_activity_repo.flush()

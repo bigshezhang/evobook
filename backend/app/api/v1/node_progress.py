@@ -1,8 +1,4 @@
-"""Node progress API endpoints.
-
-This module provides endpoints for tracking per-node learning progress
-within a course map.
-"""
+"""Node progress API endpoints."""
 
 from typing import Annotated, Literal
 from uuid import UUID
@@ -14,59 +10,40 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.auth import get_current_user_id
 from app.core.error_codes import ERROR_INTERNAL
 from app.core.exceptions import AppException
+from app.domain.repositories.course_map_repository import CourseMapRepository
+from app.domain.repositories.learning_activity_repository import LearningActivityRepository
+from app.domain.repositories.node_progress_repository import NodeProgressRepository
+from app.domain.repositories.user_stats_repository import UserStatsRepository
 from app.domain.services.activity_service import ActivityService
 from app.domain.services.node_progress_service import NodeProgressService
 from app.infrastructure.database import get_db_session
+from app.api.routes import NODE_PROGRESS_PREFIX
 
-router = APIRouter(prefix="/node-progress", tags=["node-progress"])
+router = APIRouter(prefix=NODE_PROGRESS_PREFIX, tags=["node-progress"])
 
-
-# ---------------------------------------------------------------------------
-# Request / Response schemas
-# ---------------------------------------------------------------------------
 
 class NodeProgressItem(BaseModel):
-    """Single node progress entry."""
-
     node_id: int
     status: str
     updated_at: str
 
 
 class GetProgressResponse(BaseModel):
-    """Response for GET node progress."""
-
     progress: list[NodeProgressItem]
 
 
 class UpdateProgressRequest(BaseModel):
-    """Request body for single node progress update."""
-
-    status: Literal["locked", "unlocked", "in_progress", "completed"] = Field(
-        ..., description="New node status"
-    )
+    status: Literal["locked", "unlocked", "in_progress", "completed"] = Field(..., description="New node status")
 
 
 class BatchUpdateItem(BaseModel):
-    """Single item inside a batch update request."""
-
     node_id: int = Field(..., description="DAG node ID")
-    status: Literal["locked", "unlocked", "in_progress", "completed"] = Field(
-        ..., description="New node status"
-    )
+    status: Literal["locked", "unlocked", "in_progress", "completed"] = Field(..., description="New node status")
 
 
 class BatchUpdateRequest(BaseModel):
-    """Request body for batch node progress update."""
+    updates: list[BatchUpdateItem] = Field(..., min_length=1, description="List of node progress updates")
 
-    updates: list[BatchUpdateItem] = Field(
-        ..., min_length=1, description="List of node progress updates"
-    )
-
-
-# ---------------------------------------------------------------------------
-# Endpoints
-# ---------------------------------------------------------------------------
 
 @router.get("/{course_map_id}", response_model=GetProgressResponse)
 async def get_node_progress(
@@ -74,30 +51,16 @@ async def get_node_progress(
     user_id: Annotated[UUID, Depends(get_current_user_id)],
     db: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> dict:
-    """Get all node progress for a user's course map.
-
-    Args:
-        course_map_id: The course map UUID.
-        user_id: Authenticated user ID from JWT.
-        db: Database session.
-
-    Returns:
-        List of node progress entries.
-    """
+    """Get all node progress for a user's course map."""
     try:
-        progress = await NodeProgressService.get_progress(
-            user_id=user_id,
-            course_map_id=course_map_id,
-            db=db,
-        )
+        node_progress_repo = NodeProgressRepository(db)
+        service = NodeProgressService(node_progress_repo=node_progress_repo)
+        progress = await service.get_progress(user_id=user_id, course_map_id=course_map_id)
         return {"progress": progress}
     except AppException:
         raise
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail={"code": ERROR_INTERNAL, "message": str(e)},
-        )
+        raise HTTPException(status_code=500, detail={"code": ERROR_INTERNAL, "message": str(e)})
 
 
 @router.put("/{course_map_id}/batch", response_model=GetProgressResponse)
@@ -107,51 +70,35 @@ async def batch_update_node_progress(
     user_id: Annotated[UUID, Depends(get_current_user_id)],
     db: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> dict:
-    """Batch update multiple node progresses at once.
-
-    NOTE: This route is registered BEFORE the single-node route
-    to avoid FastAPI treating "batch" as a {node_id} path param.
-
-    Args:
-        course_map_id: The course map UUID.
-        request: Batch update payload.
-        user_id: Authenticated user ID from JWT.
-        db: Database session.
-
-    Returns:
-        List of all updated node progress entries.
-    """
+    """Batch update multiple node progresses at once."""
     try:
+        node_progress_repo = NodeProgressRepository(db)
+        service = NodeProgressService(node_progress_repo=node_progress_repo)
         updates = [item.model_dump() for item in request.updates]
-        progress = await NodeProgressService.batch_update(
-            user_id=user_id,
-            course_map_id=course_map_id,
-            updates=updates,
-            db=db,
-        )
+        progress = await service.batch_update(user_id=user_id, course_map_id=course_map_id, updates=updates)
 
-        # Record learning activities for all completed nodes
+        # Record learning activities for completed nodes
+        learning_activity_repo = LearningActivityRepository(db)
+        course_map_repo = CourseMapRepository(db)
+        user_stats_repo = UserStatsRepository(db)
+        activity_service = ActivityService(
+            learning_activity_repo=learning_activity_repo,
+            course_map_repo=course_map_repo,
+            user_stats_repo=user_stats_repo,
+        )
         for item in request.updates:
             if item.status == "completed":
-                await ActivityService.record_activity(
-                    user_id=user_id,
-                    course_map_id=course_map_id,
-                    node_id=item.node_id,
-                    activity_type="node_completed",
-                    extra_data=None,
-                    db=db,
+                await activity_service.record_activity(
+                    user_id=user_id, course_map_id=course_map_id,
+                    node_id=item.node_id, activity_type="node_completed",
                 )
-
-        await db.commit()
+        await node_progress_repo.commit()
 
         return {"progress": progress}
     except AppException:
         raise
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail={"code": ERROR_INTERNAL, "message": str(e)},
-        )
+        raise HTTPException(status_code=500, detail={"code": ERROR_INTERNAL, "message": str(e)})
 
 
 @router.put("/{course_map_id}/{node_id}", response_model=NodeProgressItem)
@@ -162,44 +109,31 @@ async def update_node_progress(
     user_id: Annotated[UUID, Depends(get_current_user_id)],
     db: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> dict:
-    """Update or create progress for a specific node.
-
-    Args:
-        course_map_id: The course map UUID.
-        node_id: The DAG node ID.
-        request: Status update payload.
-        user_id: Authenticated user ID from JWT.
-        db: Database session.
-
-    Returns:
-        Updated node progress entry.
-    """
+    """Update or create progress for a specific node."""
     try:
-        result = await NodeProgressService.update_progress(
-            user_id=user_id,
-            course_map_id=course_map_id,
-            node_id=node_id,
-            status=request.status,
-            db=db,
+        node_progress_repo = NodeProgressRepository(db)
+        service = NodeProgressService(node_progress_repo=node_progress_repo)
+        result = await service.update_progress(
+            user_id=user_id, course_map_id=course_map_id, node_id=node_id, status=request.status,
         )
 
-        # Record learning activity when node is completed
         if request.status == "completed":
-            await ActivityService.record_activity(
-                user_id=user_id,
-                course_map_id=course_map_id,
-                node_id=node_id,
-                activity_type="node_completed",
-                extra_data=None,
-                db=db,
+            learning_activity_repo = LearningActivityRepository(db)
+            course_map_repo = CourseMapRepository(db)
+            user_stats_repo = UserStatsRepository(db)
+            activity_service = ActivityService(
+                learning_activity_repo=learning_activity_repo,
+                course_map_repo=course_map_repo,
+                user_stats_repo=user_stats_repo,
             )
-            await db.commit()
+            await activity_service.record_activity(
+                user_id=user_id, course_map_id=course_map_id,
+                node_id=node_id, activity_type="node_completed",
+            )
+            await node_progress_repo.commit()
 
         return result
     except AppException:
         raise
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail={"code": ERROR_INTERNAL, "message": str(e)},
-        )
+        raise HTTPException(status_code=500, detail={"code": ERROR_INTERNAL, "message": str(e)})

@@ -9,14 +9,9 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import select, update
-from sqlalchemy.dialects.postgresql import insert as pg_insert
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.core.logging import get_logger
-from app.domain.models.node_content import NodeContent
+from app.domain.repositories.node_content_repository import NodeContentRepository
 from app.domain.services.node_content_service import NodeContentService
-from app.infrastructure.database import get_async_session_maker
 from app.llm.client import LLMClient
 
 logger = get_logger(__name__)
@@ -25,16 +20,23 @@ logger = get_logger(__name__)
 class ContentGenerationService:
     """Service for background generation of node contents."""
 
-    def __init__(self, llm_client: LLMClient, db_session: AsyncSession) -> None:
+    def __init__(
+        self,
+        llm_client: LLMClient,
+        node_content_repo: NodeContentRepository,
+    ) -> None:
         """Initialize content generation service.
 
         Args:
             llm_client: LLM client for generating content.
-            db_session: Database session for persistence.
+            node_content_repo: Repository for node content persistence.
         """
         self.llm = llm_client
-        self.db = db_session
-        self.node_content_service = NodeContentService(llm_client=llm_client, db_session=db_session)
+        self.node_content_repo = node_content_repo
+        self.node_content_service = NodeContentService(
+            llm_client=llm_client,
+            node_content_repo=node_content_repo,
+        )
 
     async def generate_all_learn_nodes(
         self,
@@ -43,9 +45,6 @@ class ContentGenerationService:
         course_context: dict[str, Any],
     ) -> None:
         """Generate all learn node contents in background.
-
-        This method runs in background and generates content for all learn nodes.
-        Quiz nodes are skipped (they remain in quiz_pending status).
 
         Args:
             course_map_id: Course map UUID.
@@ -59,7 +58,6 @@ class ContentGenerationService:
         )
 
         try:
-            # Filter learn nodes only
             learn_nodes = [n for n in nodes if n.get("type") == "learn"]
             logger.info(
                 "Filtered learn nodes for generation",
@@ -67,7 +65,6 @@ class ContentGenerationService:
                 learn_nodes_count=len(learn_nodes),
             )
 
-            # Group by layer (generate lower layers first)
             nodes_by_layer = self._group_by_layer(learn_nodes)
             sorted_layers = sorted(nodes_by_layer.keys())
 
@@ -78,7 +75,6 @@ class ContentGenerationService:
                 layer_sizes={layer: len(nodes_by_layer[layer]) for layer in sorted_layers},
             )
 
-            # Generate layer by layer
             for layer in sorted_layers:
                 layer_nodes = nodes_by_layer[layer]
                 logger.info(
@@ -88,24 +84,18 @@ class ContentGenerationService:
                     node_count=len(layer_nodes),
                 )
 
-                # Use semaphore to control concurrency (max 3 at a time)
                 semaphore = asyncio.Semaphore(3)
 
-                # Create wrapper function that uses independent DB session for each node
-                async def generate_node_with_own_session(node: dict[str, Any]):
+                async def generate_node_with_own_session(node: dict[str, Any]) -> None:
                     """Wrapper to create independent DB session for each node generation."""
                     from app.infrastructure.database import get_async_session_maker
 
                     session_maker = get_async_session_maker()
                     async with session_maker() as node_db:
-                        # Create a temporary service instance with its own DB session
+                        temp_repo = NodeContentRepository(node_db)
                         temp_service = ContentGenerationService(
                             llm_client=self.llm,
-                            db_session=node_db,
-                        )
-                        temp_service.node_content_service = NodeContentService(
-                            llm_client=self.llm,
-                            db_session=node_db,
+                            node_content_repo=temp_repo,
                         )
 
                         await temp_service._generate_single_node(
@@ -116,11 +106,8 @@ class ContentGenerationService:
                         )
 
                 tasks = [generate_node_with_own_session(node) for node in layer_nodes]
-
-                # Gather with return_exceptions=True to continue on failures
                 results = await asyncio.gather(*tasks, return_exceptions=True)
 
-                # Log any exceptions
                 for i, result in enumerate(results):
                     if isinstance(result, Exception):
                         node_id = layer_nodes[i].get("id")
@@ -182,14 +169,10 @@ class ContentGenerationService:
             node_id = node.get("id")
 
             # 0. Check if already generated (idempotency)
-            # Use first() instead of scalar_one_or_none() to handle potential duplicate records gracefully
-            stmt = select(NodeContent).where(
-                NodeContent.course_map_id == course_map_id,
-                NodeContent.node_id == node_id,
-                NodeContent.content_type == "knowledge_card",
-            ).limit(1)
-            result = await self.db.execute(stmt)
-            existing = result.scalars().first()
+            existing = await self.node_content_repo.find_existing_knowledge_card(
+                course_map_id=course_map_id,
+                node_id=node_id,
+            )
 
             if (
                 existing
@@ -212,15 +195,15 @@ class ContentGenerationService:
             )
 
             # Update status to generating
-            await self._update_generation_status(
+            await self.node_content_repo.update_generation_status(
                 course_map_id=course_map_id,
                 node_id=node_id,
                 status="generating",
                 started_at=datetime.now(timezone.utc),
             )
+            await self.node_content_repo.commit()
 
             try:
-                # Build request parameters from course_context and node
                 result = await self.node_content_service.generate_knowledge_card(
                     language=course_context.get("language", "en"),
                     course_name=course_context.get("course_name", ""),
@@ -237,13 +220,13 @@ class ContentGenerationService:
                     user_id=None,
                 )
 
-                # Update status to completed
-                await self._update_generation_status(
+                await self.node_content_repo.update_generation_status(
                     course_map_id=course_map_id,
                     node_id=node_id,
                     status="completed",
                     completed_at=datetime.now(timezone.utc),
                 )
+                await self.node_content_repo.commit()
 
                 logger.info(
                     "Node content generated successfully",
@@ -253,14 +236,17 @@ class ContentGenerationService:
                 )
 
             except Exception as e:
-                # Update status to failed with error message
-                await self._update_generation_status(
+                await self.node_content_repo.update_generation_status(
                     course_map_id=course_map_id,
                     node_id=node_id,
                     status="failed",
                     error=str(e),
                     completed_at=datetime.now(timezone.utc),
                 )
+                try:
+                    await self.node_content_repo.commit()
+                except Exception:
+                    await self.node_content_repo.rollback()
 
                 logger.error(
                     "Node content generation failed",
@@ -271,82 +257,18 @@ class ContentGenerationService:
                 )
                 raise
 
-    async def _update_generation_status(
-        self,
-        course_map_id: UUID,
-        node_id: int,
-        status: str,
-        started_at: datetime | None = None,
-        completed_at: datetime | None = None,
-        error: str | None = None,
-    ) -> None:
-        """Update generation status for a node content.
-
-        Args:
-            course_map_id: Course map UUID.
-            node_id: Node ID.
-            status: New generation status.
-            started_at: Optional start timestamp.
-            completed_at: Optional completion timestamp.
-            error: Optional error message.
-        """
-        try:
-            # Build update values
-            values: dict[str, Any] = {"generation_status": status}
-            if started_at is not None:
-                values["generation_started_at"] = started_at
-            if completed_at is not None:
-                values["generation_completed_at"] = completed_at
-            if error is not None:
-                values["generation_error"] = error
-
-            # Update the record
-            stmt = (
-                update(NodeContent)
-                .where(
-                    NodeContent.course_map_id == course_map_id,
-                    NodeContent.node_id == node_id,
-                    NodeContent.content_type == "knowledge_card",
-                )
-                .values(**values)
-            )
-            await self.db.execute(stmt)
-            await self.db.commit()
-
-            logger.info(
-                "Updated generation status",
-                course_map_id=str(course_map_id),
-                node_id=node_id,
-                status=status,
-            )
-
-        except Exception as e:
-            # Rollback on error
-            await self.db.rollback()
-            logger.error(
-                "Failed to update generation status",
-                course_map_id=str(course_map_id),
-                node_id=node_id,
-                status=status,
-                error=str(e),
-                exc_info=True,
-            )
-
 
 async def initialize_node_contents(
     course_map_id: UUID,
     nodes: list[dict[str, Any]],
-    db: AsyncSession,
+    node_content_repo: NodeContentRepository,
 ) -> None:
     """Initialize node_contents records for all nodes in a course map.
-
-    This creates initial records with status='pending' for learn nodes
-    and status='quiz_pending' for quiz nodes.
 
     Args:
         course_map_id: Course map UUID.
         nodes: List of all nodes from the DAG.
-        db: Database session.
+        node_content_repo: Repository for node content data access.
     """
     logger.info(
         "Initializing node_contents records",
@@ -359,37 +281,20 @@ async def initialize_node_contents(
             node_id = node.get("id")
             node_type = node.get("type")
 
-            # Determine initial status based on node type
             if node_type == "quiz":
                 initial_status = "quiz_pending"
             else:
                 initial_status = "pending"
 
-            # Use INSERT ... ON CONFLICT DO NOTHING to avoid duplicates
-            # if this function is called more than once for the same course_map
-            stmt = (
-                pg_insert(NodeContent)
-                .values(
-                    course_map_id=course_map_id,
-                    node_id=node_id,
-                    content_type="knowledge_card",
-                    question_key=None,
-                    content_json={},  # Empty content initially
-                    generation_status=initial_status,
-                    node_type=node_type,
-                )
-                .on_conflict_do_nothing(
-                    index_elements=[
-                        NodeContent.course_map_id,
-                        NodeContent.node_id,
-                        NodeContent.content_type,
-                    ],
-                    index_where=NodeContent.question_key.is_(None),
-                )
+            await node_content_repo.initialize_node(
+                course_map_id=course_map_id,
+                node_id=node_id,
+                content_type="knowledge_card",
+                node_type=node_type,
+                initial_status=initial_status,
             )
-            await db.execute(stmt)
 
-        await db.commit()
+        await node_content_repo.commit()
 
         logger.info(
             "Initialized node_contents records",
@@ -398,7 +303,7 @@ async def initialize_node_contents(
         )
 
     except Exception as e:
-        await db.rollback()
+        await node_content_repo.rollback()
         logger.error(
             "Failed to initialize node_contents",
             course_map_id=str(course_map_id),

@@ -10,13 +10,9 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import select
-from sqlalchemy.dialects.postgresql import insert as pg_insert
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.core.exceptions import LLMValidationError
 from app.core.logging import get_logger
-from app.domain.models.node_content import NodeContent
+from app.domain.repositories.node_content_repository import NodeContentRepository
 from app.llm.client import LLMClient
 from app.llm.validators import OutputFormat
 from app.prompts.registry import PromptName, PromptRegistry
@@ -32,23 +28,23 @@ class NodeContentService:
     2. Clarification generation (quick answer to user questions)
     3. QA Detail generation (expanded explanation with image spec)
 
-    When a db_session and course_map_id are provided, generated content
+    When a node_content_repo and course_map_id are provided, generated content
     is cached in the node_contents table and returned on subsequent requests.
     """
 
     def __init__(
         self,
         llm_client: LLMClient,
-        db_session: AsyncSession | None = None,
+        node_content_repo: NodeContentRepository | None = None,
     ) -> None:
         """Initialize node content service.
 
         Args:
             llm_client: LLM client for generating content.
-            db_session: Optional database session for caching.
+            node_content_repo: Optional repository for caching.
         """
         self.llm = llm_client
-        self.db = db_session
+        self.node_content_repo = node_content_repo
 
     async def generate_knowledge_card(
         self,
@@ -532,26 +528,16 @@ class NodeContentService:
         Returns:
             Cached content dict or None.
         """
-        if course_map_id is None or self.db is None:
+        if course_map_id is None or self.node_content_repo is None:
             return None
 
         try:
-            # Use first() instead of scalar_one_or_none() for resilience against
-            # any duplicate records. Order by content size descending to prefer
-            # rows that actually contain content over empty placeholder rows.
-            result = await self.db.execute(
-                select(NodeContent).where(
-                    NodeContent.course_map_id == course_map_id,
-                    NodeContent.node_id == node_id,
-                    NodeContent.content_type == content_type,
-                    NodeContent.question_key == question_key
-                    if question_key is not None
-                    else NodeContent.question_key.is_(None),
-                ).order_by(
-                    NodeContent.generation_completed_at.desc().nulls_last()
-                ).limit(1)
+            cached = await self.node_content_repo.find_cached_content(
+                course_map_id=course_map_id,
+                node_id=node_id,
+                content_type=content_type,
+                question_key=question_key,
             )
-            cached = result.scalars().first()
             if cached is not None:
                 # Validate cached content is not empty
                 if cached.content_json and len(cached.content_json) > 0:
@@ -614,44 +600,20 @@ class NodeContentService:
             question_key: Optional hash key to distinguish different questions
                 for the same node.  NULL for knowledge cards.
         """
-        if course_map_id is None or self.db is None:
+        if course_map_id is None or self.node_content_repo is None:
             return
 
         try:
-            # Use ON CONFLICT DO UPDATE to upsert content.
-            # If a row with the same (course_map_id, node_id, content_type, question_key)
-            # already exists (e.g., from initialize_node_contents), update it with the new content.
-            # We use index_elements matching the unique index uq_node_contents_cache_key
-            # which uses COALESCE(question_key, '') to handle NULL values.
-            stmt = (
-                pg_insert(NodeContent)
-                .values(
-                    course_map_id=course_map_id,
-                    node_id=node_id,
-                    content_type=content_type,
-                    question_key=question_key,
-                    content_json=content_json,
-                    generation_status="completed",
-                    generation_completed_at=datetime.now(timezone.utc),
-                )
-                .on_conflict_do_update(
-                    index_elements=[
-                        NodeContent.course_map_id,
-                        NodeContent.node_id,
-                        NodeContent.content_type,
-                    ],
-                    index_where=(NodeContent.question_key == question_key)
-                    if question_key is not None
-                    else (NodeContent.question_key.is_(None)),
-                    set_={
-                        "content_json": content_json,
-                        "generation_status": "completed",
-                        "generation_completed_at": datetime.now(timezone.utc),
-                    },
-                )
+            await self.node_content_repo.upsert_content(
+                course_map_id=course_map_id,
+                node_id=node_id,
+                content_type=content_type,
+                content_json=content_json,
+                question_key=question_key,
+                generation_status="completed",
+                completed_at=datetime.now(timezone.utc),
             )
-            await self.db.execute(stmt)
-            await self.db.commit()
+            await self.node_content_repo.commit()
             logger.info(
                 "Cached node content",
                 course_map_id=str(course_map_id),
@@ -661,7 +623,7 @@ class NodeContentService:
             )
         except Exception:
             # Best-effort caching — rollback and continue
-            await self.db.rollback()
+            await self.node_content_repo.rollback()
             logger.warning(
                 "Failed to cache node content",
                 course_map_id=str(course_map_id),

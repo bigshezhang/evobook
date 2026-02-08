@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter
 
+from app.api.routes import API_V1_PREFIX
 from app.api.v1.course_map import router as course_map_router
 from app.api.v1.discovery import router as discovery_router
 from app.api.v1.game import router as game_router
@@ -16,7 +17,7 @@ from app.api.v1.profile import router as profile_router
 from app.api.v1.quiz import router as quiz_router
 from app.api.v1.shop import router as shop_router
 
-router = APIRouter(prefix="/api/v1")
+router = APIRouter(prefix=API_V1_PREFIX)
 
 router.include_router(health_router, tags=["health"])
 router.include_router(discovery_router)

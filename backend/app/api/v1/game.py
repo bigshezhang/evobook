@@ -1,8 +1,4 @@
-"""Game API endpoints for currency and progression.
-
-This module provides endpoints for managing game currency (gold, dice rolls),
-experience points, and user progression.
-"""
+"""Game API endpoints for currency and progression."""
 
 from typing import Annotated, Any
 from uuid import UUID
@@ -15,22 +11,20 @@ from app.core.auth import get_current_user_id
 from app.core.error_codes import ERROR_INTERNAL, ERROR_INVALID_UUID
 from app.core.exceptions import AppException
 from app.core.logging import get_logger
+from app.domain.repositories.game_transaction_repository import GameTransactionRepository
+from app.domain.repositories.profile_repository import ProfileRepository
+from app.domain.repositories.shop_item_repository import ShopItemRepository
+from app.domain.repositories.user_inventory_repository import UserInventoryRepository
 from app.domain.services.game_service import GameService
 from app.infrastructure.database import get_db_session
+from app.api.routes import GAME_PREFIX
 
 logger = get_logger(__name__)
 
-router = APIRouter(prefix="/game", tags=["game"])
-
-
-# ---------------------------------------------------------------------------
-# Request / Response schemas
-# ---------------------------------------------------------------------------
+router = APIRouter(prefix=GAME_PREFIX, tags=["game"])
 
 
 class CurrencyResponse(BaseModel):
-    """User currency status response."""
-
     gold_balance: int = Field(..., description="Gold balance")
     dice_rolls_count: int = Field(..., description="Number of dice rolls available")
     level: int = Field(..., description="User level")
@@ -40,109 +34,82 @@ class CurrencyResponse(BaseModel):
 
 
 class RollDiceRequest(BaseModel):
-    """Roll dice request."""
-
     course_map_id: str = Field(..., description="Course map UUID")
     current_position: int = Field(..., description="Current position on travel board")
 
 
 class RollDiceResponse(BaseModel):
-    """Roll dice response."""
-
-    success: bool = Field(..., description="Whether the roll was successful")
-    dice_result: int = Field(..., description="Dice roll result (1-4)")
-    dice_rolls_remaining: int = Field(..., description="Remaining dice rolls")
-    message: str = Field(..., description="Response message")
+    success: bool
+    dice_result: int
+    dice_rolls_remaining: int
+    message: str
 
 
 class ClaimRewardRequest(BaseModel):
-    """Claim reward request."""
-
     reward_type: str = Field(..., description="Type of reward: 'gold', 'dice', or 'exp'")
     amount: int = Field(..., description="Amount of reward", gt=0)
-    source: str = Field(..., description="Source of reward (e.g., 'tile_reward', 'learning_reward')")
-    source_details: dict[str, Any] | None = Field(
-        default=None,
-        description="Optional source details (course_map_id, tile_position, tile_type, etc.)"
-    )
+    source: str = Field(..., description="Source of reward")
+    source_details: dict[str, Any] | None = Field(default=None, description="Optional source details")
 
 
 class ClaimRewardResponse(BaseModel):
-    """Claim reward response."""
-
-    success: bool = Field(..., description="Whether the reward was claimed successfully")
-    reward_type: str = Field(..., description="Type of reward claimed")
-    amount: int = Field(..., description="Amount of reward claimed")
-    new_balance: int = Field(..., description="New balance of the reward type")
-    message: str = Field(..., description="Response message")
+    success: bool
+    reward_type: str
+    amount: int
+    new_balance: int
+    message: str
 
 
 class ClaimGiftRequest(BaseModel):
-    """Claim gift reward request."""
-
-    source_details: dict[str, Any] | None = Field(
-        default=None,
-        description="Optional source details (course_map_id, tile_position, etc.)"
-    )
+    source_details: dict[str, Any] | None = Field(default=None, description="Optional source details")
 
 
 class GiftItemInfo(BaseModel):
-    """Gift item information."""
-
-    id: str = Field(..., description="Item UUID")
-    name: str = Field(..., description="Item display name")
-    item_type: str = Field(..., description="Item type (clothes/furniture)")
-    image_path: str = Field(..., description="Path to item image")
-    rarity: str = Field(..., description="Item rarity")
+    id: str
+    name: str
+    item_type: str
+    image_path: str
+    rarity: str
 
 
 class ClaimGiftResponse(BaseModel):
-    """Claim gift reward response."""
-
-    success: bool = Field(..., description="Whether the gift was claimed")
-    reward_type: str = Field(..., description="'item' or 'gold' (fallback)")
-    gold_amount: int | None = Field(default=None, description="Gold amount if fallback")
-    item: GiftItemInfo | None = Field(default=None, description="Item info if item reward")
-    message: str = Field(..., description="Response message")
+    success: bool
+    reward_type: str
+    gold_amount: int | None = None
+    item: GiftItemInfo | None = None
+    message: str
 
 
 class EarnExpRequest(BaseModel):
-    """Earn EXP request."""
-
     exp_amount: int = Field(..., description="Amount of EXP to earn", gt=0)
-    gold_reward: int = Field(default=0, description="Base gold reward to give (always applied)", ge=0)
-    dice_reward: int = Field(default=0, description="Base dice roll reward to give (always applied)", ge=0)
-    source: str = Field(..., description="Source of EXP (e.g., 'learning_reward', 'quiz_completion')")
-    source_details: dict[str, Any] | None = Field(
-        default=None,
-        description="Optional source details (course_map_id, node_id, activity_type, etc.)"
-    )
+    gold_reward: int = Field(default=0, description="Base gold reward", ge=0)
+    dice_reward: int = Field(default=0, description="Base dice roll reward", ge=0)
+    source: str = Field(..., description="Source of EXP")
+    source_details: dict[str, Any] | None = Field(default=None, description="Optional source details")
 
 
 class RewardsSummary(BaseModel):
-    """Total rewards summary (base + level-up bonus)."""
-
-    gold: int = Field(..., description="Total gold earned (base + level-up bonus)")
-    dice_rolls: int = Field(..., description="Total dice rolls earned (base + level-up bonus)")
+    gold: int
+    dice_rolls: int
 
 
 class EarnExpResponse(BaseModel):
-    """Earn EXP response."""
+    success: bool
+    exp_earned: int
+    current_exp: int
+    current_level: int
+    level_up: bool
+    rewards: RewardsSummary
 
-    success: bool = Field(..., description="Whether EXP was earned successfully")
-    exp_earned: int = Field(..., description="Amount of EXP earned")
-    current_exp: int = Field(..., description="Current EXP in current level")
-    current_level: int = Field(..., description="Current level")
-    level_up: bool = Field(..., description="Whether user leveled up")
-    rewards: RewardsSummary = Field(
-        ...,
-        description="Total rewards earned (base + level-up bonus, always present)"
+
+def _build_game_service(db: AsyncSession) -> GameService:
+    """Build a GameService with all required repositories."""
+    return GameService(
+        profile_repo=ProfileRepository(db),
+        game_transaction_repo=GameTransactionRepository(db),
+        shop_item_repo=ShopItemRepository(db),
+        user_inventory_repo=UserInventoryRepository(db),
     )
-
-
-# ---------------------------------------------------------------------------
-# Endpoints
-# ---------------------------------------------------------------------------
 
 
 @router.get("/currency", response_model=CurrencyResponse)
@@ -150,20 +117,13 @@ async def get_currency(
     user_id: Annotated[UUID, Depends(get_current_user_id)],
     db: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> dict[str, Any]:
-    """Get user's current currency status.
-
-    Returns:
-        User's gold, dice rolls, level, and EXP status.
-    """
+    """Get user's current currency status."""
     try:
-        return await GameService.get_user_currency(user_id=user_id, db=db)
+        return await _build_game_service(db).get_user_currency(user_id=user_id)
     except AppException:
         raise
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail={"code": ERROR_INTERNAL, "message": str(e)},
-        )
+        raise HTTPException(status_code=500, detail={"code": ERROR_INTERNAL, "message": str(e)})
 
 
 @router.post("/roll-dice", response_model=RollDiceResponse)
@@ -172,41 +132,18 @@ async def roll_dice(
     user_id: Annotated[UUID, Depends(get_current_user_id)],
     db: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> dict[str, Any]:
-    """Roll dice and deduct one dice roll.
-
-    Args:
-        request: Roll dice request with course map and current position.
-        user_id: Authenticated user ID from JWT.
-        db: Database session.
-
-    Returns:
-        Dice roll result, remaining dice rolls, and success status.
-
-    Raises:
-        400: INSUFFICIENT_DICE if no dice rolls available
-        400: INVALID_UUID if course map UUID is invalid
-    """
+    """Roll dice and deduct one dice roll."""
     try:
         course_map_id = UUID(request.course_map_id)
-
-        return await GameService.roll_dice(
-            user_id=user_id,
-            db=db,
-            course_map_id=course_map_id,
-            current_position=request.current_position,
+        return await _build_game_service(db).roll_dice(
+            user_id=user_id, course_map_id=course_map_id, current_position=request.current_position,
         )
     except ValueError:
-        raise HTTPException(
-            status_code=400,
-            detail={"code": ERROR_INVALID_UUID, "message": "Invalid course map UUID"},
-        )
+        raise HTTPException(status_code=400, detail={"code": ERROR_INVALID_UUID, "message": "Invalid course map UUID"})
     except AppException:
         raise
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail={"code": ERROR_INTERNAL, "message": str(e)},
-        )
+        raise HTTPException(status_code=500, detail={"code": ERROR_INTERNAL, "message": str(e)})
 
 
 @router.post("/claim-reward", response_model=ClaimRewardResponse)
@@ -215,36 +152,16 @@ async def claim_reward(
     user_id: Annotated[UUID, Depends(get_current_user_id)],
     db: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> dict[str, Any]:
-    """Claim a reward (gold, dice, or exp).
-
-    Args:
-        request: Reward claim request with type, amount, source, and details.
-        user_id: Authenticated user ID from JWT.
-        db: Database session.
-
-    Returns:
-        Success status, reward details, and new balance.
-
-    Raises:
-        400: INVALID_REWARD_TYPE if reward type is not 'gold', 'dice', or 'exp'
-        400: INVALID_AMOUNT if amount is not positive
-    """
+    """Claim a reward (gold, dice, or exp)."""
     try:
-        return await GameService.claim_reward(
-            user_id=user_id,
-            reward_type=request.reward_type,
-            amount=request.amount,
-            source=request.source,
-            db=db,
-            source_details=request.source_details,
+        return await _build_game_service(db).claim_reward(
+            user_id=user_id, reward_type=request.reward_type, amount=request.amount,
+            source=request.source, source_details=request.source_details,
         )
     except AppException:
         raise
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail={"code": ERROR_INTERNAL, "message": str(e)},
-        )
+        raise HTTPException(status_code=500, detail={"code": ERROR_INTERNAL, "message": str(e)})
 
 
 @router.post("/claim-gift", response_model=ClaimGiftResponse)
@@ -253,38 +170,16 @@ async def claim_gift(
     user_id: Annotated[UUID, Depends(get_current_user_id)],
     db: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> dict[str, Any]:
-    """Claim a gift reward from the travel board.
-
-    Randomly grants an unowned item. If the user owns all items,
-    falls back to a gold reward.
-
-    Args:
-        request: Gift claim request with optional source details.
-        user_id: Authenticated user ID from JWT.
-        db: Database session.
-
-    Returns:
-        Gift reward details (item info or fallback gold).
-    """
+    """Claim a gift reward from the travel board."""
     try:
-        return await GameService.claim_gift_reward(
-            user_id=user_id,
-            db=db,
-            source_details=request.source_details,
+        return await _build_game_service(db).claim_gift_reward(
+            user_id=user_id, source_details=request.source_details,
         )
     except AppException:
         raise
     except Exception as e:
-        logger.error(
-            "Unexpected error claiming gift reward",
-            user_id=str(user_id),
-            error=str(e),
-            exc_info=True,
-        )
-        raise HTTPException(
-            status_code=500,
-            detail={"code": ERROR_INTERNAL, "message": str(e)},
-        )
+        logger.error("Unexpected error claiming gift reward", user_id=str(user_id), error=str(e), exc_info=True)
+        raise HTTPException(status_code=500, detail={"code": ERROR_INTERNAL, "message": str(e)})
 
 
 @router.post("/earn-exp", response_model=EarnExpResponse)
@@ -293,37 +188,13 @@ async def earn_exp(
     user_id: Annotated[UUID, Depends(get_current_user_id)],
     db: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> dict[str, Any]:
-    """Earn experience points and potentially level up.
-
-    When leveling up, user receives rewards:
-    - 100 gold per level
-    - 2 dice rolls per level
-
-    Args:
-        request: EXP earning request with amount, source, and optional details.
-        user_id: Authenticated user ID from JWT.
-        db: Database session.
-
-    Returns:
-        Success status, EXP earned, current EXP/level, level up flag, and rewards if leveled up.
-
-    Raises:
-        400: INVALID_AMOUNT if exp_amount is not positive
-    """
+    """Earn experience points and potentially level up."""
     try:
-        return await GameService.earn_exp(
-            user_id=user_id,
-            amount=request.exp_amount,
-            gold_reward=request.gold_reward,
-            dice_reward=request.dice_reward,
-            source=request.source,
-            db=db,
-            source_details=request.source_details,
+        return await _build_game_service(db).earn_exp(
+            user_id=user_id, amount=request.exp_amount, gold_reward=request.gold_reward,
+            dice_reward=request.dice_reward, source=request.source, source_details=request.source_details,
         )
     except AppException:
         raise
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail={"code": ERROR_INTERNAL, "message": str(e)},
-        )
+        raise HTTPException(status_code=500, detail={"code": ERROR_INTERNAL, "message": str(e)})

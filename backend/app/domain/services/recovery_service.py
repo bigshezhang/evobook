@@ -7,13 +7,9 @@ tasks that were interrupted due to server restart or crash.
 import asyncio
 from uuid import UUID
 
-from sqlalchemy import select, update
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.core.logging import get_logger
-from app.domain.models.course_map import CourseMap
-from app.domain.models.node_content import NodeContent
-from app.infrastructure.database import get_async_session_maker
+from app.domain.repositories.course_map_repository import CourseMapRepository
+from app.domain.repositories.node_content_repository import NodeContentRepository
 
 logger = get_logger(__name__)
 
@@ -21,27 +17,31 @@ logger = get_logger(__name__)
 class RecoveryService:
     """Service to recover incomplete generation tasks after server restart."""
 
+    def __init__(
+        self,
+        node_content_repo: NodeContentRepository,
+        course_map_repo: CourseMapRepository,
+    ) -> None:
+        """Initialize recovery service.
+
+        Args:
+            node_content_repo: Repository for node content data access.
+            course_map_repo: Repository for course map data access.
+        """
+        self.node_content_repo = node_content_repo
+        self.course_map_repo = course_map_repo
+
     async def recover_incomplete_tasks(
         self,
-        db: AsyncSession,
-        content_generation_service,
+        content_generation_service: object,
     ) -> dict[str, int]:
         """Recover all incomplete content generation tasks.
 
-        This method:
-        1. Finds all courses with nodes in 'generating' or 'pending' status
-        2. Resets 'generating' status to 'pending' (since process was interrupted)
-        3. Restarts background generation tasks for each affected course
-
         Args:
-            db: Database session
-            content_generation_service: Service to generate content
+            content_generation_service: Service to generate content.
 
         Returns:
-            Dict with recovery statistics:
-            - courses_found: Number of courses with incomplete tasks
-            - nodes_reset: Number of nodes reset from 'generating' to 'pending'
-            - tasks_restarted: Number of background tasks successfully restarted
+            Dict with recovery statistics.
         """
         stats = {
             "courses_found": 0,
@@ -50,15 +50,8 @@ class RecoveryService:
         }
 
         try:
-            # 1. Find all courses with incomplete generation tasks
-            stmt = (
-                select(NodeContent.course_map_id)
-                .distinct()
-                .where(NodeContent.generation_status.in_(["generating", "pending"]))
-            )
-            result = await db.execute(stmt)
-            course_map_ids = [row[0] for row in result.fetchall()]
-
+            # 1. Find courses with incomplete tasks
+            course_map_ids = await self.node_content_repo.find_incomplete_course_map_ids()
             stats["courses_found"] = len(course_map_ids)
 
             if not course_map_ids:
@@ -71,31 +64,18 @@ class RecoveryService:
                 course_map_ids=[str(cid) for cid in course_map_ids],
             )
 
-            # 2. Reset all 'generating' status to 'pending'
-            # (because the process was interrupted, they cannot still be generating)
-            reset_stmt = (
-                update(NodeContent)
-                .where(NodeContent.generation_status == "generating")
-                .values(
-                    generation_status="pending",
-                    generation_started_at=None,
-                )
-            )
-            result = await db.execute(reset_stmt)
-            stats["nodes_reset"] = result.rowcount
-            await db.commit()
+            # 2. Reset 'generating' status to 'pending'
+            nodes_reset = await self.node_content_repo.reset_generating_to_pending()
+            stats["nodes_reset"] = nodes_reset
+            await self.node_content_repo.commit()
 
-            logger.info(
-                "Reset generating nodes to pending",
-                count=stats["nodes_reset"],
-            )
+            logger.info("Reset generating nodes to pending", count=stats["nodes_reset"])
 
-            # 3. Restart background generation task for each course
+            # 3. Restart generation tasks
             for course_map_id in course_map_ids:
                 try:
                     await self._restart_course_generation(
                         course_map_id,
-                        db,
                         content_generation_service,
                     )
                     stats["tasks_restarted"] += 1
@@ -106,40 +86,26 @@ class RecoveryService:
                         error=str(e),
                         exc_info=True,
                     )
-                    # Continue with other courses
 
-            logger.info(
-                "Recovery completed",
-                stats=stats,
-            )
-
+            logger.info("Recovery completed", stats=stats)
             return stats
 
         except Exception as e:
-            logger.error(
-                "Recovery failed",
-                error=str(e),
-                exc_info=True,
-            )
+            logger.error("Recovery failed", error=str(e), exc_info=True)
             raise
 
     async def _restart_course_generation(
         self,
         course_map_id: UUID,
-        db: AsyncSession,
-        content_generation_service,
+        content_generation_service: object,
     ) -> None:
         """Restart generation for a specific course.
 
         Args:
-            course_map_id: Course map UUID
-            db: Database session
-            content_generation_service: Service to generate content
+            course_map_id: Course map UUID.
+            content_generation_service: Service to generate content.
         """
-        # 1. Get course map information
-        stmt = select(CourseMap).where(CourseMap.id == course_map_id)
-        result = await db.execute(stmt)
-        course_map = result.scalar_one_or_none()
+        course_map = await self.course_map_repo.find_by_id(course_map_id)
 
         if not course_map:
             logger.warning(
@@ -148,7 +114,6 @@ class RecoveryService:
             )
             return
 
-        # 2. Prepare course context (read language from persisted course map)
         course_context = {
             "course_name": course_map.map_meta.get("course_name", ""),
             "strategy_rationale": course_map.map_meta.get("strategy_rationale", ""),
@@ -158,32 +123,19 @@ class RecoveryService:
             "language": getattr(course_map, "language", "en") or "en",
         }
 
-        # 3. Start background generation task with its own database session
-        # Note: Cannot use BackgroundTasks here (no request context during startup)
-        # Use asyncio.create_task instead
-        # CRITICAL: Create a new database session for each task to avoid conflicts
-        import asyncio
         from app.infrastructure.database import get_async_session_maker
-        from app.domain.services.node_content_service import NodeContentService
+        from app.domain.services.content_generation_service import ContentGenerationService
+        from app.domain.repositories.node_content_repository import NodeContentRepository
 
-        async def run_generation_with_own_session():
+        async def run_generation_with_own_session() -> None:
             """Wrapper to create an independent DB session for this generation task."""
-            # Import here to avoid circular dependency
-            from app.domain.services.content_generation_service import ContentGenerationService
-            from app.domain.services.node_content_service import NodeContentService
-
             session_maker = get_async_session_maker()
             async with session_maker() as task_db:
-                # Create a new service instance with its own DB session
-                node_content_service = NodeContentService(
-                    llm_client=content_generation_service.llm,
-                    db_session=task_db,
-                )
+                task_repo = NodeContentRepository(task_db)
                 task_generation_service = ContentGenerationService(
-                    llm_client=content_generation_service.llm,
-                    db_session=task_db,
+                    llm_client=content_generation_service.llm,  # type: ignore[attr-defined]
+                    node_content_repo=task_repo,
                 )
-                task_generation_service.node_content_service = node_content_service
 
                 await task_generation_service.generate_all_learn_nodes(
                     course_map_id=course_map_id,

@@ -7,13 +7,9 @@ user profiles linked to Supabase auth.users.
 from datetime import datetime, timezone
 from uuid import UUID
 
-from sqlalchemy import desc, select
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.core.exceptions import NotFoundError
 from app.core.logging import get_logger
-from app.domain.models.course_map import CourseMap
-from app.domain.models.profile import Profile
+from app.domain.repositories.profile_repository import ProfileRepository
 
 logger = get_logger(__name__)
 
@@ -21,13 +17,19 @@ logger = get_logger(__name__)
 class ProfileService:
     """Service for managing user profiles."""
 
-    @staticmethod
-    async def get_profile(user_id: UUID, db: AsyncSession) -> dict:
+    def __init__(self, profile_repo: ProfileRepository) -> None:
+        """Initialize profile service.
+
+        Args:
+            profile_repo: Profile repository for data access.
+        """
+        self.profile_repo = profile_repo
+
+    async def get_profile(self, user_id: UUID) -> dict:
         """Get a user's profile.
 
         Args:
             user_id: The authenticated user's ID (from Supabase auth).
-            db: Async database session.
 
         Returns:
             Dict with profile fields.
@@ -35,9 +37,7 @@ class ProfileService:
         Raises:
             NotFoundError: If profile does not exist.
         """
-        stmt = select(Profile).where(Profile.id == user_id)
-        result = await db.execute(stmt)
-        profile = result.scalar_one_or_none()
+        profile = await self.profile_repo.find_by_id(user_id)
 
         if profile is None:
             raise NotFoundError(resource="Profile", identifier=str(user_id))
@@ -50,6 +50,7 @@ class ProfileService:
             "display_name": profile.display_name,
             "mascot": profile.mascot,
             "onboarding_completed": profile.onboarding_completed,
+            "guides_completed": profile.guides_completed or [],
             "gold_balance": profile.gold_balance,
             "dice_rolls_count": profile.dice_rolls_count,
             "level": profile.level,
@@ -60,11 +61,10 @@ class ProfileService:
             "updated_at": profile.updated_at.isoformat(),
         }
 
-    @staticmethod
     async def update_profile(
+        self,
         user_id: UUID,
         updates: dict,
-        db: AsyncSession,
     ) -> dict:
         """Update a user's profile with provided fields.
 
@@ -73,7 +73,6 @@ class ProfileService:
         Args:
             user_id: The authenticated user's ID.
             updates: Dict of fields to update (display_name, mascot, onboarding_completed).
-            db: Async database session.
 
         Returns:
             Dict with the full updated profile.
@@ -81,9 +80,7 @@ class ProfileService:
         Raises:
             NotFoundError: If profile does not exist.
         """
-        stmt = select(Profile).where(Profile.id == user_id)
-        result = await db.execute(stmt)
-        profile = result.scalar_one_or_none()
+        profile = await self.profile_repo.find_by_id(user_id)
 
         if profile is None:
             raise NotFoundError(resource="Profile", identifier=str(user_id))
@@ -95,12 +92,14 @@ class ProfileService:
             profile.mascot = updates["mascot"]
         if "onboarding_completed" in updates:
             profile.onboarding_completed = updates["onboarding_completed"]
+        if "guides_completed" in updates:
+            profile.guides_completed = updates["guides_completed"]
 
         profile.updated_at = datetime.now(timezone.utc)
 
-        db.add(profile)
-        await db.commit()
-        await db.refresh(profile)
+        await self.profile_repo.save(profile)
+        await self.profile_repo.commit()
+        await self.profile_repo.refresh(profile)
 
         logger.info(
             "Updated profile",
@@ -114,6 +113,7 @@ class ProfileService:
             "display_name": profile.display_name,
             "mascot": profile.mascot,
             "onboarding_completed": profile.onboarding_completed,
+            "guides_completed": profile.guides_completed or [],
             "gold_balance": profile.gold_balance,
             "dice_rolls_count": profile.dice_rolls_count,
             "level": profile.level,
@@ -124,8 +124,7 @@ class ProfileService:
             "updated_at": profile.updated_at.isoformat(),
         }
 
-    @staticmethod
-    async def get_active_course_map_id(user_id: UUID, db: AsyncSession) -> UUID | None:
+    async def get_active_course_map_id(self, user_id: UUID) -> UUID | None:
         """Get the active course map ID for a user.
 
         Priority:
@@ -135,21 +134,17 @@ class ProfileService:
 
         Args:
             user_id: The authenticated user's ID.
-            db: Async database session.
 
         Returns:
             Course map UUID or None if no courses exist.
         """
-        # 获取用户 profile
-        stmt = select(Profile).where(Profile.id == user_id)
-        result = await db.execute(stmt)
-        profile = result.scalar_one_or_none()
+        profile = await self.profile_repo.find_by_id(user_id)
 
         if profile is None:
             logger.warning("Profile not found when getting active course", user_id=str(user_id))
             return None
 
-        # 优先级 1: 用户设置的活跃课程
+        # Priority 1: user-set active course
         if profile.active_course_map_id:
             logger.info(
                 "Returning user-set active course",
@@ -158,7 +153,7 @@ class ProfileService:
             )
             return profile.active_course_map_id
 
-        # 优先级 2: 最后访问的课程
+        # Priority 2: last accessed course
         if profile.last_accessed_course_map_id:
             logger.info(
                 "Returning last accessed course",
@@ -167,15 +162,8 @@ class ProfileService:
             )
             return profile.last_accessed_course_map_id
 
-        # 优先级 3: 最新创建的课程
-        stmt = (
-            select(CourseMap.id)
-            .where(CourseMap.user_id == user_id)
-            .order_by(desc(CourseMap.created_at))
-            .limit(1)
-        )
-        result = await db.execute(stmt)
-        latest_course_id = result.scalar_one_or_none()
+        # Priority 3: latest created course
+        latest_course_id = await self.profile_repo.find_latest_course_map_id(user_id)
 
         if latest_course_id:
             logger.info(
@@ -188,25 +176,21 @@ class ProfileService:
         logger.info("No courses found for user", user_id=str(user_id))
         return None
 
-    @staticmethod
     async def set_active_course_map(
+        self,
         user_id: UUID,
         course_map_id: UUID,
-        db: AsyncSession,
     ) -> None:
         """Set the active course map for a user.
 
         Args:
             user_id: The authenticated user's ID.
             course_map_id: The course map UUID to set as active.
-            db: Async database session.
 
         Raises:
             NotFoundError: If profile does not exist.
         """
-        stmt = select(Profile).where(Profile.id == user_id)
-        result = await db.execute(stmt)
-        profile = result.scalar_one_or_none()
+        profile = await self.profile_repo.find_by_id(user_id)
 
         if profile is None:
             raise NotFoundError(resource="Profile", identifier=str(user_id))
@@ -214,8 +198,8 @@ class ProfileService:
         profile.active_course_map_id = course_map_id
         profile.updated_at = datetime.now(timezone.utc)
 
-        db.add(profile)
-        await db.commit()
+        await self.profile_repo.save(profile)
+        await self.profile_repo.commit()
 
         logger.info(
             "Set active course map",
@@ -223,25 +207,21 @@ class ProfileService:
             course_map_id=str(course_map_id),
         )
 
-    @staticmethod
     async def update_last_accessed_course(
+        self,
         user_id: UUID,
         course_map_id: UUID,
-        db: AsyncSession,
     ) -> None:
         """Update the last accessed course map for a user.
 
         Args:
             user_id: The authenticated user's ID.
             course_map_id: The course map UUID that was accessed.
-            db: Async database session.
 
         Raises:
             NotFoundError: If profile does not exist.
         """
-        stmt = select(Profile).where(Profile.id == user_id)
-        result = await db.execute(stmt)
-        profile = result.scalar_one_or_none()
+        profile = await self.profile_repo.find_by_id(user_id)
 
         if profile is None:
             raise NotFoundError(resource="Profile", identifier=str(user_id))
@@ -250,8 +230,8 @@ class ProfileService:
         profile.last_accessed_at = datetime.now(timezone.utc)
         profile.updated_at = datetime.now(timezone.utc)
 
-        db.add(profile)
-        await db.commit()
+        await self.profile_repo.save(profile)
+        await self.profile_repo.commit()
 
         logger.info(
             "Updated last accessed course",

@@ -3,7 +3,7 @@
 from datetime import datetime, timezone
 from uuid import UUID
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, Text, text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, Text, text, ARRAY
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 import sqlalchemy as sa
@@ -46,6 +46,12 @@ class Profile(Base):
         default=False,
         server_default=text("false"),
         comment="Whether user has completed onboarding",
+    )
+    guides_completed: Mapped[list[str]] = mapped_column(
+        ARRAY(Text),
+        nullable=False,
+        server_default=text("'{}'"),
+        comment="List of completed guide IDs (e.g., 'knowledge_tree', 'quiz')",
     )
 
     # 游戏货币系统字段

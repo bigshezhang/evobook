@@ -10,12 +10,10 @@ from enum import Enum
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.core.logging import get_logger
 from app.domain.models.onboarding import OnboardingSession
-from app.domain.models.profile import Profile
+from app.domain.repositories.onboarding_repository import OnboardingRepository
+from app.domain.repositories.profile_repository import ProfileRepository
 from app.llm.client import LLMClient
 from app.llm.validators import OutputFormat
 from app.prompts.registry import PromptName, PromptRegistry
@@ -142,15 +140,22 @@ class OnboardingService:
     7. handoff - Complete and return profile
     """
 
-    def __init__(self, llm_client: LLMClient, db_session: AsyncSession) -> None:
+    def __init__(
+        self,
+        llm_client: LLMClient,
+        onboarding_repo: OnboardingRepository,
+        profile_repo: ProfileRepository,
+    ) -> None:
         """Initialize onboarding service.
 
         Args:
             llm_client: LLM client for generating responses.
-            db_session: Database session for persistence.
+            onboarding_repo: Repository for onboarding session persistence.
+            profile_repo: Repository for profile updates.
         """
         self.llm = llm_client
-        self.db = db_session
+        self.onboarding_repo = onboarding_repo
+        self.profile_repo = profile_repo
 
     async def process_next(
         self,
@@ -277,9 +282,7 @@ class OnboardingService:
             return state
 
         # Try to load from database
-        stmt = select(OnboardingSession).where(OnboardingSession.id == session_id)
-        result = await self.db.execute(stmt)
-        session = result.scalar_one_or_none()
+        session = await self.onboarding_repo.find_by_id(session_id)
 
         if session is None:
             logger.warning(
@@ -321,9 +324,7 @@ class OnboardingService:
             state: OnboardingState to persist.
         """
         # Try to load existing session
-        stmt = select(OnboardingSession).where(OnboardingSession.id == state.session_id)
-        result = await self.db.execute(stmt)
-        session = result.scalar_one_or_none()
+        session = await self.onboarding_repo.find_by_id(state.session_id)
 
         if session is None:
             # Create new session with optional user_id
@@ -340,7 +341,7 @@ class OnboardingService:
                 intent=state.intent.value if state.intent else None,
                 state_json={"history": state.history},
             )
-            self.db.add(session)
+            await self.onboarding_repo.save(session)
         else:
             # Update existing session
             session.phase = state.phase.value
@@ -353,7 +354,7 @@ class OnboardingService:
             session.intent = state.intent.value if state.intent else None
             session.state_json = {"history": state.history}
 
-        await self.db.commit()
+        await self.onboarding_repo.commit()
 
         logger.info(
             "Session state saved",
@@ -521,9 +522,7 @@ class OnboardingService:
         Args:
             user_id: The authenticated user's UUID.
         """
-        stmt = select(Profile).where(Profile.id == user_id)
-        result = await self.db.execute(stmt)
-        profile = result.scalar_one_or_none()
+        profile = await self.profile_repo.find_by_id(user_id)
 
         if profile is None:
             logger.warning(
@@ -533,7 +532,7 @@ class OnboardingService:
             return
 
         profile.onboarding_completed = True
-        await self.db.commit()
+        await self.profile_repo.commit()
 
         logger.info(
             "Profile onboarding_completed set to True",

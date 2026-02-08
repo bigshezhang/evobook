@@ -7,11 +7,10 @@ import json
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.core.exceptions import LLMValidationError, ValidationException
 from app.core.logging import get_logger
 from app.domain.models.course_map import CourseMap
+from app.domain.repositories.course_map_repository import CourseMapRepository
 from app.llm.client import LLMClient
 from app.llm.validators import OutputFormat
 from app.prompts.registry import PromptName, PromptRegistry
@@ -35,15 +34,15 @@ class CourseMapService:
     3. Persisting the course map to database
     """
 
-    def __init__(self, llm_client: LLMClient, db_session: AsyncSession) -> None:
+    def __init__(self, llm_client: LLMClient, course_map_repo: CourseMapRepository) -> None:
         """Initialize course map service.
 
         Args:
             llm_client: LLM client for generating DAG.
-            db_session: Database session for persistence.
+            course_map_repo: Repository for course map persistence.
         """
         self.llm = llm_client
-        self.db = db_session
+        self.course_map_repo = course_map_repo
 
     async def generate_course_map(
         self,
@@ -129,8 +128,8 @@ class CourseMapService:
             map_meta=dag_data.get("map_meta", {}),
             nodes=dag_data.get("nodes", []),
         )
-        self.db.add(course_map)
-        await self.db.commit()
+        await self.course_map_repo.save(course_map)
+        await self.course_map_repo.commit()
 
         logger.info(
             "Course map generated and saved",
@@ -279,7 +278,6 @@ class CourseMapService:
             DAGValidationError: If DAG is linear (no branches/merges).
         """
         if len(nodes) < 3:
-            # Can't have branches with fewer than 3 nodes
             raise DAGValidationError(
                 message="DAG must have at least 3 nodes for branching structure",
                 details={"nodes_count": len(nodes)},

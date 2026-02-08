@@ -7,14 +7,11 @@ learning activities for the activity heatmap feature.
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
-from sqlalchemy import select
-from sqlalchemy.dialects.postgresql import insert as pg_insert
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.core.logging import get_logger
-from app.domain.models.course_map import CourseMap
 from app.domain.models.learning_activity import LearningActivity
-from app.domain.models.user_stats import UserStats
+from app.domain.repositories.course_map_repository import CourseMapRepository
+from app.domain.repositories.learning_activity_repository import LearningActivityRepository
+from app.domain.repositories.user_stats_repository import UserStatsRepository
 
 logger = get_logger(__name__)
 
@@ -25,14 +22,30 @@ VALID_ACTIVITY_TYPES = {"node_completed", "quiz_passed", "knowledge_card_finishe
 class ActivityService:
     """Service for managing learning activity history."""
 
-    @staticmethod
+    def __init__(
+        self,
+        learning_activity_repo: LearningActivityRepository,
+        course_map_repo: CourseMapRepository,
+        user_stats_repo: UserStatsRepository,
+    ) -> None:
+        """Initialize activity service.
+
+        Args:
+            learning_activity_repo: Repository for learning activity data access.
+            course_map_repo: Repository for course map data access.
+            user_stats_repo: Repository for user stats data access.
+        """
+        self.learning_activity_repo = learning_activity_repo
+        self.course_map_repo = course_map_repo
+        self.user_stats_repo = user_stats_repo
+
     async def record_activity(
+        self,
         user_id: UUID,
         course_map_id: UUID,
         node_id: int,
         activity_type: str,
         extra_data: dict | None = None,
-        db: AsyncSession | None = None,
     ) -> LearningActivity:
         """Record a new learning activity.
 
@@ -42,7 +55,6 @@ class ActivityService:
             node_id: The DAG node ID.
             activity_type: Type of activity (node_completed | quiz_passed | knowledge_card_finished).
             extra_data: Optional extra data (e.g., score, time_spent_seconds).
-            db: Async database session (if None, assumes caller handles commit).
 
         Returns:
             The created LearningActivity instance.
@@ -65,9 +77,7 @@ class ActivityService:
             extra_data=extra_data,
         )
 
-        if db is not None:
-            db.add(activity)
-            await db.flush()
+        await self.learning_activity_repo.create(activity)
 
         logger.info(
             "Recorded learning activity",
@@ -77,44 +87,35 @@ class ActivityService:
             activity_type=activity_type,
         )
 
-        # 如果是节点完成活动，检查课程是否已全部完成
-        if activity_type == "node_completed" and db is not None:
-            await ActivityService._check_and_update_course_completion(
+        # If node completed, check course completion
+        if activity_type == "node_completed":
+            await self._check_and_update_course_completion(
                 user_id=user_id,
                 course_map_id=course_map_id,
-                db=db,
             )
 
         return activity
 
-    @staticmethod
     async def _check_and_update_course_completion(
+        self,
         user_id: UUID,
         course_map_id: UUID,
-        db: AsyncSession,
     ) -> None:
-        """检查课程是否已全部完成，如果是则更新 completed_courses_count。
-
-        课程完成条件：所有 learn 类型节点都有对应的 node_completed 活动记录。
-
-        通过插入 activity_type="course_completed" 标记来避免重复计数。
+        """Check if course is fully completed and update stats.
 
         Args:
-            user_id: 用户 ID
-            course_map_id: 课程 ID
-            db: 数据库会话
+            user_id: User UUID.
+            course_map_id: Course map UUID.
         """
-        # 1. 获取课程 DAG 结构
-        course_stmt = select(CourseMap).where(CourseMap.id == course_map_id)
-        course_result = await db.execute(course_stmt)
-        course_map = course_result.scalar_one_or_none()
+        # 1. Get course DAG structure
+        course_map = await self.course_map_repo.find_by_id(course_map_id)
 
         if not course_map or not course_map.nodes:
             return
 
         nodes = course_map.nodes
 
-        # 2. 找出所有 learn 节点
+        # 2. Find all learn nodes
         learning_node_ids = {
             node["id"]
             for node in nodes
@@ -124,58 +125,39 @@ class ActivityService:
         if not learning_node_ids:
             return
 
-        # 3. 查询该用户在该课程中已完成的节点
-        completed_stmt = select(LearningActivity.node_id).where(
-            LearningActivity.user_id == user_id,
-            LearningActivity.course_map_id == course_map_id,
-            LearningActivity.activity_type == "node_completed",
-        ).distinct()
-        completed_result = await db.execute(completed_stmt)
-        completed_node_ids = {row[0] for row in completed_result.fetchall()}
+        # 3. Query completed nodes
+        completed_node_ids = await self.learning_activity_repo.find_completed_node_ids(
+            user_id=user_id,
+            course_map_id=course_map_id,
+        )
 
-        # 4. 判断是否全部完成
+        # 4. Check if all learn nodes are completed
         if learning_node_ids.issubset(completed_node_ids):
-            # 检查是否已经有 "course_completed" 标记（避免重复计数）
-            course_completion_marker_stmt = select(LearningActivity).where(
-                LearningActivity.user_id == user_id,
-                LearningActivity.course_map_id == course_map_id,
-                LearningActivity.activity_type == "course_completed",
+            # Check for existing completion marker
+            has_marker = await self.learning_activity_repo.find_course_completion_marker(
+                user_id=user_id,
+                course_map_id=course_map_id,
             )
-            marker_result = await db.execute(course_completion_marker_stmt)
-            has_marker = marker_result.scalar_one_or_none() is not None
 
-            if not has_marker:
-                # 首次完成该课程，插入标记并更新计数
+            if has_marker is None:
+                # First completion: insert marker and update stats
                 now = datetime.now(timezone.utc)
 
-                # 插入 course_completed 标记
                 completion_marker = LearningActivity(
                     user_id=user_id,
                     course_map_id=course_map_id,
-                    node_id=0,  # 课程级别标记，不关联具体节点
+                    node_id=0,
                     activity_type="course_completed",
                     completed_at=now,
                     extra_data={"total_nodes": len(learning_node_ids)},
                 )
-                db.add(completion_marker)
+                await self.learning_activity_repo.create(completion_marker)
 
-                # 更新 completed_courses_count
-                upsert_stmt = pg_insert(UserStats).values(
+                await self.user_stats_repo.upsert_increment_completed_courses(
                     user_id=user_id,
-                    total_study_seconds=0,
-                    completed_courses_count=1,
-                    mastered_nodes_count=0,
-                    updated_at=now,
+                    now=now,
                 )
-                upsert_stmt = upsert_stmt.on_conflict_do_update(
-                    constraint="user_stats_pkey",
-                    set_={
-                        "completed_courses_count": UserStats.completed_courses_count + 1,
-                        "updated_at": now,
-                    },
-                )
-                await db.execute(upsert_stmt)
-                await db.flush()
+                await self.user_stats_repo.flush()
 
                 logger.info(
                     "Course completed for the first time, incremented completed_courses_count",
@@ -183,37 +165,10 @@ class ActivityService:
                     course_map_id=str(course_map_id),
                 )
 
-    @staticmethod
-    async def _increment_mastered_nodes(user_id: UUID, db: AsyncSession) -> None:
-        """增加已掌握节点数（每完成一个 node 就增加 1）。
-
-        Args:
-            user_id: 用户 ID
-            db: 数据库会话
-        """
-        now = datetime.now(timezone.utc)
-        upsert_stmt = pg_insert(UserStats).values(
-            user_id=user_id,
-            total_study_seconds=0,
-            completed_courses_count=0,
-            mastered_nodes_count=1,
-            updated_at=now,
-        )
-        upsert_stmt = upsert_stmt.on_conflict_do_update(
-            constraint="user_stats_pkey",
-            set_={
-                "mastered_nodes_count": UserStats.mastered_nodes_count + 1,
-                "updated_at": now,
-            },
-        )
-        await db.execute(upsert_stmt)
-        await db.flush()
-
-    @staticmethod
     async def get_user_activities(
+        self,
         user_id: UUID,
         days: int,
-        db: AsyncSession,
     ) -> list[dict]:
         """Get user's learning activities for the past N days.
 
@@ -222,7 +177,6 @@ class ActivityService:
         Args:
             user_id: The authenticated user's ID.
             days: Number of days to look back (1-365).
-            db: Async database session.
 
         Returns:
             List of activity dicts with id, course_map_id, node_id, activity_type,
@@ -233,17 +187,10 @@ class ActivityService:
 
         cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
 
-        stmt = (
-            select(LearningActivity)
-            .where(
-                LearningActivity.user_id == user_id,
-                LearningActivity.completed_at >= cutoff_date,
-            )
-            .order_by(LearningActivity.completed_at.desc())
+        activities = await self.learning_activity_repo.find_by_user_since(
+            user_id=user_id,
+            cutoff_date=cutoff_date,
         )
-
-        result = await db.execute(stmt)
-        activities = result.scalars().all()
 
         logger.info(
             "Fetched learning activities",
@@ -264,33 +211,24 @@ class ActivityService:
             for activity in activities
         ]
 
-    @staticmethod
     async def get_course_activities(
+        self,
         user_id: UUID,
         course_map_id: UUID,
-        db: AsyncSession,
     ) -> list[dict]:
         """Get all activities for a specific course.
 
         Args:
             user_id: The authenticated user's ID.
             course_map_id: The course map to query activities for.
-            db: Async database session.
 
         Returns:
             List of activity dicts.
         """
-        stmt = (
-            select(LearningActivity)
-            .where(
-                LearningActivity.user_id == user_id,
-                LearningActivity.course_map_id == course_map_id,
-            )
-            .order_by(LearningActivity.completed_at.desc())
+        activities = await self.learning_activity_repo.find_by_user_and_course(
+            user_id=user_id,
+            course_map_id=course_map_id,
         )
-
-        result = await db.execute(stmt)
-        activities = result.scalars().all()
 
         logger.info(
             "Fetched course activities",
