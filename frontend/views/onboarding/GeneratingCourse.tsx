@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { generateCourseMap, STORAGE_KEYS, FinishData, Mode, buildLearningPath } from '../../utils/api';
+import { generateCourseMap, STORAGE_KEYS, FinishData, Mode, buildLearningPath, BUSINESS_CONFIG } from '../../utils/api';
 
 interface GenerationState {
   status: 'loading' | 'success' | 'error';

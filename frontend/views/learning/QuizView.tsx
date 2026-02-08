@@ -17,6 +17,8 @@ import {
 } from '../../utils/api';
 import { heartbeatManager } from '../../utils/learningHeartbeat';
 import { useLanguage } from '../../utils/LanguageContext';
+import { getSelectedCharacter } from '../../utils/mascotUtils';
+import { CHARACTER_MAPPING } from '../../utils/mascotConfig';
 
 interface UserAnswer {
   questionIdx: number;
@@ -49,7 +51,12 @@ const QuizView: React.FC = () => {
   const [quizData, setQuizData] = useState<QuizGenerateResponse | null>(null);
   const [userAnswers, setUserAnswers] = useState<UserAnswer[]>([]);
 
-  const MASCOT_SRC = "https://lh3.googleusercontent.com/aida-public/AB6AXuCnRMVMv3VQCalsOm2RCkci09ous1fHuESh9sMZOzls1ru6VuE5HAlxYcKU6AswyAOsq12l9kr0vdwHeD8hswbrsxz4xZRK5oDlUPQMkmsbBJks_RVJ7JpcWNSLbPi4ISfkMH__idCAOv8RTmRLMNFkIzfyPwb3vJzSQ628ux_fwHE7XdjKa0LbGIrGOhhEmLaWRqfg-nPFNVhkih46KYodq5ipAZkQGeaLwK99YG7Az-UcKbMDqfxhd6RQqOg4faz2K3kd90U7PsXV";
+  // 获取用户当前选择的角色形象（smile_transparent）
+  const getMascotSrc = (): string => {
+    const character = getSelectedCharacter();
+    const resourceCharacter = CHARACTER_MAPPING[character];
+    return `/compressed_output/smile_transparent/${resourceCharacter}_smile.webm`;
+  };
 
   // Start/stop heartbeat when entering/leaving the quiz page
   useEffect(() => {
@@ -307,7 +314,7 @@ const QuizView: React.FC = () => {
           <div className="animate-in fade-in zoom-in slide-in-from-bottom-8 duration-700 flex flex-col items-center max-w-sm">
             <div className="mb-8 relative">
               <div className="absolute inset-0 bg-slate-100 rounded-full blur-2xl scale-125 opacity-50"></div>
-              <Mascot src={MASCOT_SRC} width="160" className="drop-shadow-2xl relative z-10" />
+              <Mascot src={getMascotSrc()} width="160" className="drop-shadow-2xl relative z-10" />
             </div>
 
             <p className="text-[10px] font-black uppercase tracking-[0.4em] text-secondary mb-3">Assessment Ready</p>
