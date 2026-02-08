@@ -24,7 +24,7 @@ const OutfitView: React.FC = () => {
   const [items, setItems] = useState<Item[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isPurchasing, setIsPurchasing] = useState(false);
-  
+
   // Toast state
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
@@ -361,10 +361,10 @@ const OutfitView: React.FC = () => {
           </div>
         </div>
       )}
-      
-      <SuccessFeedbackPill 
-        isOpen={showToast} 
-        onClose={() => setShowToast(false)} 
+
+      <SuccessFeedbackPill
+        isOpen={showToast}
+        onClose={() => setShowToast(false)}
         message={toastMessage}
       />
     </div>

@@ -1,6 +1,6 @@
 /**
  * Frontend constants for business logic and configuration.
- * 
+ *
  * Centralized constants to ensure consistency across the application.
  */
 
@@ -59,22 +59,22 @@ export const STORAGE_KEYS = {
   ONBOARDING_DATA: 'evo_onboarding_data',
   ASSESSMENT_SESSION_ID: 'evo_assessment_session_id',
   SELECTED_TOPIC: 'evo_selected_topic',
-  
+
   // Course & Learning
   COURSE_MAP: 'evo_course_map',
   MAIN_COURSE: 'evo_main_course',
   CURRENT_NODE: 'evo_current_node',
   LEARNED_TOPICS: 'evo_learned_topics',
   NODE_PROGRESS: 'evo_node_progress',
-  
+
   // QA & Knowledge Card
   QA_HISTORY_PREFIX: 'evo_qa_history_',
   KC_CACHE_PREFIX: 'evo_kc_',
-  
+
   // User customization
   USER_MASCOT: 'evo_user_mascot',
   USER_OUTFIT: 'evo_user_outfit',
-  
+
   // Invite
   PENDING_INVITE_CODE: 'pending_invite_code',
 } as const;
@@ -83,19 +83,19 @@ export const STORAGE_KEYS = {
 export const BUSINESS_CONFIG = {
   // Learning heartbeat
   HEARTBEAT_INTERVAL_MS: 30000, // 30 seconds
-  
+
   // Default course generation
   DEFAULT_MODE: MODE.FAST,
   DEFAULT_COMMITMENT_MINUTES: 120,
-  
+
   // Progress animation
   INITIAL_PROGRESS_PERCENT: 30,
-  
+
   // Time display thresholds
   MINUTES_TO_HOURS_THRESHOLD: 120,
   SECONDS_PER_HOUR: 3600,
   SECONDS_PER_MINUTE: 60,
-  
+
   // Quiz scoring
   QUIZ_PASS_SCORE: 60,
 } as const;

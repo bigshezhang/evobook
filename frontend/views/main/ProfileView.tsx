@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../utils/AuthContext';
 import Header from '../../components/Header';
 import BottomNav from '../../components/BottomNav';
-import { getProfileStats, ProfileStats, getInviteCode, InviteCodeData, getUserCourses, CourseListItem } from '../../utils/api';
+import { getProfileStats, ProfileStats, getInviteCode, InviteCodeData, getUserCourses, CourseListItem, getProfile, updateProfile, Profile } from '../../utils/api';
 import { getSelectedCharacter } from '../../utils/mascotUtils';
 import { CHARACTER_MAPPING } from '../../utils/mascotConfig';
 import { QRCodeSVG } from 'qrcode.react';
@@ -25,6 +25,10 @@ const ProfileView: React.FC = () => {
     type: 'success', 
     visible: false 
   });
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [showEditNickname, setShowEditNickname] = useState(false);
+  const [editingNickname, setEditingNickname] = useState('');
+  const [savingNickname, setSavingNickname] = useState(false);
 
   // 检测屏幕尺寸 - 同时考虑高度和宽度
   useEffect(() => {
@@ -71,30 +75,72 @@ const ProfileView: React.FC = () => {
   // The high-fidelity mascot image for the poster
   const POSTER_MASCOT = "https://lh3.googleusercontent.com/aida-public/AB6AXuA46trIZajUdPDtcb5Mve4AANhBVcFPf7hD1VJlypb0dFYRxS2hXKwdShsNFVNhbqxXKQFSjVVMsE3mxGpTikZ_57rFFad-Wac1TeLu7mkLVUcNcXHe1dMp94PSQWv0zRukZyCVX_0DBZ2YWtZ3z95XJoYIk-kHHf_jOtCXVxwOascf_uy1-xN9B6LDuY7LUnDzKY4Em18_6PP7pnkilqsGpMh1-4xyIUGnBpFdw5egLxog1wDMZwcwvb0tgobqJaobQeIGVn7VCUfO";
 
-  // Extract username from email (part before @)
-  const getUsernameFromEmail = (email: string | undefined): string => {
-    if (!email) return 'Loading...';
-    const atIndex = email.indexOf('@');
-    return atIndex > 0 ? email.substring(0, atIndex) : email;
+  // Get display name - prioritize profile.display_name, fallback to email prefix
+  const getDisplayName = (): string => {
+    if (profile?.display_name) {
+      return profile.display_name;
+    }
+    if (user?.email) {
+      const atIndex = user.email.indexOf('@');
+      return atIndex > 0 ? user.email.substring(0, atIndex) : user.email;
+    }
+    return 'Loading...';
+  };
+
+  // Handle edit nickname
+  const handleEditNickname = () => {
+    setEditingNickname(profile?.display_name || '');
+    setShowEditNickname(true);
+  };
+
+  // Handle save nickname
+  const handleSaveNickname = async () => {
+    const trimmedNickname = editingNickname.trim();
+    
+    if (!trimmedNickname) {
+      showToast('Nickname cannot be empty', 'error');
+      return;
+    }
+
+    if (trimmedNickname.length < 2 || trimmedNickname.length > 20) {
+      showToast('Nickname must be 2-20 characters', 'error');
+      return;
+    }
+
+    setSavingNickname(true);
+    try {
+      const updatedProfile = await updateProfile({ display_name: trimmedNickname });
+      setProfile(updatedProfile);
+      setShowEditNickname(false);
+      showToast('Nickname updated successfully!');
+    } catch (error) {
+      console.error('Failed to update nickname:', error);
+      showToast('Update failed, please try again', 'error');
+    } finally {
+      setSavingNickname(false);
+    }
   };
 
   // Generate poster image - 使用 html-to-image，真正的"显示什么样导出什么样"
   const generatePosterBlob = async (): Promise<Blob> => {
     const posterElement = document.getElementById('invite-poster-content');
-    const closeButton = document.getElementById('invite-close-button');
     
     if (!posterElement) throw new Error('Poster element not found');
 
-    // 只隐藏关闭按钮
-    if (closeButton) closeButton.style.display = 'none';
-
-    try {
-      const dataUrl = await toPng(posterElement, { pixelRatio: 2 });
-      const res = await fetch(dataUrl);
-      return await res.blob();
-    } finally {
-      if (closeButton) closeButton.style.display = '';
-    }
+    // 使用 filter 选项排除关闭按钮，避免 UI 闪烁
+    // pixelRatio: 3 for high quality (3x resolution)
+    const dataUrl = await toPng(posterElement, { 
+      pixelRatio: 3,
+      filter: (node) => {
+        // 排除关闭按钮及其子元素
+        if (node instanceof HTMLElement) {
+          return node.id !== 'invite-close-button';
+        }
+        return true;
+      }
+    });
+    const res = await fetch(dataUrl);
+    return await res.blob();
   };
 
   // Handle share image
@@ -192,6 +238,15 @@ const ProfileView: React.FC = () => {
 
   // Load profile stats and invite code from API
   useEffect(() => {
+    const loadProfile = async () => {
+      try {
+        const data = await getProfile();
+        setProfile(data);
+      } catch (error) {
+        console.error('Failed to load profile:', error);
+      }
+    };
+
     const loadStats = async () => {
       try {
         const data = await getProfileStats();
@@ -225,6 +280,7 @@ const ProfileView: React.FC = () => {
       }
     };
 
+    loadProfile();
     loadStats();
     loadInviteCode();
     loadCourses();
@@ -284,12 +340,15 @@ const ProfileView: React.FC = () => {
 
           <div className="flex items-center gap-2 mb-1 justify-center">
             <h2 className="text-2xl font-black text-black uppercase tracking-tight break-all">
-              {getUsernameFromEmail(user?.email)}
+              {getDisplayName()}
             </h2>
-            <div className="bg-black text-white text-[10px] font-black px-2 py-0.5 rounded-lg flex items-center gap-1 shadow-sm">
-              <span className="material-symbols-outlined text-[12px]" style={{ fontVariationSettings: "'FILL' 1" }}>verified</span>
-              PRO
-            </div>
+            <button
+              onClick={handleEditNickname}
+              className="w-7 h-7 flex items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200 active:scale-95 transition-all"
+              aria-label="Edit Nickname"
+            >
+              <span className="material-symbols-outlined text-slate-600 text-[16px]">edit</span>
+            </button>
           </div>
           <p className="text-slate-400 text-sm font-bold opacity-80">
             {loading ? 'Loading...' : (stats?.joined_date ? (() => {
@@ -434,7 +493,7 @@ const ProfileView: React.FC = () => {
                 <div>
                   <p className={`${isSmallScreen ? 'text-[8px]' : 'text-[9px]'} font-black uppercase tracking-[0.4em] text-primary/40 mb-1.5`}>Invited By</p>
                   <h1 className={`${isSmallScreen ? 'text-xl' : 'text-2xl'} font-black text-slate-900 tracking-tight leading-tight truncate`}>
-                    {getUsernameFromEmail(user?.email)}
+                    {getDisplayName()}
                   </h1>
                 </div>
 
@@ -528,6 +587,55 @@ const ProfileView: React.FC = () => {
             </div>
           </div>
 
+        </div>
+      )}
+
+      {/* Edit Nickname Modal */}
+      {showEditNickname && (
+        <div className="fixed inset-0 z-[150] bg-black/50 backdrop-blur-sm flex items-center justify-center p-6 animate-in fade-in duration-200">
+          <div className="bg-white rounded-[2.5rem] p-8 w-full max-w-sm shadow-2xl animate-in zoom-in duration-300">
+            <h3 className="text-2xl font-black text-slate-900 mb-6 text-center">Edit Nickname</h3>
+            
+            <div className="space-y-4">
+              <div className="relative">
+                <input
+                  type="text"
+                  value={editingNickname}
+                  onChange={(e) => setEditingNickname(e.target.value)}
+                  placeholder="Enter new nickname"
+                  maxLength={20}
+                  disabled={savingNickname}
+                  className="w-full h-14 px-5 rounded-2xl border-2 border-slate-200 text-base font-bold placeholder:text-slate-300 focus:border-primary transition-all disabled:opacity-50"
+                />
+                <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                  <span className={`text-xs font-black ${editingNickname.length > 20 ? 'text-red-400' : 'text-slate-300'}`}>
+                    {editingNickname.length}/20
+                  </span>
+                </div>
+              </div>
+
+              <p className="text-xs font-bold text-slate-400 text-center">
+                2-20 characters, letters, numbers and symbols
+              </p>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  onClick={() => setShowEditNickname(false)}
+                  disabled={savingNickname}
+                  className="flex-1 h-12 rounded-full font-bold text-slate-600 bg-slate-100 active:scale-95 transition-all disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveNickname}
+                  disabled={savingNickname || !editingNickname.trim()}
+                  className="flex-1 h-12 rounded-full font-bold text-white bg-charcoal active:scale-95 transition-all disabled:opacity-50 disabled:bg-slate-300"
+                >
+                  {savingNickname ? 'Saving...' : 'Save'}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 

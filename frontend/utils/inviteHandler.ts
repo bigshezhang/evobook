@@ -1,6 +1,6 @@
 /**
  * Invite code handling utilities.
- * 
+ *
  * Manages storing and processing invite codes from URL parameters.
  */
 
@@ -11,7 +11,7 @@ const STORAGE_KEY = STORAGE_KEYS.PENDING_INVITE_CODE;
 
 /**
  * Store an invite code to localStorage for later binding.
- * 
+ *
  * @param code - Invite code to store
  */
 export function storeInviteCode(code: string): void {
@@ -20,7 +20,7 @@ export function storeInviteCode(code: string): void {
 
 /**
  * Get pending invite code from localStorage.
- * 
+ *
  * @returns Invite code or null if not found
  */
 export function getPendingInviteCode(): string | null {
@@ -36,7 +36,7 @@ export function clearPendingInviteCode(): void {
 
 /**
  * Process pending invite code by binding it to the current user.
- * 
+ *
  * @returns Result with success status and optional message
  */
 export async function processPendingInvite(): Promise<{ success: boolean; message?: string }> {

@@ -552,7 +552,7 @@ export interface LearningActivitiesResponse {
 /**
  * Get user's learning activities for the past N days.
  * Returns raw UTC timestamps - frontend handles timezone conversion.
- * 
+ *
  * @param days - Number of days to look back (default: 180, max: 365)
  * @returns Learning activities with UTC timestamps
  */
@@ -603,7 +603,7 @@ export function buildLearningPath(
 /**
  * Read the current course_map_id from localStorage (convenience for components
  * that don't have it in their own state, like BottomNav).
- * 
+ *
  * @deprecated Use getActiveCourse() API instead. This localStorage-based approach
  * is unreliable and doesn't reflect the backend's active course state.
  */
@@ -635,7 +635,7 @@ export interface HeartbeatResponse {
 /**
  * Send learning heartbeat to record study time.
  * Client should send a heartbeat every 30 seconds while the user is actively learning.
- * 
+ *
  * @param request - Heartbeat request with course_map_id and node_id
  * @returns Heartbeat response with acknowledged status and total study seconds
  */
@@ -686,7 +686,7 @@ export interface ProfileUpdateRequest {
 
 /**
  * Get the authenticated user's profile.
- * 
+ *
  * @returns User profile
  */
 export async function getProfile(): Promise<Profile> {
@@ -707,7 +707,7 @@ export async function getProfile(): Promise<Profile> {
 
 /**
  * Update the authenticated user's profile.
- * 
+ *
  * @param updates - Partial profile updates
  * @returns Updated profile
  */
@@ -745,7 +745,7 @@ export interface ProfileStats {
 
 /**
  * Get user's learning statistics including study time, completed courses, and global rank.
- * 
+ *
  * @returns Profile statistics
  */
 export async function getProfileStats(): Promise<ProfileStats> {
@@ -813,7 +813,7 @@ export interface QuizAttemptDetail {
 
 /**
  * Submit a quiz attempt with user answers and score.
- * 
+ *
  * @param request - Quiz submission data
  * @returns Created attempt info
  */
@@ -839,7 +839,7 @@ export async function submitQuizAttempt(
 
 /**
  * Get quiz attempt history for a specific node.
- * 
+ *
  * @param courseMapId - Course map ID
  * @param nodeId - Quiz node ID
  * @returns List of quiz attempts
@@ -866,7 +866,7 @@ export async function getQuizHistory(
 
 /**
  * Get full details of a quiz attempt.
- * 
+ *
  * @param attemptId - Quiz attempt ID
  * @returns Full quiz attempt details
  */
@@ -901,7 +901,7 @@ export interface GameCurrencyResponse {
 
 /**
  * Get user's game currency data (gold, dice rolls, level, exp).
- * 
+ *
  * @returns Game currency data
  */
 export async function getCurrency(): Promise<GameCurrencyResponse> {
@@ -933,7 +933,7 @@ export interface RollDiceResponse {
 
 /**
  * Roll dice in the travel board game.
- * 
+ *
  * @param request - Roll dice request
  * @returns Dice result and remaining rolls
  */
@@ -971,7 +971,7 @@ export interface ClaimRewardResponse {
 
 /**
  * Claim a reward (gold, dice, or gift).
- * 
+ *
  * @param request - Reward claim request
  * @returns Success status and new balance
  */
@@ -1008,7 +1008,7 @@ export interface EarnExpResponse {
 
 /**
  * Earn experience points from learning activities.
- * 
+ *
  * @param request - Experience earn request
  * @returns Experience earned and level up status
  */
@@ -1050,7 +1050,7 @@ export interface ShopItemsResponse {
 
 /**
  * Get shop items by type.
- * 
+ *
  * @param itemType - Type of items to fetch
  * @returns List of shop items
  */
@@ -1083,7 +1083,7 @@ export interface PurchaseItemResponse {
 
 /**
  * Purchase an item from the shop.
- * 
+ *
  * @param request - Purchase request
  * @returns Purchase result
  */
@@ -1123,16 +1123,16 @@ export interface UserInventoryResponse {
 
 /**
  * Get user's inventory items.
- * 
+ *
  * @param itemType - Optional filter by item type
  * @returns User's inventory items
  */
 export async function getUserInventory(itemType?: 'clothes' | 'furniture'): Promise<UserInventoryResponse> {
   const headers = await getAuthHeaders();
-  const url = itemType 
+  const url = itemType
     ? `${API_BASE_URL}/api/v1/inventory?item_type=${itemType}`
     : `${API_BASE_URL}/api/v1/inventory`;
-  
+
   const response = await fetch(url, { headers });
 
   if (!response.ok) {
@@ -1156,7 +1156,7 @@ export interface EquipItemResponse {
 
 /**
  * Equip or unequip an inventory item.
- * 
+ *
  * @param request - Equip/unequip request
  * @returns Operation result
  */
@@ -1200,7 +1200,7 @@ export interface BindInviteResponse {
 
 /**
  * Get or create user's invite code.
- * 
+ *
  * @returns User's invite code data
  */
 export async function getInviteCode(): Promise<InviteCodeData> {
@@ -1221,7 +1221,7 @@ export async function getInviteCode(): Promise<InviteCodeData> {
 
 /**
  * Bind user to an invite code and grant rewards.
- * 
+ *
  * @param inviteCode - Invite code to bind
  * @returns Binding result with reward info
  */

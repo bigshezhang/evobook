@@ -26,7 +26,7 @@ const TravelBoard: React.FC = () => {
   const [isJumping, setIsJumping] = useState(false);
   const [eventModal, setEventModal] = useState<{ type: string; title: string; desc: string; reward?: number } | null>(null);
   const [activeCourseId, setActiveCourseId] = useState<string | null>(null);
-  
+
   // Toast state
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
@@ -464,9 +464,9 @@ const TravelBoard: React.FC = () => {
         </div>
       )}
 
-      <SuccessFeedbackPill 
-        isOpen={showToast} 
-        onClose={() => setShowToast(false)} 
+      <SuccessFeedbackPill
+        isOpen={showToast}
+        onClose={() => setShowToast(false)}
         message={toastMessage}
       />
 

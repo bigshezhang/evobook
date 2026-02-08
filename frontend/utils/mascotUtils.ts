@@ -3,9 +3,9 @@
  * Mascot Asset Manager & Registry
  */
 
-import { 
-  MascotCharacter, 
-  MascotOutfit, 
+import {
+  MascotCharacter,
+  MascotOutfit,
   SceneType,
   getMascotResourcePath,
   getResourceType
@@ -69,21 +69,21 @@ interface MascotConfig {
  * 获取资源路径（兼容旧代码）
  * @deprecated 请使用 getMascotResourcePath 代替
  */
-export const getMascotPath = ({ 
-  character, 
-  action, 
-  view = 'front', 
-  outfit = 'default' 
+export const getMascotPath = ({
+  character,
+  action,
+  view = 'front',
+  outfit = 'default'
 }: MascotConfig): string => {
   // 根据 view 和 action 映射到新的 scene 系统
   let scene: SceneType = 'default';
-  
+
   if (view === 'back') {
     scene = 'travel';
   } else if (action === 'idle' || action === 'wave') {
     scene = 'onboarding';
   }
-  
+
   return getMascotResourcePath(character, scene, outfit);
 };
 
