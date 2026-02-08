@@ -36,7 +36,7 @@ def upgrade() -> None:
     )
     op.create_index('idx_user_invites_code', 'user_invites', ['invite_code'])
     op.create_index('idx_user_invites_user_id', 'user_invites', ['user_id'])
-    
+
     # Create invite_bindings table
     op.create_table(
         'invite_bindings',
@@ -54,7 +54,7 @@ def upgrade() -> None:
     )
     op.create_index('idx_invite_bindings_inviter', 'invite_bindings', ['inviter_id'])
     op.create_index('idx_invite_bindings_invitee', 'invite_bindings', ['invitee_id'])
-    
+
     # Create user_rewards table (for future XP system integration)
     op.create_table(
         'user_rewards',
@@ -75,11 +75,11 @@ def downgrade() -> None:
     """Downgrade database schema."""
     op.drop_index('idx_user_rewards_user_id', table_name='user_rewards')
     op.drop_table('user_rewards')
-    
+
     op.drop_index('idx_invite_bindings_invitee', table_name='invite_bindings')
     op.drop_index('idx_invite_bindings_inviter', table_name='invite_bindings')
     op.drop_table('invite_bindings')
-    
+
     op.drop_index('idx_user_invites_user_id', table_name='user_invites')
     op.drop_index('idx_user_invites_code', table_name='user_invites')
     op.drop_table('user_invites')

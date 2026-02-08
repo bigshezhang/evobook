@@ -12,12 +12,12 @@ from app.infrastructure.database import Base
 
 class UserInvite(Base):
     """User invite code model.
-    
+
     Each user can have one unique invite code.
     """
-    
+
     __tablename__ = "user_invites"
-    
+
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[UUID] = mapped_column(
         PG_UUID(as_uuid=True),
@@ -42,19 +42,19 @@ class UserInvite(Base):
         nullable=False,
         server_default=text("CURRENT_TIMESTAMP"),
     )
-    
+
     def __repr__(self) -> str:
         return f"<UserInvite id={self.id} user_id={self.user_id} code={self.invite_code}>"
 
 
 class InviteBinding(Base):
     """Invite binding relationship model.
-    
+
     Tracks who invited whom. Each invitee can only be bound once.
     """
-    
+
     __tablename__ = "invite_bindings"
-    
+
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     inviter_id: Mapped[UUID] = mapped_column(
         PG_UUID(as_uuid=True),
@@ -85,19 +85,19 @@ class InviteBinding(Base):
         server_default=text("false"),
         comment="Whether XP reward has been granted",
     )
-    
+
     def __repr__(self) -> str:
         return f"<InviteBinding id={self.id} inviter={self.inviter_id} invitee={self.invitee_id}>"
 
 
 class UserReward(Base):
     """User rewards history model.
-    
+
     Tracks all XP and other rewards granted to users.
     """
-    
+
     __tablename__ = "user_rewards"
-    
+
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[UUID] = mapped_column(
         PG_UUID(as_uuid=True),
@@ -125,6 +125,6 @@ class UserReward(Base):
         nullable=False,
         server_default=text("CURRENT_TIMESTAMP"),
     )
-    
+
     def __repr__(self) -> str:
         return f"<UserReward id={self.id} user_id={self.user_id} type={self.reward_type} xp={self.xp_amount}>"

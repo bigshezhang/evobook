@@ -350,7 +350,7 @@ async def get_profile_stats(
 
         # 3. 获取排名数据
         ranking = await RankingService.get_user_rank(user_id=user_id, db=db)
-        
+
         # 4. 获取邀请码数据
         from app.domain.services.invite_service import InviteService
         invite_data = await InviteService.get_or_create_invite_code(

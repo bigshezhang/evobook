@@ -70,6 +70,11 @@ class Settings(BaseSettings):
         default=2,
         description="Max retries for LLM requests",
     )
+    
+    @property
+    def frontend_base_url(self) -> str:
+        """Alias for app_base_url for backward compatibility."""
+        return self.app_base_url
 
 
 @lru_cache

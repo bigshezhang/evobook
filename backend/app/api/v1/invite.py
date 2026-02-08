@@ -24,7 +24,7 @@ router = APIRouter(tags=["invite"])
 
 class InviteCodeResponse(BaseModel):
     """Response for get invite code endpoint."""
-    
+
     invite_code: str = Field(..., description="Raw invite code (6 characters)")
     formatted_code: str = Field(..., description="Formatted code (EvoBook#AbCdEf)")
     invite_url: str = Field(..., description="Full invite URL with code parameter")
@@ -33,13 +33,13 @@ class InviteCodeResponse(BaseModel):
 
 class BindInviteRequest(BaseModel):
     """Request body for binding an invite code."""
-    
+
     invite_code: str = Field(..., description="Invite code to bind (6 characters)")
 
 
 class BindInviteResponse(BaseModel):
     """Response for bind invite code endpoint."""
-    
+
     success: bool
     inviter_name: str | None = None
     reward: dict | None = None
@@ -55,17 +55,17 @@ async def get_invite_code(
     db: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> dict:
     """Get or create user's invite code.
-    
+
     Returns the user's unique invite code along with the formatted version,
     invite URL, and count of successful invites.
-    
+
     Args:
         user_id: Authenticated user ID from JWT.
         db: Database session.
-    
+
     Returns:
         InviteCodeResponse with invite code details.
-    
+
     Raises:
         401: User not authenticated.
         500: Server error (e.g., failed to generate unique code).
@@ -98,19 +98,19 @@ async def bind_invite_code(
     db: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> dict:
     """Bind user to an invite code and grant rewards.
-    
+
     This endpoint should be called after a new user completes authentication.
     The invite code is typically stored in localStorage by the frontend when
     the user visits a registration page with ?invite=CODE parameter.
-    
+
     Args:
         request: Request body containing the invite code.
         user_id: Authenticated user ID from JWT.
         db: Database session.
-    
+
     Returns:
         BindInviteResponse with success status and reward details.
-    
+
     Raises:
         400: Already bound, invalid code, or self-invite.
         401: User not authenticated.
@@ -122,7 +122,7 @@ async def bind_invite_code(
             invite_code=request.invite_code,
             db=db
         )
-        
+
         if not result["success"]:
             error_messages = {
                 "already_bound": "You have already used an invite code",
@@ -131,14 +131,14 @@ async def bind_invite_code(
             }
             error_code = result["error"].upper()
             error_message = error_messages.get(result["error"], "Failed to bind invite code")
-            
+
             logger.warning(
                 "Invite binding failed",
                 user_id=str(user_id),
                 invite_code=request.invite_code,
                 error=result["error"]
             )
-            
+
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail={
@@ -148,7 +148,7 @@ async def bind_invite_code(
                     }
                 }
             )
-        
+
         return result
     except HTTPException:
         raise

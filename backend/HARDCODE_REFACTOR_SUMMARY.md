@@ -269,13 +269,13 @@ if node_type == NODE_TYPE_QUIZ:
 
 ```typescript
 // 导入常量
-import { 
-  STORAGE_KEYS, 
-  NODE_STATUS, 
-  NODE_TYPE, 
-  LEVEL, 
+import {
+  STORAGE_KEYS,
+  NODE_STATUS,
+  NODE_TYPE,
+  LEVEL,
   MODE,
-  BUSINESS_CONFIG 
+  BUSINESS_CONFIG
 } from './utils/constants';
 
 // 使用示例
