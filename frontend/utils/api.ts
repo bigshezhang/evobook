@@ -765,6 +765,8 @@ export interface ProfileStats {
   global_rank: number | null;
   rank_percentile: number | null;
   total_users: number;
+  invite_code: string;
+  successful_invites_count: number;
 }
 
 /**
@@ -1196,6 +1198,71 @@ export async function equipItem(request: EquipItemRequest): Promise<EquipItemRes
     const errorData = await response.json().catch(() => ({}));
     throw new Error(
       errorData.detail?.message || `Failed to equip item: ${response.status}`
+    );
+  }
+
+  return response.json();
+}
+
+// ---------------------------------------------------------------------------
+// Invite System APIs
+// ---------------------------------------------------------------------------
+
+export interface InviteCodeData {
+  invite_code: string;
+  formatted_code: string;
+  invite_url: string;
+  successful_invites_count: number;
+}
+
+export interface BindInviteResponse {
+  success: boolean;
+  inviter_name?: string;
+  reward?: {
+    xp_earned: number;
+    message: string;
+  };
+}
+
+/**
+ * Get or create user's invite code.
+ * 
+ * @returns User's invite code data
+ */
+export async function getInviteCode(): Promise<InviteCodeData> {
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${API_BASE_URL}/api/v1/profile/invite-code`, {
+    headers,
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(
+      errorData.error?.message || `Failed to get invite code: ${response.status}`
+    );
+  }
+
+  return response.json();
+}
+
+/**
+ * Bind user to an invite code and grant rewards.
+ * 
+ * @param inviteCode - Invite code to bind
+ * @returns Binding result with reward info
+ */
+export async function bindInviteCode(inviteCode: string): Promise<BindInviteResponse> {
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${API_BASE_URL}/api/v1/auth/bind-invite`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ invite_code: inviteCode }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(
+      errorData.error?.message || `Failed to bind invite code: ${response.status}`
     );
   }
 

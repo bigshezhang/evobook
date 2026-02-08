@@ -4,9 +4,11 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../utils/AuthContext';
 import Header from '../../components/Header';
 import BottomNav from '../../components/BottomNav';
-import { getProfileStats, ProfileStats } from '../../utils/api';
+import { getProfileStats, ProfileStats, getInviteCode, InviteCodeData } from '../../utils/api';
 import { getSelectedCharacter } from '../../utils/mascotUtils';
 import { CHARACTER_MAPPING } from '../../utils/mascotConfig';
+import { QRCodeSVG } from 'qrcode.react';
+import html2canvas from 'html2canvas';
 
 const ProfileView: React.FC = () => {
   const navigate = useNavigate();
@@ -14,6 +16,8 @@ const ProfileView: React.FC = () => {
   const [showInvite, setShowInvite] = useState(false);
   const [stats, setStats] = useState<ProfileStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [inviteData, setInviteData] = useState<InviteCodeData | null>(null);
+  const [loadingInvite, setLoadingInvite] = useState(false);
 
   // 获取用户选择的角色头像
   const getProfileAvatar = (): string => {
@@ -39,7 +43,133 @@ const ProfileView: React.FC = () => {
     return atIndex > 0 ? email.substring(0, atIndex) : email;
   };
 
-  // Load profile stats from API
+  // Generate canvas from poster
+  const generatePosterCanvas = async () => {
+    const posterElement = document.getElementById('invite-poster-content');
+    const closeButton = document.getElementById('invite-close-button');
+    const bgGlow1 = document.getElementById('bg-glow-1');
+    const bgGlow2 = document.getElementById('bg-glow-2');
+    
+    if (!posterElement) throw new Error('Poster element not found');
+
+    // Hide elements that shouldn't be in the exported image
+    if (closeButton) closeButton.style.display = 'none';
+    if (bgGlow1) bgGlow1.style.display = 'none';
+    if (bgGlow2) bgGlow2.style.display = 'none';
+    
+    // Store original styles and remove problematic classes
+    const originalClass = posterElement.className;
+    const originalOverflow = posterElement.style.overflow;
+    
+    posterElement.className = posterElement.className
+      .replace(/animate-in/g, '')
+      .replace(/zoom-in/g, '')
+      .replace(/duration-\d+/g, '')
+      .replace(/overflow-hidden/g, '');
+    posterElement.style.overflow = 'visible';
+
+    // Wait for DOM to settle and ensure all content is rendered
+    await new Promise(resolve => setTimeout(resolve, 200));
+
+    try {
+      const canvas = await html2canvas(posterElement, {
+        backgroundColor: null,
+        scale: 2,
+        logging: false,
+        useCORS: true,
+        allowTaint: true,
+        scrollY: -window.scrollY,
+        scrollX: -window.scrollX,
+      });
+      return canvas;
+    } finally {
+      // Restore all hidden elements and original classes
+      if (closeButton) closeButton.style.display = '';
+      if (bgGlow1) bgGlow1.style.display = '';
+      if (bgGlow2) bgGlow2.style.display = '';
+      posterElement.className = originalClass;
+      posterElement.style.overflow = originalOverflow;
+    }
+  };
+
+  // Handle share image
+  const handleShare = async () => {
+    try {
+      const canvas = await generatePosterCanvas();
+
+      canvas.toBlob(async (blob) => {
+        if (!blob) return;
+
+        const file = new File([blob], 'evobook-invite.png', { type: 'image/png' });
+
+        if (navigator.share && navigator.canShare({ files: [file] })) {
+          await navigator.share({
+            files: [file],
+            title: 'Join me on EvoBook!',
+            text: `Use code ${inviteData?.formatted_code} to get +500 XP!`,
+          });
+        } else {
+          alert('Share not supported. Try Download Image instead.');
+        }
+      });
+    } catch (error) {
+      console.error('Failed to share:', error);
+      alert('Share failed. Please try again.');
+    }
+  };
+
+  // Handle download image
+  const handleDownload = async () => {
+    try {
+      const canvas = await generatePosterCanvas();
+
+      canvas.toBlob((blob) => {
+        if (!blob) return;
+
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `evobook-invite-${inviteData?.invite_code || 'poster'}.png`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      });
+    } catch (error) {
+      console.error('Failed to download:', error);
+      alert('Download failed. Please try again.');
+    }
+  };
+
+  // Handle copy invite link
+  const handleCopyLink = async () => {
+    if (!inviteData?.invite_url) return;
+
+    try {
+      await navigator.clipboard.writeText(inviteData.invite_url);
+      alert('Invite link copied to clipboard!');
+    } catch (error) {
+      // Fallback for older browsers
+      const textArea = document.createElement('textarea');
+      textArea.value = inviteData.invite_url;
+      textArea.style.position = 'fixed';
+      textArea.style.left = '-999999px';
+      document.body.appendChild(textArea);
+      textArea.select();
+      
+      try {
+        document.execCommand('copy');
+        alert('Invite link copied to clipboard!');
+      } catch (err) {
+        console.error('Failed to copy:', err);
+        alert('Failed to copy link. Please copy manually: ' + inviteData.invite_url);
+      }
+      
+      document.body.removeChild(textArea);
+    }
+  };
+
+  // Load profile stats and invite code from API
   useEffect(() => {
     const loadStats = async () => {
       try {
@@ -52,7 +182,20 @@ const ProfileView: React.FC = () => {
       }
     };
 
+    const loadInviteCode = async () => {
+      try {
+        setLoadingInvite(true);
+        const data = await getInviteCode();
+        setInviteData(data);
+      } catch (error) {
+        console.error('Failed to load invite code:', error);
+      } finally {
+        setLoadingInvite(false);
+      }
+    };
+
     loadStats();
+    loadInviteCode();
 
     // Listen for study time updates from heartbeat
     const handleStudyTimeUpdate = (event: CustomEvent) => {
@@ -176,7 +319,7 @@ const ProfileView: React.FC = () => {
                 <span className="text-base font-black tracking-tight text-slate-900">Invite Friends</span>
                 <span className="text-[10px] font-black bg-white text-primary border border-primary/20 px-2 py-0.5 rounded-lg">+500 XP</span>
               </div>
-              <span className="text-xs font-bold text-slate-500">Code: <span className="text-slate-900 font-black">{stats?.user_name ? stats.user_name.toUpperCase().replace(/\s+/g, '').slice(0, 8) + '99' : 'EVOBOOK99'}</span></span>
+              <span className="text-xs font-bold text-slate-500">Code: <span className="text-slate-900 font-black">{loadingInvite ? 'Loading...' : (inviteData?.formatted_code || 'N/A')}</span></span>
             </div>
             <button
               onClick={() => setShowInvite(true)}
@@ -221,14 +364,15 @@ const ProfileView: React.FC = () => {
         <div className="fixed inset-0 z-[100] bg-white flex flex-col items-center justify-center p-6 animate-in fade-in duration-300">
 
           {/* Poster Content Card - 淡紫色渐变背景 */}
-          <div className="w-full max-w-[340px] bg-gradient-to-br from-purple-50 via-purple-100/80 to-indigo-50 rounded-[3.5rem] shadow-2xl relative overflow-hidden flex flex-col animate-in zoom-in duration-400">
+          <div id="invite-poster-content" className="w-full max-w-[340px] bg-gradient-to-br from-purple-50 via-purple-100/80 to-indigo-50 rounded-[3.5rem] shadow-2xl relative overflow-hidden flex flex-col animate-in zoom-in duration-400">
 
             {/* Close Button Inside Card (X icon) */}
             <button
+              id="invite-close-button"
               onClick={() => setShowInvite(false)}
-              className="absolute top-6 right-6 w-8 h-8 flex items-center justify-center z-[110] active:scale-90"
+              className="absolute top-6 right-6 w-10 h-10 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center z-[110] active:scale-90 shadow-lg border border-slate-100"
             >
-              <span className="material-symbols-outlined text-slate-400 text-[22px] font-bold">close</span>
+              <span className="material-symbols-outlined text-slate-700 text-[22px] font-bold">close</span>
             </button>
 
             {/* Square Mascot Container - 更紧凑 */}
@@ -267,7 +411,7 @@ const ProfileView: React.FC = () => {
             </div>
 
             {/* Bottom White Section - QR style - 更紧凑 */}
-            <div className="bg-white rounded-t-[3rem] p-6 flex flex-col items-center shadow-[0_-20px_50px_rgba(0,0,0,0.02)]">
+            <div className="bg-white rounded-t-[3rem] rounded-b-[3.5rem] p-6 pb-16 flex flex-col items-center shadow-[0_-20px_50px_rgba(0,0,0,0.02)]">
               <div className="text-center mb-4">
                 <h3 className="text-lg font-black text-slate-900 tracking-tight">
                   {stats?.user_name || getUsernameFromEmail(user?.email)}
@@ -275,27 +419,57 @@ const ProfileView: React.FC = () => {
                 <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mt-1">Join the learning revolution</p>
               </div>
 
-              {/* Abstract QR Grid */}
-              <div className="w-32 h-32 p-4 bg-slate-50 rounded-[2rem] border border-slate-100 flex items-center justify-center">
-                 <div className="grid grid-cols-7 gap-1.5 w-full h-full">
-                    {[...Array(49)].map((_, i) => (
-                      <div key={i} className={`w-1.5 h-1.5 rounded-[2px] ${(i % 3 === 0 || i % 7 === 0 || i % 11 === 0) ? 'bg-slate-800' : 'bg-transparent'}`}></div>
-                    ))}
-                 </div>
+              {/* Real QR Code */}
+              <div className="w-32 h-32 p-3 bg-white rounded-[2rem] border border-slate-100 flex items-center justify-center mb-2">
+                {inviteData ? (
+                  <QRCodeSVG 
+                    value={inviteData.invite_url}
+                    size={104}
+                    level="H"
+                    includeMargin={false}
+                  />
+                ) : (
+                  <div className="text-slate-300 text-xs">Loading...</div>
+                )}
               </div>
             </div>
 
-            {/* Background Glows */}
-            <div className="absolute top-0 right-0 w-56 h-56 bg-primary/10 rounded-full blur-[90px] pointer-events-none"></div>
-            <div className="absolute bottom-1/4 left-0 w-48 h-48 bg-indigo-500/10 rounded-full blur-[70px] pointer-events-none"></div>
+            {/* Background Glows - hidden during export */}
+            <div id="bg-glow-1" className="absolute top-0 right-0 w-56 h-56 bg-primary/10 rounded-full blur-[90px] pointer-events-none"></div>
+            <div id="bg-glow-2" className="absolute bottom-1/4 left-0 w-48 h-48 bg-indigo-500/10 rounded-full blur-[70px] pointer-events-none"></div>
           </div>
 
-          {/* Floating Share Button at the bottom of the screen */}
-          <div className="w-full max-w-[440px] px-2 mt-4 animate-in slide-in-from-bottom-6 duration-500">
-            <button className="w-full bg-white py-4 rounded-[2.5rem] font-black text-slate-900 shadow-2xl active:scale-[0.97] transition-all flex items-center justify-center gap-3 border border-slate-100">
-              <span className="material-symbols-outlined text-slate-900 font-bold">share</span>
+          {/* Action Buttons at the bottom */}
+          <div className="w-full max-w-[440px] px-4 mt-6 space-y-3 animate-in slide-in-from-bottom-6 duration-500">
+            {/* Share Image Button */}
+            <button 
+              onClick={handleShare}
+              className="w-full bg-black py-4 rounded-[2rem] font-black text-white shadow-xl active:scale-[0.97] transition-all flex items-center justify-center gap-3"
+            >
+              <span className="material-symbols-outlined text-white">share</span>
               <span className="text-[15px] tracking-tight">Share Image</span>
             </button>
+
+            {/* Download and Copy Link Buttons */}
+            <div className="grid grid-cols-2 gap-3">
+              {/* Download Image Button */}
+              <button 
+                onClick={handleDownload}
+                className="bg-white py-3.5 rounded-[2rem] font-black text-slate-900 shadow-lg active:scale-[0.97] transition-all flex items-center justify-center gap-2 border border-slate-100"
+              >
+                <span className="material-symbols-outlined text-slate-700">download</span>
+                <span className="text-[13px] tracking-tight">Download</span>
+              </button>
+
+              {/* Copy Link Button */}
+              <button 
+                onClick={handleCopyLink}
+                className="bg-white py-3.5 rounded-[2rem] font-black text-slate-900 shadow-lg active:scale-[0.97] transition-all flex items-center justify-center gap-2 border border-slate-100"
+              >
+                <span className="material-symbols-outlined text-slate-700">link</span>
+                <span className="text-[13px] tracking-tight">Copy Link</span>
+              </button>
+            </div>
           </div>
 
         </div>

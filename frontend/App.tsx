@@ -3,6 +3,7 @@ import React, { useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './utils/AuthContext';
 import { LanguageProvider } from './utils/LanguageContext';
+import { storeInviteCode, processPendingInvite } from './utils/inviteHandler';
 
 // Reset localStorage when ?reset=1 is in URL
 const useResetOnParam = () => {
@@ -88,6 +89,76 @@ const QADetailRouteView: React.FC = () => {
   return <QADetailModal isOpen={true} onClose={() => navigate(-1)} data={data} />;
 };
 
+// AppInternals: handles hooks that require Router and Auth context
+const AppInternals: React.FC = () => {
+  const { user } = useAuth();
+  
+  // Detect invite code in URL
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const inviteCode = params.get('invite');
+    if (inviteCode) {
+      storeInviteCode(inviteCode);
+      console.log('Invite code detected and stored:', inviteCode);
+    }
+  }, []);
+  
+  // Process pending invite after authentication
+  useEffect(() => {
+    if (!user) return;
+
+    const processInvite = async () => {
+      const result = await processPendingInvite();
+      if (result.success && result.message) {
+        alert(result.message);
+      }
+    };
+
+    const timer = setTimeout(() => {
+      processInvite();
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [user]);
+  
+  return (
+    <Routes>
+      {/* Public route — login / signup */}
+      <Route path="/login" element={<LoginView />} />
+
+      {/* Onboarding Flow */}
+      <Route path="/" element={<ProtectedRoute><RootRedirect /></ProtectedRoute>} />
+      <Route path="/interests" element={<ProtectedRoute><InterestSelection /></ProtectedRoute>} />
+      <Route path="/assessment" element={<ProtectedRoute><AssessmentChatWithKey /></ProtectedRoute>} />
+      <Route path="/companion" element={<ProtectedRoute><CompanionSelection /></ProtectedRoute>} />
+      <Route path="/notifications" element={<ProtectedRoute><NotificationPermission /></ProtectedRoute>} />
+      <Route path="/generating" element={<ProtectedRoute><GeneratingCourse /></ProtectedRoute>} />
+      
+      {/* Main Learning Flow */}
+      <Route path="/course-detail" element={<ProtectedRoute><CourseDetail /></ProtectedRoute>} />
+      <Route path="/knowledge-tree" element={<ProtectedRoute><KnowledgeTree /></ProtectedRoute>} />
+      <Route path="/knowledge-card" element={<ProtectedRoute><KnowledgeCardWithKey /></ProtectedRoute>} />
+      <Route path="/quiz" element={<ProtectedRoute><QuizView /></ProtectedRoute>} />
+      <Route path="/quiz-history" element={<ProtectedRoute><QuizHistoryList /></ProtectedRoute>} />
+      <Route path="/quiz-attempt" element={<ProtectedRoute><QuizAttemptDetail /></ProtectedRoute>} />
+      <Route path="/qa-detail" element={<ProtectedRoute><QADetailRouteView /></ProtectedRoute>} />
+      
+      {/* Game Flow */}
+      <Route path="/game" element={<ProtectedRoute><TravelBoard /></ProtectedRoute>} />
+      <Route path="/game/outfit" element={<ProtectedRoute><OutfitView /></ProtectedRoute>} />
+      
+      {/* Main Navigation Tabs */}
+      <Route path="/courses" element={<ProtectedRoute><CoursesDashboard /></ProtectedRoute>} />
+      {/* Keep /dashboard as alias for backward compatibility */}
+      <Route path="/dashboard" element={<Navigate to="/courses" replace />} />
+      <Route path="/discovery/:category" element={<ProtectedRoute><DiscoveryList /></ProtectedRoute>} />
+      <Route path="/profile" element={<ProtectedRoute><ProfileView /></ProtectedRoute>} />
+      
+      <Route path="*" element={<Navigate to="/" />} />
+    </Routes>
+  );
+};
+
 // Smart root redirect: check if user has courses, then decide where to go
 const RootRedirect: React.FC = () => {
   const navigate = useNavigate();
@@ -154,40 +225,7 @@ const App: React.FC = () => {
       <LanguageProvider>
         <HashRouter>
           <div className="max-w-lg mx-auto min-h-screen bg-white shadow-xl relative overflow-x-hidden">
-            <Routes>
-            {/* Public route — login / signup */}
-            <Route path="/login" element={<LoginView />} />
-
-            {/* Onboarding Flow */}
-            <Route path="/" element={<ProtectedRoute><RootRedirect /></ProtectedRoute>} />
-            <Route path="/interests" element={<ProtectedRoute><InterestSelection /></ProtectedRoute>} />
-            <Route path="/assessment" element={<ProtectedRoute><AssessmentChatWithKey /></ProtectedRoute>} />
-            <Route path="/companion" element={<ProtectedRoute><CompanionSelection /></ProtectedRoute>} />
-            <Route path="/notifications" element={<ProtectedRoute><NotificationPermission /></ProtectedRoute>} />
-            <Route path="/generating" element={<ProtectedRoute><GeneratingCourse /></ProtectedRoute>} />
-            
-            {/* Main Learning Flow */}
-            <Route path="/course-detail" element={<ProtectedRoute><CourseDetail /></ProtectedRoute>} />
-            <Route path="/knowledge-tree" element={<ProtectedRoute><KnowledgeTree /></ProtectedRoute>} />
-            <Route path="/knowledge-card" element={<ProtectedRoute><KnowledgeCardWithKey /></ProtectedRoute>} />
-            <Route path="/quiz" element={<ProtectedRoute><QuizView /></ProtectedRoute>} />
-            <Route path="/quiz-history" element={<ProtectedRoute><QuizHistoryList /></ProtectedRoute>} />
-            <Route path="/quiz-attempt" element={<ProtectedRoute><QuizAttemptDetail /></ProtectedRoute>} />
-            <Route path="/qa-detail" element={<ProtectedRoute><QADetailRouteView /></ProtectedRoute>} />
-            
-            {/* Game Flow */}
-            <Route path="/game" element={<ProtectedRoute><TravelBoard /></ProtectedRoute>} />
-            <Route path="/game/outfit" element={<ProtectedRoute><OutfitView /></ProtectedRoute>} />
-            
-            {/* Main Navigation Tabs */}
-            <Route path="/courses" element={<ProtectedRoute><CoursesDashboard /></ProtectedRoute>} />
-            {/* Keep /dashboard as alias for backward compatibility */}
-            <Route path="/dashboard" element={<Navigate to="/courses" replace />} />
-            <Route path="/discovery/:category" element={<ProtectedRoute><DiscoveryList /></ProtectedRoute>} />
-            <Route path="/profile" element={<ProtectedRoute><ProfileView /></ProtectedRoute>} />
-            
-            <Route path="*" element={<Navigate to="/" />} />
-            </Routes>
+            <AppInternals />
           </div>
         </HashRouter>
       </LanguageProvider>
