@@ -1,6 +1,6 @@
 /**
  * Activity aggregator for heatmap visualization
- * 
+ *
  * Converts raw UTC activity timestamps to daily aggregated data
  * for GitHub-style activity heatmap display.
  */
@@ -17,7 +17,7 @@ export interface DayActivity {
 
 /**
  * Aggregate learning activities into daily heatmap data.
- * 
+ *
  * @param activities - Array of activities with UTC timestamps
  * @param days - Number of days to generate (default: 36)
  * @returns Array of daily activity data with intensity levels
@@ -72,7 +72,7 @@ export function aggregateActivitiesToHeatmap(
 
 /**
  * Format a Date object to YYYY-MM-DD string in local timezone.
- * 
+ *
  * @param date - Date object to format
  * @returns Date string in YYYY-MM-DD format
  */

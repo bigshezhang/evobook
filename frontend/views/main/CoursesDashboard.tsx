@@ -47,7 +47,7 @@ const CoursesDashboard: React.FC = () => {
       try {
         setIsLoadingActivity(true);
         const data = await getLearningActivities(180); // Get 6 months of data
-        
+
         // Aggregate into 36-day heatmap
         const heatmap = aggregateActivitiesToHeatmap(data.activities, 36);
         setHeatmapData(heatmap);
@@ -105,13 +105,13 @@ const CoursesDashboard: React.FC = () => {
   // Fixed CourseCard type definition to allow 'key' prop in maps
   const CourseCard: React.FC<{ course: any }> = ({ course }) => (
     <div className="flex flex-col gap-3">
-      <div 
+      <div
         onClick={() => navigate(buildLearningPath('/course-detail', { cid: getStoredCourseMapId() }))}
         className="aspect-square bg-[#F0EBE3] rounded-[2.5rem] overflow-hidden relative group cursor-pointer shadow-sm border border-black/5"
       >
-        <img 
-          alt={course.title} 
-          className="w-full h-full object-cover mix-blend-multiply opacity-90 group-hover:scale-105 transition-transform duration-500" 
+        <img
+          alt={course.title}
+          className="w-full h-full object-cover mix-blend-multiply opacity-90 group-hover:scale-105 transition-transform duration-500"
           src={course.img}
         />
         {/* Friends Avatars Overlay if applicable */}
@@ -134,7 +134,7 @@ const CoursesDashboard: React.FC = () => {
             <span className="text-[12px] font-bold text-slate-400">{course.rating}</span>
           </div>
         </div>
-        <button 
+        <button
           onClick={(e) => {
             e.stopPropagation();
             handleAddCourse();
@@ -154,14 +154,14 @@ const CoursesDashboard: React.FC = () => {
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-[32px] font-black tracking-tight text-primary">Courses</h1>
           <div className="flex items-center gap-3">
-            <button 
+            <button
               onClick={() => navigate('/assessment')}
               className="flex items-center gap-2 px-4 h-11 rounded-2xl bg-white border border-slate-100 shadow-sm active:scale-95 transition-all"
             >
               <span className="material-symbols-rounded text-secondary text-[22px]" style={{ fontVariationSettings: "'FILL' 0" }}>library_add</span>
               <span className="text-[13px] font-bold text-slate-700">Create</span>
             </button>
-            <button 
+            <button
               onClick={() => navigate('/profile')}
               className="w-11 h-11 rounded-full bg-[#E0E2D1] border border-slate-100 shadow-sm flex items-center justify-center active:scale-95 transition-transform overflow-hidden"
             >
@@ -176,13 +176,13 @@ const CoursesDashboard: React.FC = () => {
 
         {/* Top Tab Switcher */}
         <div className="bg-[#F1F3F9] p-1 rounded-2xl flex gap-1 mb-4 shadow-inner">
-          <button 
+          <button
             onClick={() => setSearchParams({ tab: 'mine' })}
             className={`flex-1 py-3 text-[14px] font-black rounded-xl transition-all ${activeTab === 'mine' ? 'bg-white shadow-md text-primary' : 'text-slate-400'}`}
           >
             Mine
           </button>
-          <button 
+          <button
             onClick={() => setSearchParams({ tab: 'discovery' })}
             className={`flex-1 py-3 text-[14px] font-black rounded-xl transition-all ${activeTab === 'discovery' ? 'bg-white shadow-md text-primary' : 'text-slate-400'}`}
           >
@@ -208,15 +208,15 @@ const CoursesDashboard: React.FC = () => {
                   <div className="grid grid-cols-12 gap-2">
                     {heatmapData.map((day, i) => {
                       // Map intensity to colors
-                      const bgColor = 
+                      const bgColor =
                         day.intensity === 'deep' ? 'bg-secondary' :
                         day.intensity === 'medium' ? 'bg-secondary/60' :
                         day.intensity === 'light' ? 'bg-accent-purple/40' :
                         'bg-[#F3F4F6]';
-                      
+
                       return (
-                        <div 
-                          key={i} 
+                        <div
+                          key={i}
                           className={`aspect-square rounded-[4px] ${bgColor} transition-colors cursor-pointer hover:opacity-80`}
                           title={`${day.date}: ${day.count} ${day.count === 1 ? 'node' : 'nodes'} completed`}
                         />
@@ -231,7 +231,7 @@ const CoursesDashboard: React.FC = () => {
             <section>
               <div className="bg-[#F1F3F9] p-1 rounded-2xl flex gap-1 shadow-inner">
                 {['all', 'progress', 'tolearn'].map((type) => (
-                  <button 
+                  <button
                     key={type}
                     onClick={() => setStatusFilter(type as any)}
                     className={`flex-1 py-3 text-[13px] font-black rounded-xl transition-all ${statusFilter === type ? 'bg-white shadow-sm text-primary' : 'text-slate-400'}`}
@@ -280,7 +280,7 @@ const CoursesDashboard: React.FC = () => {
                       return true;
                     })
                     .map((course) => (
-                    <div 
+                    <div
                       key={course.course_map_id}
                       onClick={() => navigate(buildLearningPath('/course-detail', { cid: course.course_map_id }))}
                       className="relative flex items-center gap-4 p-5 bg-white rounded-[2.5rem] border border-slate-50 shadow-soft group active:scale-[0.98] transition-all cursor-pointer overflow-hidden"
@@ -298,7 +298,7 @@ const CoursesDashboard: React.FC = () => {
                         {/* Progress bar with percentage */}
                         <div className="flex items-center gap-2 mt-3">
                           <div className="flex-1 h-[6px] bg-[#F3F4F6] rounded-full overflow-hidden">
-                            <div 
+                            <div
                               className="bg-secondary h-full rounded-full shadow-[0_0_8px_rgba(124,58,237,0.3)] transition-all duration-500"
                               style={{ width: `${course.progress_percentage}%` }}
                             ></div>
@@ -308,7 +308,7 @@ const CoursesDashboard: React.FC = () => {
                           </span>
                         </div>
                       </div>
-                      <button 
+                      <button
                         onClick={(e) => {
                           e.stopPropagation();
                           navigate(buildLearningPath('/knowledge-tree', { cid: course.course_map_id }));
@@ -326,7 +326,7 @@ const CoursesDashboard: React.FC = () => {
         ) : (
           /* Discovery Content Restored from Screenshot */
           <div className="px-6 space-y-10 animate-in fade-in duration-500 pb-10">
-            
+
             {/* Recommended */}
             <section>
               <div className="flex justify-between items-center mb-5">

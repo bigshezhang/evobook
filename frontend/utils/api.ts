@@ -679,6 +679,8 @@ export async function sendLearningHeartbeat(
 // ==================== Profile Stats API ====================
 
 export interface ProfileStats {
+  user_name: string;
+  joined_date: string; // ISO 8601 format
   total_study_hours: number;
   total_study_seconds: number;
   completed_courses_count: number;

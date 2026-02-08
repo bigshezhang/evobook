@@ -10,7 +10,7 @@ import { CHARACTER_MAPPING } from '../../utils/mascotConfig';
 
 const ProfileView: React.FC = () => {
   const navigate = useNavigate();
-  const { signOut } = useAuth();
+  const { signOut, user } = useAuth();
   const [showInvite, setShowInvite] = useState(false);
   const [stats, setStats] = useState<ProfileStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -31,6 +31,13 @@ const ProfileView: React.FC = () => {
 
   // The high-fidelity mascot image for the poster
   const POSTER_MASCOT = "https://lh3.googleusercontent.com/aida-public/AB6AXuA46trIZajUdPDtcb5Mve4AANhBVcFPf7hD1VJlypb0dFYRxS2hXKwdShsNFVNhbqxXKQFSjVVMsE3mxGpTikZ_57rFFad-Wac1TeLu7mkLVUcNcXHe1dMp94PSQWv0zRukZyCVX_0DBZ2YWtZ3z95XJoYIk-kHHf_jOtCXVxwOascf_uy1-xN9B6LDuY7LUnDzKY4Em18_6PP7pnkilqsGpMh1-4xyIUGnBpFdw5egLxog1wDMZwcwvb0tgobqJaobQeIGVn7VCUfO";
+
+  // Extract username from email (part before @)
+  const getUsernameFromEmail = (email: string | undefined): string => {
+    if (!email) return 'Loading...';
+    const atIndex = email.indexOf('@');
+    return atIndex > 0 ? email.substring(0, atIndex) : email;
+  };
 
   // Load profile stats from API
   useEffect(() => {
@@ -101,13 +108,22 @@ const ProfileView: React.FC = () => {
           </div>
           
           <div className="flex items-center gap-2 mb-1 justify-center">
-            <h2 className="text-2xl font-black text-black uppercase tracking-tight">Alex Rivers</h2>
+            <h2 className="text-2xl font-black text-black uppercase tracking-tight break-all">
+              {getUsernameFromEmail(user?.email)}
+            </h2>
             <div className="bg-black text-white text-[10px] font-black px-2 py-0.5 rounded-lg flex items-center gap-1 shadow-sm">
               <span className="material-symbols-outlined text-[12px]" style={{ fontVariationSettings: "'FILL' 1" }}>verified</span>
               PRO
             </div>
           </div>
-          <p className="text-slate-400 text-sm font-bold opacity-80">Joined January 2024</p>
+          <p className="text-slate-400 text-sm font-bold opacity-80">
+            {loading ? 'Loading...' : (stats?.joined_date ? (() => {
+              const date = new Date(stats.joined_date);
+              const year = date.getFullYear();
+              const month = date.toLocaleDateString('en-US', { month: 'long' });
+              return `Joined ${month} ${year}`;
+            })() : 'Joined recently')}
+          </p>
         </section>
 
         {/* Stats Grid - Square card style */}
@@ -160,7 +176,7 @@ const ProfileView: React.FC = () => {
                 <span className="text-base font-black tracking-tight text-slate-900">Invite Friends</span>
                 <span className="text-[10px] font-black bg-white text-primary border border-primary/20 px-2 py-0.5 rounded-lg">+500 XP</span>
               </div>
-              <span className="text-xs font-bold text-slate-500">Code: <span className="text-slate-900 font-black">STITCH99</span></span>
+              <span className="text-xs font-bold text-slate-500">Code: <span className="text-slate-900 font-black">{stats?.user_name ? stats.user_name.toUpperCase().replace(/\s+/g, '').slice(0, 8) + '99' : 'EVOBOOK99'}</span></span>
             </div>
             <button 
               onClick={() => setShowInvite(true)}
@@ -233,7 +249,9 @@ const ProfileView: React.FC = () => {
             {/* Poster Text Content - 更紧凑 */}
             <div className="flex flex-col items-center py-4 px-8 text-center">
               <p className="text-[10px] font-black uppercase tracking-[0.45em] text-primary/40 mb-2">Invited By</p>
-              <h1 className="text-3xl font-black text-slate-900 tracking-tighter mb-4 leading-none">Alex Rivers</h1>
+              <h1 className="text-3xl font-black text-slate-900 tracking-tighter mb-4 leading-none break-all">
+                {getUsernameFromEmail(user?.email)}
+              </h1>
 
               {/* Reward Pill - Yellow style */}
               <div className="w-full bg-[#FFFBEB] rounded-[24px] p-4 flex items-center gap-3 border border-amber-100/60 shadow-sm relative overflow-hidden">
@@ -242,7 +260,7 @@ const ProfileView: React.FC = () => {
                 </div>
                 <div className="flex-1 text-left">
                   <p className="text-[12px] font-bold text-slate-800 leading-snug">
-                    Help Alex get <span className="text-amber-500 font-black">+500 EXP</span>,<br/>and you'll get it too!
+                    Help me get <span className="text-amber-500 font-black">+500 EXP</span>,<br/>and you'll get it too!
                   </p>
                 </div>
               </div>
@@ -251,7 +269,9 @@ const ProfileView: React.FC = () => {
             {/* Bottom White Section - QR style - 更紧凑 */}
             <div className="bg-white rounded-t-[3rem] p-6 flex flex-col items-center shadow-[0_-20px_50px_rgba(0,0,0,0.02)]">
               <div className="text-center mb-4">
-                <h3 className="text-lg font-black text-slate-900 tracking-tight">Scan to Download</h3>
+                <h3 className="text-lg font-black text-slate-900 tracking-tight">
+                  {stats?.user_name || getUsernameFromEmail(user?.email)}
+                </h3>
                 <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mt-1">Join the learning revolution</p>
               </div>
 

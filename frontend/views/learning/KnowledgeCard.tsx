@@ -382,6 +382,19 @@ const KnowledgeCard: React.FC = () => {
     return pages[currentPage - 1] || '';
   }, [pages, currentPage]);
   
+  // Extract the first H2 as page title
+  const pageTitle = useMemo(() => {
+    if (!currentPageContent) return '';
+    const h2Match = currentPageContent.match(/^##\s+(.+)$/m);
+    return h2Match ? h2Match[1].trim() : '';
+  }, [currentPageContent]);
+  
+  // Remove the first H2 from content (since it's displayed separately)
+  const contentWithoutTitle = useMemo(() => {
+    if (!currentPageContent) return '';
+    return currentPageContent.replace(/^##\s+.+$/m, '').trim();
+  }, [currentPageContent]);
+  
   // Update total pages when pages array changes
   useEffect(() => {
     if (pages.length > 0) {
@@ -404,16 +417,14 @@ const KnowledgeCard: React.FC = () => {
 
   // Load course data from backend API and fetch knowledge card
   useEffect(() => {
-    // CRITICAL: Reset ALL state immediately to prevent flash of old content
-    setMarkdownContent('');
-    setCurrentPage(1);
-    setTotalPagesInCard(1);
-    setError(null);
+    // ==========================================
+    // 【关键优化】立即同步设置 loading 状态，避免闪烁
+    // ==========================================
     setIsLoading(true);
-    setQaList([]);
-    setDynamicQuestions([]);
-    setShowComplete(false);
-    setInputValue('');
+    setError(null);
+    
+    // 使用 abort controller 来取消过期的请求
+    const abortController = new AbortController();
     
     const loadData = async () => {
       if (!cidFromUrl) {
@@ -429,9 +440,63 @@ const KnowledgeCard: React.FC = () => {
         return;
       }
       
+      // 先检查缓存，如果有缓存就直接用（避免加载课程数据的延迟）
+      const cacheKey = `evo_kc_${cidFromUrl}_${targetNodeId}`;
+      try {
+        const cachedStr = sessionStorage.getItem(cacheKey);
+        if (cachedStr) {
+          const cached = JSON.parse(cachedStr) as { 
+            markdown: string; 
+            totalPagesInCard: number;
+            nodeTitle: string;
+            courseMapId: string;
+            courseName: string;
+            moduleInfo: string;
+            totalNodes: number;
+            completedNodes: number;
+          };
+          
+          // 批量更新所有状态（React 18 会自动批处理）
+          setMarkdownContent(cached.markdown);
+          setTotalPagesInCard(cached.totalPagesInCard || 1);
+          setCurrentPage(1);
+          setNodeTitle(cached.nodeTitle);
+          setCourseMapId(cached.courseMapId);
+          setCourseName(cached.courseName);
+          setModuleInfo(cached.moduleInfo);
+          setTotalNodes(cached.totalNodes);
+          setCompletedNodes(cached.completedNodes);
+          setCurrentNodeId(targetNodeId);
+          setQaList([]);
+          setDynamicQuestions([]);
+          setShowComplete(false);
+          setInputValue('');
+          setIsLoading(false);
+          
+          console.log('[KnowledgeCard] Loaded from cache', cacheKey);
+          return;
+        }
+      } catch {
+        // Corrupted cache — ignore and re-fetch
+        sessionStorage.removeItem(cacheKey);
+      }
+      
+      // 没有缓存，需要加载数据
+      // 清空旧内容（但 isLoading 已经在函数开头设置了）
+      setMarkdownContent('');
+      setCurrentPage(1);
+      setTotalPagesInCard(1);
+      setQaList([]);
+      setDynamicQuestions([]);
+      setShowComplete(false);
+      setInputValue('');
+      
       try {
         // Load course data from backend
         const courseData = await getCourseDetail(cidFromUrl);
+        
+        if (abortController.signal.aborted) return;
+        
         const courseMapData = {
           course_map_id: courseData.course_map_id,
           topic: courseData.topic,
@@ -441,11 +506,6 @@ const KnowledgeCard: React.FC = () => {
           nodes: courseData.nodes as DAGNode[],
         };
         
-        setCourseName((courseMapData.map_meta as any).course_name || courseMapData.topic);
-        setCourseContext((courseMapData.map_meta as any).strategy_rationale || '');
-        setTotalNodes(courseMapData.nodes.length);
-        setCourseMapId(courseMapData.course_map_id);
-        
         // Find current node by URL parameter
         const currentNode = courseMapData.nodes.find(n => n.id === targetNodeId);
         if (!currentNode) {
@@ -454,54 +514,15 @@ const KnowledgeCard: React.FC = () => {
           return;
         }
         
-        setCurrentNodeId(currentNode.id);
-        setNodeTitle(currentNode.title);
-        setNodeDescription(currentNode.description);
-        setModuleInfo(`Module ${String(currentNode.layer).padStart(2, '0')}`);
-        const completedCount = courseMapData.nodes.filter(n => n.layer < currentNode.layer).length;
-        setCompletedNodes(completedCount);
+        const courseNameValue = (courseMapData.map_meta as any).course_name || courseMapData.topic;
+        const moduleInfoValue = `Module ${String(currentNode.layer).padStart(2, '0')}`;
+        const completedCountValue = courseMapData.nodes.filter(n => n.layer < currentNode.layer).length;
         
-        // Fetch knowledge card from API (with sessionStorage caching)
-        await fetchKnowledgeCard(courseMapData, currentNode);
-      } catch (err) {
-        console.error('Failed to load course data:', err);
-        setError(err instanceof Error ? err.message : 'Failed to load course');
-        setIsLoading(false);
-      }
-    };
-    
-    const fetchKnowledgeCard = async (courseMapData: any, currentNode: DAGNode) => {
-      if (!courseMapData || !currentNode) {
-        setError('Missing course or node data. Please start from the course selection.');
-        setIsLoading(false);
-        return;
-      }
-
-      // Check sessionStorage cache first to avoid redundant LLM calls
-      const cacheKey = `evo_kc_${courseMapData.course_map_id}_${currentNode.id}`;
-      try {
-        const cachedStr = sessionStorage.getItem(cacheKey);
-        if (cachedStr) {
-          const cached = JSON.parse(cachedStr) as { markdown: string; totalPagesInCard: number };
-          setMarkdownContent(cached.markdown);
-          setTotalPagesInCard(cached.totalPagesInCard || 1);
-          setCurrentPage(1);
-          setIsLoading(false);
-          return;
-        }
-      } catch {
-        // Corrupted cache — ignore and re-fetch
-        sessionStorage.removeItem(cacheKey);
-      }
-      
-      try {
-        setIsLoading(true);
-        setError(null);
-        
+        // Fetch knowledge card from API
         const request: KnowledgeCardRequest = {
           course_map_id: courseMapData.course_map_id,
           course: {
-            course_name: (courseMapData.map_meta as any).course_name || courseMapData.topic,
+            course_name: courseNameValue,
             course_context: (courseMapData.map_meta as any).strategy_rationale || '',
             topic: courseMapData.topic,
             level: courseMapData.level,
@@ -518,43 +539,66 @@ const KnowledgeCard: React.FC = () => {
         
         const response = await getKnowledgeCard(request);
         
+        if (abortController.signal.aborted) return;
+        
+        // 批量更新所有状态（一次性完成，减少渲染）
         setMarkdownContent(response.markdown);
         setTotalPagesInCard(response.totalPagesInCard || 1);
         setCurrentPage(1);
+        setCourseName(courseNameValue);
+        setCourseContext((courseMapData.map_meta as any).strategy_rationale || '');
+        setTotalNodes(courseMapData.nodes.length);
+        setCourseMapId(courseMapData.course_map_id);
+        setCurrentNodeId(currentNode.id);
+        setNodeTitle(currentNode.title);
+        setNodeDescription(currentNode.description);
+        setModuleInfo(moduleInfoValue);
+        setCompletedNodes(completedCountValue);
+        setIsLoading(false);
 
-        // Save to sessionStorage for subsequent visits
+        // Save to sessionStorage with all metadata
         try {
           sessionStorage.setItem(cacheKey, JSON.stringify({
             markdown: response.markdown,
             totalPagesInCard: response.totalPagesInCard || 1,
+            nodeTitle: currentNode.title,
+            courseMapId: courseMapData.course_map_id,
+            courseName: courseNameValue,
+            moduleInfo: moduleInfoValue,
+            totalNodes: courseMapData.nodes.length,
+            completedNodes: completedCountValue,
           }));
         } catch {
           // sessionStorage quota exceeded — non-critical, just skip
         }
       } catch (err) {
-        console.error('Failed to fetch knowledge card:', err);
-        setError(err instanceof Error ? err.message : 'Failed to load content. Please try again.');
-      } finally {
+        if (abortController.signal.aborted) return;
+        
+        console.error('Failed to load course data:', err);
+        setError(err instanceof Error ? err.message : 'Failed to load course');
         setIsLoading(false);
       }
     };
     
     loadData();
+    
+    // Cleanup: abort any pending requests when component unmounts or deps change
+    return () => {
+      abortController.abort();
+    };
   }, [cidFromUrl, nidFromUrl]);
 
-  // Animation trigger for page changes only (not initial mount)
-  const [animate, setAnimate] = useState(false);
-  const isFirstRender = React.useRef(true);
+  // Page transition animation state
+  const [isPageTransitioning, setIsPageTransitioning] = useState(false);
+  const previousNodeId = React.useRef<number | null>(null);
+  
+  // Reset transition state when switching nodes
   useEffect(() => {
-    // Skip animation on first render to prevent 300ms blank screen
-    if (isFirstRender.current) {
-      isFirstRender.current = false;
-      return;
+    if (currentNodeId !== previousNodeId.current) {
+      previousNodeId.current = currentNodeId;
+      setIsPageTransitioning(false);
     }
-    setAnimate(true);
-    const timer = setTimeout(() => setAnimate(false), 300);
-    return () => clearTimeout(timer);
-  }, [currentPage]);
+  }, [currentNodeId]);
 
   /**
    * Mark the current node as completed using backend API.
@@ -574,14 +618,23 @@ const KnowledgeCard: React.FC = () => {
 
   const handleNext = () => {
     if (currentPage < totalPagesInCard) {
-      const nextPage = currentPage + 1;
-      setCurrentPage(nextPage);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      // 先触发淡出动画
+      setIsPageTransitioning(true);
       
-      // 当进入最后一页时自动标记完成
-      if (nextPage === totalPagesInCard) {
-        handleNodeCompletion();
-      }
+      // 等动画完成后切换页码
+      setTimeout(() => {
+        const nextPage = currentPage + 1;
+        setCurrentPage(nextPage);
+        window.scrollTo({ top: 0, behavior: 'auto' }); // 使用 auto 避免动画冲突
+        
+        // 立即触发淡入
+        setIsPageTransitioning(false);
+        
+        // 当进入最后一页时自动标记完成
+        if (nextPage === totalPagesInCard) {
+          handleNodeCompletion();
+        }
+      }, 200); // 淡出动画时长
     } else {
       // 已经在最后一页，显示完成弹窗
       setShowComplete(true);
@@ -590,8 +643,17 @@ const KnowledgeCard: React.FC = () => {
 
   const handleBack = () => {
     if (currentPage > 1) {
-      setCurrentPage(prev => prev - 1);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      // 先触发淡出动画
+      setIsPageTransitioning(true);
+      
+      // 等动画完成后切换页码
+      setTimeout(() => {
+        setCurrentPage(prev => prev - 1);
+        window.scrollTo({ top: 0, behavior: 'auto' });
+        
+        // 立即触发淡入
+        setIsPageTransitioning(false);
+      }, 200); // 淡出动画时长
     } else {
       navigate(buildLearningPath('/knowledge-tree', { cid: courseMapId }));
     }
@@ -691,31 +753,34 @@ const KnowledgeCard: React.FC = () => {
       </header>
 
       {/* Main Content Area - Layout & Rich Text blocks from HTML template */}
-      <main className={`flex-1 overflow-y-auto no-scrollbar px-6 pt-6 pb-48 transition-all duration-300 ${animate ? 'opacity-0 translate-y-2' : 'opacity-100 translate-y-0'}`}>
-        <div className="mb-6">
-          <span className="text-[10px] font-extrabold uppercase tracking-[0.15em] text-accent-purple mb-1.5 block">
-            {moduleInfo} • {courseName}
-          </span>
-          <h1 className="text-[26px] font-extrabold text-primary dark:text-white leading-tight">
-            {nodeTitle || ''}
-          </h1>
-        </div>
-
-        {/* Loading State */}
-        {isLoading && (
-          <div className="space-y-4 animate-pulse">
-            <div className="h-4 bg-black/5 dark:bg-white/5 rounded-lg w-full"></div>
-            <div className="h-4 bg-black/5 dark:bg-white/5 rounded-lg w-5/6"></div>
-            <div className="h-4 bg-black/5 dark:bg-white/5 rounded-lg w-4/6"></div>
-            <div className="h-32 bg-black/5 dark:bg-white/5 rounded-2xl w-full mt-6"></div>
-            <div className="h-4 bg-black/5 dark:bg-white/5 rounded-lg w-full mt-6"></div>
-            <div className="h-4 bg-black/5 dark:bg-white/5 rounded-lg w-3/4"></div>
-            <div className="h-24 bg-black/5 dark:bg-white/5 rounded-2xl w-full mt-6"></div>
+      <main 
+        className="flex-1 overflow-y-auto no-scrollbar px-6 pt-6 pb-48 transition-all duration-200 ease-out"
+        style={{ 
+          opacity: isPageTransitioning ? 0 : 1,
+          transform: isPageTransitioning ? 'translateY(8px)' : 'translateY(0)',
+        }}
+      >
+        {/* Loading State - Full skeleton */}
+        {isLoading ? (
+          <div className="space-y-4">
+            {/* Module + Node skeleton */}
+            <div className="mb-6">
+              <div className="h-3 bg-black/5 dark:bg-white/5 rounded w-40 mb-4"></div>
+            </div>
+            {/* Content skeleton (H2 + body) */}
+            <div className="space-y-4 animate-pulse">
+              <div className="h-8 bg-black/5 dark:bg-white/5 rounded w-3/4 mb-4"></div>
+              <div className="h-4 bg-black/5 dark:bg-white/5 rounded-lg w-full"></div>
+              <div className="h-4 bg-black/5 dark:bg-white/5 rounded-lg w-5/6"></div>
+              <div className="h-4 bg-black/5 dark:bg-white/5 rounded-lg w-4/6"></div>
+              <div className="h-32 bg-black/5 dark:bg-white/5 rounded-2xl w-full mt-6"></div>
+              <div className="h-4 bg-black/5 dark:bg-white/5 rounded-lg w-full mt-6"></div>
+              <div className="h-4 bg-black/5 dark:bg-white/5 rounded-lg w-3/4"></div>
+              <div className="h-24 bg-black/5 dark:bg-white/5 rounded-2xl w-full mt-6"></div>
+            </div>
           </div>
-        )}
-        
-        {/* Error State */}
-        {error && !isLoading && (
+        ) : error ? (
+          /* Error State */
           <div className="flex flex-col items-center justify-center py-12 text-center">
             <div className="w-16 h-16 bg-red-100 dark:bg-red-900/20 rounded-2xl flex items-center justify-center mb-4">
               <span className="material-symbols-rounded text-red-500 text-3xl">error</span>
@@ -729,25 +794,36 @@ const KnowledgeCard: React.FC = () => {
               Try Again
             </button>
           </div>
-        )}
-        
-        {/* Markdown Content with DSL Parsing */}
-        {!isLoading && !error && (
-          <div className="prose prose-sm max-w-none text-primary/80 dark:text-white/80">
-            <ParsedContentRenderer content={currentPageContent} />
-            
-            {/* Clarification Section */}
-            <div id="clarification-section" className="mt-8">
-              <ClarificationSection 
-                pendingQuestions={dynamicQuestions}
-                initialQAList={qaList}
-                pageMarkdown={currentPageContent || ''}
-                language={language}
-                courseMapId={courseMapId}
-                nodeId={currentNodeId || undefined}
-              />
+        ) : (
+          /* Content State */
+          <>
+            {/* Module + Node Title + Page Title (extracted from first H2) */}
+            <div className="mb-6">
+              <span className="text-[10px] font-extrabold uppercase tracking-[0.15em] text-accent-purple mb-1.5 block">
+                {moduleInfo} • {nodeTitle}
+              </span>
+              <h1 className="text-[26px] font-extrabold text-primary dark:text-white leading-tight">
+                {pageTitle}
+              </h1>
             </div>
-          </div>
+            
+            {/* Main Content (with first H2 removed) */}
+            <div className="prose prose-sm max-w-none text-primary/80 dark:text-white/80">
+              <ParsedContentRenderer content={contentWithoutTitle} />
+              
+              {/* Clarification Section */}
+              <div id="clarification-section" className="mt-8">
+                <ClarificationSection 
+                  pendingQuestions={dynamicQuestions}
+                  initialQAList={qaList}
+                  pageMarkdown={currentPageContent || ''}
+                  language={language}
+                  courseMapId={courseMapId}
+                  nodeId={currentNodeId || undefined}
+                />
+              </div>
+            </div>
+          </>
         )}
       </main>
 
@@ -799,7 +875,7 @@ const KnowledgeCard: React.FC = () => {
           {currentPage === totalPagesInCard && !isLoading ? (
             <button 
               onClick={handleNext}
-              className="h-14 px-8 flex items-center justify-center rounded-full bg-black dark:bg-white text-white dark:text-black shadow-xl active:scale-95 hover:scale-105 transition-all duration-300 animate-in fade-in zoom-in"
+              className="h-14 px-8 flex items-center justify-center rounded-full bg-black dark:bg-white text-white dark:text-black shadow-xl active:scale-95 transition-transform duration-200"
             >
               <span className="text-[13px] font-black uppercase tracking-wider">Finish</span>
               <span className="material-symbols-rounded text-[20px] ml-2">check_circle</span>
