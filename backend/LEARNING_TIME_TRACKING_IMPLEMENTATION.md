@@ -131,7 +131,7 @@ uv run alembic upgrade head
 - [x] 返回 `global_rank`, `rank_percentile`, `total_users`
 
 ### ✅ 4. 已完成课程数
-- [x] 用户完成课程内所有 learn + boss 节点后，`completed_courses_count` 增加 1
+- [x] 用户完成课程内所有 learn 节点后，`completed_courses_count` 增加 1
 
 ### ✅ 5. 前端集成
 - [x] 进入 KnowledgeCard 页面，启动心跳
@@ -270,7 +270,7 @@ cd /Users/lazyman/Desktop/evobook_be
 
 ### 3. 更细粒度的统计
 - 按课程统计学习时长
-- 按节点类型（learn/quiz/boss）统计
+- 按节点类型（learn/quiz）统计
 
 ### 4. 排行榜缓存
 - 排名计算结果缓存到 Redis

@@ -208,14 +208,8 @@ class CourseMapService:
                 },
             )
 
-        # 2. Validate boss constraint for non-Deep modes
-        if mode != "Deep":
-            boss_nodes = [n for n in nodes if n.get("type") == "boss"]
-            if boss_nodes:
-                raise DAGValidationError(
-                    message=f"Mode '{mode}' must not have boss nodes",
-                    details={"boss_count": len(boss_nodes)},
-                )
+        # 2. Validate reward multipliers
+        self._validate_reward_multipliers(nodes)
 
         # 3. Validate branches and merges
         self._validate_branches_and_merges(nodes)
@@ -235,6 +229,37 @@ class CourseMapService:
                 meta_value=meta_time_budget,
                 request_value=total_commitment_minutes,
             )
+
+    def _validate_reward_multipliers(self, nodes: list[dict[str, Any]]) -> None:
+        """Validate that all nodes have valid reward_multiplier values.
+
+        Args:
+            nodes: List of DAG nodes.
+
+        Raises:
+            DAGValidationError: If any node has invalid or missing reward_multiplier.
+        """
+        for node in nodes:
+            node_id = node.get("id")
+            multiplier = node.get("reward_multiplier")
+
+            if multiplier is None:
+                raise DAGValidationError(
+                    message=f"Node {node_id} missing reward_multiplier",
+                    details={"node_id": node_id},
+                )
+
+            if not isinstance(multiplier, (int, float)):
+                raise DAGValidationError(
+                    message=f"Node {node_id} has invalid reward_multiplier type",
+                    details={"node_id": node_id, "type": type(multiplier).__name__},
+                )
+
+            if not (1.0 <= multiplier <= 3.0):
+                raise DAGValidationError(
+                    message=f"Node {node_id} reward_multiplier out of range (1.0-3.0)",
+                    details={"node_id": node_id, "value": multiplier},
+                )
 
     def _validate_branches_and_merges(self, nodes: list[dict[str, Any]]) -> None:
         """Validate that DAG has proper branch and merge structure.

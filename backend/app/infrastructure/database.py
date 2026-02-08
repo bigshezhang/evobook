@@ -85,6 +85,17 @@ async def init_db() -> None:
         await conn.run_sync(Base.metadata.create_all)
 
 
+def get_async_session_maker() -> async_sessionmaker[AsyncSession]:
+    """Get the async session maker for background tasks.
+    
+    This is an alias for get_session_factory() for compatibility.
+    
+    Returns:
+        Configured async session factory.
+    """
+    return get_session_factory()
+
+
 async def close_db() -> None:
     """Close database connections."""
     global _engine, _async_session_factory

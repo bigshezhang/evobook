@@ -43,7 +43,7 @@ class NodeInfo(BaseModel):
     id: int = Field(..., description="Node identifier")
     title: str = Field(..., description="Node title")
     description: str = Field(..., description="Node description")
-    type: Literal["learn", "boss"] = Field(..., description="Node type")
+    type: Literal["learn"] = Field(..., description="Node type")
     estimated_minutes: int = Field(..., ge=1, description="Estimated learning time in minutes")
 
 

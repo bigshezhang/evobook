@@ -23,7 +23,7 @@ Given a course context + node info + estimated learning time, output:
     id: <node_id>,
     title: <node_title>,
     description: <node_description>,
-    type: <node_type> ("learn"|"boss"),
+    type: <node_type> ("learn"),
     estimated_minutes: <estimated_minutes>
   }
 
@@ -61,7 +61,7 @@ Use these exact XML blocks in Markdown so the frontend can parse them:
 # Content Density by Mode
 - Light: concise, intuitive, minimal jargon.
 - Fast: practical + key ideas, moderate depth.
-- Deep: richer explanations + subtle pitfalls; if node.type="boss", include a mini "Boss Challenge" task (NOT as H2).
+- Deep: richer explanations + subtle pitfalls.
 
 # Page Count Heuristic (deterministic)
 Compute pages from estimated_minutes:

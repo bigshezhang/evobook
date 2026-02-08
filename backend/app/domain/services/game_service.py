@@ -17,11 +17,8 @@ from app.core.logging import get_logger
 from app.domain.constants import (
     DICE_MAX_VALUE,
     DICE_MIN_VALUE,
-    NODE_REWARD_BOSS_EXP,
     NODE_REWARD_QUIZ_EXP,
     NODE_REWARD_REGULAR_EXP,
-    NODE_TYPE_BOSS,
-    NODE_TYPE_QUIZ,
     REWARD_TYPE_DICE,
     REWARD_TYPE_EXP,
     REWARD_TYPE_GOLD,
@@ -476,15 +473,15 @@ class GameService:
 
     @staticmethod
     async def calculate_learning_reward(
-        node_type: str,
         estimated_minutes: int,
+        reward_multiplier: float = 1.0,
         actual_seconds: int | None = None,
     ) -> dict[str, int]:
         """Calculate rewards for completing a learning node.
 
         Args:
-            node_type: Type of node ('learn', 'quiz', 'boss')
             estimated_minutes: Estimated time for the node
+            reward_multiplier: Reward multiplier from DAG (1.0-3.0, set by LLM)
             actual_seconds: Actual time spent (optional)
 
         Returns:
@@ -493,13 +490,9 @@ class GameService:
         base_gold = estimated_minutes * 10  # 10 gold per minute
         base_exp = estimated_minutes * 5    # 5 exp per minute
 
-        # Bonus for node type
-        if node_type == NODE_TYPE_QUIZ:
-            base_gold = int(base_gold * 1.5)
-            base_exp = int(base_exp * 1.5)
-        elif node_type == NODE_TYPE_BOSS:
-            base_gold = int(base_gold * 2.0)
-            base_exp = int(base_exp * 2.0)
+        # Apply reward multiplier (set by LLM in DAG generation)
+        base_gold = int(base_gold * reward_multiplier)
+        base_exp = int(base_exp * reward_multiplier)
 
         return {
             "gold": base_gold,

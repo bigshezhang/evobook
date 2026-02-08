@@ -6,6 +6,7 @@ and QA Details using LLM, with optional caching via the node_contents table.
 
 import hashlib
 import json
+from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
 
@@ -81,7 +82,7 @@ class NodeContentService:
             node_id: Node identifier.
             node_title: Title of the node.
             node_description: Description of the node.
-            node_type: Node type (learn|boss).
+            node_type: Node type (learn).
             estimated_minutes: Estimated learning time.
             course_map_id: Optional course map ID for caching.
             user_id: Optional authenticated user ID (reserved for future use).
@@ -535,24 +536,51 @@ class NodeContentService:
             return None
 
         try:
+            # Use first() instead of scalar_one_or_none() for resilience against
+            # any duplicate records. Order by content size descending to prefer
+            # rows that actually contain content over empty placeholder rows.
             result = await self.db.execute(
                 select(NodeContent).where(
                     NodeContent.course_map_id == course_map_id,
                     NodeContent.node_id == node_id,
                     NodeContent.content_type == content_type,
-                    NodeContent.question_key == question_key,
-                )
+                    NodeContent.question_key == question_key
+                    if question_key is not None
+                    else NodeContent.question_key.is_(None),
+                ).order_by(
+                    NodeContent.generation_completed_at.desc().nulls_last()
+                ).limit(1)
             )
-            cached = result.scalar_one_or_none()
+            cached = result.scalars().first()
             if cached is not None:
-                logger.info(
-                    "Cache hit for node content",
-                    course_map_id=str(course_map_id),
-                    node_id=node_id,
-                    content_type=content_type,
-                    question_key=question_key,
-                )
-                return cached.content_json  # type: ignore[return-value]
+                # Validate cached content is not empty
+                if cached.content_json and len(cached.content_json) > 0:
+                    # Additional check: for knowledge_card, ensure it has actual content
+                    if content_type == "knowledge_card":
+                        if cached.content_json.get("markdown") or cached.content_json.get("yaml"):
+                            logger.info(
+                                "Cache hit for node content",
+                                course_map_id=str(course_map_id),
+                                node_id=node_id,
+                                content_type=content_type,
+                                question_key=question_key,
+                            )
+                            return cached.content_json  # type: ignore[return-value]
+                        else:
+                            logger.warning(
+                                "Cache hit but content is invalid (empty markdown/yaml), will regenerate",
+                                course_map_id=str(course_map_id),
+                                node_id=node_id,
+                            )
+                    else:
+                        logger.info(
+                            "Cache hit for node content",
+                            course_map_id=str(course_map_id),
+                            node_id=node_id,
+                            content_type=content_type,
+                            question_key=question_key,
+                        )
+                        return cached.content_json  # type: ignore[return-value]
         except Exception:
             # Cache lookup is best-effort; log and continue to LLM
             logger.warning(
@@ -590,9 +618,11 @@ class NodeContentService:
             return
 
         try:
-            # Use ON CONFLICT DO NOTHING to safely handle duplicate inserts.
+            # Use ON CONFLICT DO UPDATE to upsert content.
             # If a row with the same (course_map_id, node_id, content_type, question_key)
-            # already exists, the insert is silently skipped.
+            # already exists (e.g., from initialize_node_contents), update it with the new content.
+            # We use index_elements matching the unique index uq_node_contents_cache_key
+            # which uses COALESCE(question_key, '') to handle NULL values.
             stmt = (
                 pg_insert(NodeContent)
                 .values(
@@ -601,9 +631,23 @@ class NodeContentService:
                     content_type=content_type,
                     question_key=question_key,
                     content_json=content_json,
+                    generation_status="completed",
+                    generation_completed_at=datetime.now(timezone.utc),
                 )
-                .on_conflict_do_nothing(
-                    constraint="uq_node_contents_cache_key",
+                .on_conflict_do_update(
+                    index_elements=[
+                        NodeContent.course_map_id,
+                        NodeContent.node_id,
+                        NodeContent.content_type,
+                    ],
+                    index_where=(NodeContent.question_key == question_key)
+                    if question_key is not None
+                    else (NodeContent.question_key.is_(None)),
+                    set_={
+                        "content_json": content_json,
+                        "generation_status": "completed",
+                        "generation_completed_at": datetime.now(timezone.utc),
+                    },
                 )
             )
             await self.db.execute(stmt)

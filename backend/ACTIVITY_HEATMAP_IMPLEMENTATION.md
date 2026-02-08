@@ -223,7 +223,7 @@ curl http://localhost:8000/healthz
 - 可选：未来可加 Redis 缓存
 
 ### 3. 扩展性
-- `activity_type` 支持多种类型（node/quiz/boss）
+- `activity_type` 支持多种类型（node/quiz）
 - `extra_data` JSONB 字段可存储任意元数据
 - 前端可轻松切换时区视图
 

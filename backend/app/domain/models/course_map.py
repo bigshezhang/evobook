@@ -13,13 +13,13 @@ from app.infrastructure.database import Base
 
 class CourseMap(Base):
     """Stores generated course maps (DAG) for learning paths.
-    
+
     Each course map contains a DAG structure with nodes that represent
-    learning units, quizzes, and boss challenges.
+    learning units and quizzes.
     """
-    
+
     __tablename__ = "course_maps"
-    
+
     id: Mapped[UUID] = mapped_column(
         PG_UUID(as_uuid=True),
         primary_key=True,
@@ -69,7 +69,7 @@ class CourseMap(Base):
     nodes: Mapped[list[dict[str, Any]]] = mapped_column(
         JSONB,
         nullable=False,
-        comment="DAG nodes array with id, title, type, layer, pre_requisites, estimated_minutes",
+        comment="DAG nodes array with id, title, type, layer, pre_requisites, estimated_minutes, reward_multiplier",
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -77,13 +77,13 @@ class CourseMap(Base):
         server_default=text("CURRENT_TIMESTAMP"),
         default=lambda: datetime.now(timezone.utc),
     )
-    
+
     __table_args__ = (
         Index("idx_course_maps_topic", "topic"),
         Index("idx_course_maps_mode", "mode"),
         Index("idx_course_maps_created_at", "created_at"),
         Index("idx_course_maps_user_id", "user_id"),
     )
-    
+
     def __repr__(self) -> str:
         return f"<CourseMap id={self.id} topic={self.topic} mode={self.mode}>"

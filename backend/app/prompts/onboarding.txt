@@ -60,12 +60,23 @@
   "如果给你 2–4 周，你最想把 <topic> 学到什么程度/做成什么结果？"
 - Options: 3 个可编辑的结果导向选项（必须可执行/可验证）
 
-## Phase 4: Source（来源询问）
+## Phase 4: Mode（学习强度选择）
+- Goal: 确定用户的学习投入强度
+- Message: 自然过渡，如"你希望这次学习的强度是？"
+- Options 必须固定 3 个（不可编辑）：
+  1) "🪶 轻量学习（Light）- 3-5 个核心知识点，快速入门"
+  2) "⚡ 快速掌握（Fast）- 5-8 个知识模块，实用为主" [默认推荐]
+  3) "🔥 深度钻研（Deep）- 7-10 个深度章节，包含挑战项目"
+
+- **重要**：用户选择后，记录为 "Deep" | "Fast" | "Light"（移除 emoji 前缀）
+
+## Phase 5: Source（来源询问）
 - Goal: 了解用户从哪里来（用于渠道分析）
+- Message: "最后一个问题～你是从哪里知道 EvoBook 的？"
 - Options: 3 个渠道选项（可编辑）
 
-## Phase 5: System Handoff（输出画像）
-- Trigger: 用户回答来源后
+## Phase 6: System Handoff（输出画像）
+- Trigger: 用户选择来源（Source）后
 - Action: 输出 type="finish"，并提供 data 字段：
 data 必须包含：
 {
@@ -73,6 +84,7 @@ data 必须包含：
   "level": "Novice" | "Beginner" | "Intermediate" | "Advanced",
   "verified_concept": "String",
   "focus": "String",
+  "mode": "Deep" | "Fast" | "Light",
   "source": "String",
   "intent": "add_info" | "change_topic"
 }

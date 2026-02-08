@@ -211,7 +211,7 @@ Response：
       "id": 1,
       "title": "string",
       "description": "string",
-      "type": "learn|quiz|boss",
+      "type": "learn|quiz",
       "layer": 1,
       "pre_requisites": [],
       "estimated_minutes": 20
@@ -223,7 +223,6 @@ Response：
 硬约束：
 - 必须有分支和汇合（不能线性）
 - sum(nodes[].estimated_minutes) == total_commitment_minutes
-- mode != Deep 禁止 boss
 
 ### 8.4 POST /api/v1/node-content/knowledge-card
 Request：
@@ -240,7 +239,7 @@ Request：
     "id": 1,
     "title": "string",
     "description": "string",
-    "type": "learn|boss",
+    "type": "learn",
     "estimated_minutes": 16
   }
 }

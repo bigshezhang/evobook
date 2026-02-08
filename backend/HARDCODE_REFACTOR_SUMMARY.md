@@ -64,7 +64,6 @@ NODE_STATUS_COMPLETED = "completed"
 # 节点类型
 NODE_TYPE_LEARN = "learn"
 NODE_TYPE_QUIZ = "quiz"
-NODE_TYPE_BOSS = "boss"
 
 # 学习等级
 LEVEL_NOVICE = "Novice"
@@ -88,7 +87,6 @@ INVITE_CODE_MAX_RETRIES = 3
 DICE_MIN_VALUE = 1
 DICE_MAX_VALUE = 4
 NODE_REWARD_QUIZ_EXP = 20
-NODE_REWARD_BOSS_EXP = 50
 NODE_REWARD_REGULAR_EXP = 10
 ```
 
@@ -114,7 +112,6 @@ export const NODE_STATUS = {
 export const NODE_TYPE = {
   LEARN: 'learn',
   QUIZ: 'quiz',
-  BOSS: 'boss',
 } as const;
 
 // 学习等级
@@ -195,7 +192,7 @@ if base_url is None:
 - ✅ 邀请码生成重试次数: `INVITE_CODE_MAX_RETRIES = 3`
 - ✅ 邀请码长度: `INVITE_CODE_LENGTH = 6`
 - ✅ 骰子范围: `DICE_MIN_VALUE = 1`, `DICE_MAX_VALUE = 4`
-- ✅ 节点奖励: `NODE_REWARD_QUIZ_EXP`, `NODE_REWARD_BOSS_EXP`, `NODE_REWARD_REGULAR_EXP`
+- ✅ 节点奖励: `NODE_REWARD_QUIZ_EXP`, `NODE_REWARD_REGULAR_EXP`
 
 ### 6. ✅ 前端 localStorage 键统一
 所有分散的 localStorage 键已统一到 `STORAGE_KEYS` 常量对象。

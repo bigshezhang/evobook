@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, Text, UniqueConstraint, text
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -49,6 +49,33 @@ class NodeContent(Base):
         nullable=False,
         comment="Full response content",
     )
+    generation_status: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default="pending",
+        server_default="pending",
+        comment="Generation status: pending|generating|completed|failed|quiz_pending|quiz_completed",
+    )
+    generation_started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="When generation started",
+    )
+    generation_completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="When generation completed",
+    )
+    generation_error: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+        comment="Error message if generation failed",
+    )
+    node_type: Mapped[str | None] = mapped_column(
+        String(50),
+        nullable=True,
+        comment="Node type: learn|quiz",
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -60,6 +87,7 @@ class NodeContent(Base):
         Index("idx_node_contents_course_map_id", "course_map_id"),
         Index("idx_node_contents_course_node", "course_map_id", "node_id"),
         Index("idx_node_contents_type", "content_type"),
+        Index("idx_node_contents_generation_status", "generation_status"),
         # Unique constraint for cache lookup — prevents duplicate rows
         UniqueConstraint(
             "course_map_id",

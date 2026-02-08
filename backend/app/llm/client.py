@@ -404,7 +404,6 @@ class LLMClient:
         - Proper branch structure (layer 2 with 2 parallel nodes)
         - A merge node (node with 2+ prerequisites)
         - Time sum equal to _mock_dag_total_minutes
-        - No boss nodes if mode != Deep
 
         Returns:
             JSON string with mock DAG response.
@@ -416,13 +415,13 @@ class LLMClient:
 
         # Distribute time across nodes (5 nodes for Fast/Light, 7 for Deep)
         if mode == "Deep":
-            # Deep mode: 7 nodes with boss
+            # Deep mode: 7 nodes
             # Use percentage-based allocation to ensure exact sum
             # Layer 1: 15% (root)
             # Layer 2: 15% + 15% (branch)
             # Layer 3: 12% + 12% (branch)
             # Layer 4: 16% (merge)
-            # Layer 5: 15% (boss)
+            # Layer 5: 15% (quiz)
             # Total: 100%
             t1 = total_minutes * 15 // 100  # root
             t2 = total_minutes * 15 // 100  # branch A
@@ -434,16 +433,16 @@ class LLMClient:
             t7 = total_minutes - t1 - t2 - t3 - t4 - t5 - t6
 
             nodes = [
-                {"id": 1, "title": "基础入门", "description": "掌握核心概念基础", "type": "learn", "layer": 1, "pre_requisites": [], "estimated_minutes": t1},
-                {"id": 2, "title": "分支路径 A", "description": "深入学习路径 A", "type": "learn", "layer": 2, "pre_requisites": [1], "estimated_minutes": t2},
-                {"id": 3, "title": "分支路径 B", "description": "深入学习路径 B", "type": "learn", "layer": 2, "pre_requisites": [1], "estimated_minutes": t3},
-                {"id": 4, "title": "进阶路径 A", "description": "进阶学习 A", "type": "learn", "layer": 3, "pre_requisites": [2], "estimated_minutes": t4},
-                {"id": 5, "title": "进阶路径 B", "description": "进阶学习 B", "type": "learn", "layer": 3, "pre_requisites": [3], "estimated_minutes": t5},
-                {"id": 6, "title": "知识汇合", "description": "整合所有知识点", "type": "quiz", "layer": 4, "pre_requisites": [4, 5], "estimated_minutes": t6},
-                {"id": 7, "title": "终极挑战", "description": "综合能力检验", "type": "boss", "layer": 5, "pre_requisites": [6], "estimated_minutes": t7},
+                {"id": 1, "title": "基础入门", "description": "掌握核心概念基础", "type": "learn", "layer": 1, "pre_requisites": [], "estimated_minutes": t1, "reward_multiplier": 1.0},
+                {"id": 2, "title": "分支路径 A", "description": "深入学习路径 A", "type": "learn", "layer": 2, "pre_requisites": [1], "estimated_minutes": t2, "reward_multiplier": 1.2},
+                {"id": 3, "title": "分支路径 B", "description": "深入学习路径 B", "type": "learn", "layer": 2, "pre_requisites": [1], "estimated_minutes": t3, "reward_multiplier": 1.2},
+                {"id": 4, "title": "进阶路径 A", "description": "进阶学习 A", "type": "learn", "layer": 3, "pre_requisites": [2], "estimated_minutes": t4, "reward_multiplier": 1.4},
+                {"id": 5, "title": "进阶路径 B", "description": "进阶学习 B", "type": "learn", "layer": 3, "pre_requisites": [3], "estimated_minutes": t5, "reward_multiplier": 1.4},
+                {"id": 6, "title": "知识汇合", "description": "整合所有知识点", "type": "quiz", "layer": 4, "pre_requisites": [4, 5], "estimated_minutes": t6, "reward_multiplier": 2.0},
+                {"id": 7, "title": "终极挑战", "description": "综合能力检验", "type": "quiz", "layer": 5, "pre_requisites": [6], "estimated_minutes": t7, "reward_multiplier": 3.0},
             ]
         else:
-            # Fast/Light mode: 5 nodes without boss
+            # Fast/Light mode: 5 nodes
             # Layer 1: 1 node (root) - 20%
             # Layer 2: 2 nodes (branch) - 25% each
             # Layer 3: 1 node (merge) - 15%
@@ -456,11 +455,11 @@ class LLMClient:
             t4 = total_minutes - t1 - t2 - t2 - t3
 
             nodes = [
-                {"id": 1, "title": "基础入门", "description": "掌握核心概念基础", "type": "learn", "layer": 1, "pre_requisites": [], "estimated_minutes": t1},
-                {"id": 2, "title": "分支路径 A", "description": "深入学习路径 A", "type": "learn", "layer": 2, "pre_requisites": [1], "estimated_minutes": t2},
-                {"id": 3, "title": "分支路径 B", "description": "深入学习路径 B", "type": "learn", "layer": 2, "pre_requisites": [1], "estimated_minutes": t2},
-                {"id": 4, "title": "知识汇合", "description": "整合所有知识点", "type": "quiz", "layer": 3, "pre_requisites": [2, 3], "estimated_minutes": t3},
-                {"id": 5, "title": "实战演练", "description": "应用所学知识", "type": "learn", "layer": 4, "pre_requisites": [4], "estimated_minutes": t4},
+                {"id": 1, "title": "基础入门", "description": "掌握核心概念基础", "type": "learn", "layer": 1, "pre_requisites": [], "estimated_minutes": t1, "reward_multiplier": 1.0},
+                {"id": 2, "title": "分支路径 A", "description": "深入学习路径 A", "type": "learn", "layer": 2, "pre_requisites": [1], "estimated_minutes": t2, "reward_multiplier": 1.2},
+                {"id": 3, "title": "分支路径 B", "description": "深入学习路径 B", "type": "learn", "layer": 2, "pre_requisites": [1], "estimated_minutes": t2, "reward_multiplier": 1.2},
+                {"id": 4, "title": "知识汇合", "description": "整合所有知识点", "type": "quiz", "layer": 3, "pre_requisites": [2, 3], "estimated_minutes": t3, "reward_multiplier": 2.0},
+                {"id": 5, "title": "实战演练", "description": "应用所学知识", "type": "learn", "layer": 4, "pre_requisites": [4], "estimated_minutes": t4, "reward_multiplier": 2.5},
             ]
 
         time_sum = sum(n["estimated_minutes"] for n in nodes)

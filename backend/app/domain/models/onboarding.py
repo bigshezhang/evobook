@@ -13,9 +13,9 @@ from app.infrastructure.database import Base
 
 class OnboardingSession(Base):
     """Stores onboarding dialogue state and final profile."""
-    
+
     __tablename__ = "onboarding_sessions"
-    
+
     id: Mapped[UUID] = mapped_column(
         PG_UUID(as_uuid=True),
         primary_key=True,
@@ -31,7 +31,7 @@ class OnboardingSession(Base):
         Text,
         nullable=False,
         default="exploration",
-        comment="exploration | calibration_r1 | calibration_r2 | focus | source | handoff",
+        comment="exploration | calibration_r1 | calibration_r2 | focus | mode | source | handoff",
     )
     topic: Mapped[str | None] = mapped_column(Text, nullable=True)
     level: Mapped[str | None] = mapped_column(
@@ -41,6 +41,11 @@ class OnboardingSession(Base):
     )
     verified_concept: Mapped[str | None] = mapped_column(Text, nullable=True)
     focus: Mapped[str | None] = mapped_column(Text, nullable=True)
+    mode: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+        comment="Deep | Fast | Light",
+    )
     source: Mapped[str | None] = mapped_column(Text, nullable=True)
     intent: Mapped[str | None] = mapped_column(
         Text,
@@ -66,12 +71,12 @@ class OnboardingSession(Base):
         default=lambda: datetime.now(timezone.utc),
         onupdate=lambda: datetime.now(timezone.utc),
     )
-    
+
     __table_args__ = (
         Index("idx_onboarding_phase", "phase"),
         Index("idx_onboarding_topic", "topic"),
         Index("idx_onboarding_user_id", "user_id"),
     )
-    
+
     def __repr__(self) -> str:
         return f"<OnboardingSession id={self.id} phase={self.phase} topic={self.topic}>"

@@ -165,7 +165,7 @@
 | `id` | int | 节点 ID |
 | `title` | string | 节点标题 |
 | `description` | string | 节点描述 |
-| `type` | enum | learn / quiz / boss |
+| `type` | enum | learn / quiz |
 | `layer` | int | DAG 层级 |
 | `pre_requisites` | int[] | 前置节点 ID 列表 |
 | `estimated_minutes` | int | 预估学习时间 |
@@ -173,7 +173,6 @@
 **约束:**
 - DAG 必须有分支和汇合（不能是线性路径）
 - `sum(nodes[].estimated_minutes) == total_commitment_minutes`
-- `mode != Deep` 时禁止 boss 节点
 
 ---
 

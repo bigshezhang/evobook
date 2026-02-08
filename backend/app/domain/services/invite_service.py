@@ -101,10 +101,14 @@ class InviteService:
         count_result = await db.execute(count_stmt)
         successful_count = count_result.scalar() or 0
 
+        # Generate invite URL with HashRouter-compatible format
+        # Using /?invite=XXX#/login format for maximum compatibility:
+        # - Pre-hash query param is read by App.tsx's useEffect
+        # - Falls back to #/login route for unauthenticated users
         return {
             "invite_code": invite_code,
             "formatted_code": format_invite_code(invite_code),
-            "invite_url": f"{base_url}/register?invite={invite_code}",
+            "invite_url": f"{base_url}/?invite={invite_code}#/login",
             "successful_invites_count": successful_count,
         }
 

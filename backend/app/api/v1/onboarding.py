@@ -45,6 +45,7 @@ class FinishData(BaseModel):
     verified_concept: str
     focus: str
     source: str
+    mode: str  # Deep|Fast|Light
     intent: str  # add_info|change_topic
 
 

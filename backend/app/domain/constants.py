@@ -21,13 +21,11 @@ VALID_NODE_STATUSES = {
 # ==================== Node Types ====================
 NODE_TYPE_LEARN = "learn"
 NODE_TYPE_QUIZ = "quiz"
-NODE_TYPE_BOSS = "boss"
 
 # Set of all valid node types
 VALID_NODE_TYPES = {
     NODE_TYPE_LEARN,
     NODE_TYPE_QUIZ,
-    NODE_TYPE_BOSS,
 }
 
 # ==================== Learning Levels ====================
@@ -79,7 +77,6 @@ DICE_MAX_VALUE = 4
 
 # Node completion rewards
 NODE_REWARD_QUIZ_EXP = 20
-NODE_REWARD_BOSS_EXP = 50
 NODE_REWARD_REGULAR_EXP = 10
 
 # Session reasons

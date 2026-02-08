@@ -6,7 +6,7 @@ This module provides API endpoints for generating and retrieving course map DAGs
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,6 +18,10 @@ from app.core.exceptions import AppException, NotFoundError
 from app.core.logging import get_logger
 from app.domain.models.course_map import CourseMap
 from app.domain.models.node_progress import NodeProgress
+from app.domain.services.content_generation_service import (
+    ContentGenerationService,
+    initialize_node_contents,
+)
 from app.domain.services.course_map_service import CourseMapService
 from app.domain.services.profile_service import ProfileService
 from app.infrastructure.database import get_db_session
@@ -60,10 +64,11 @@ class DAGNode(BaseModel):
     id: int
     title: str
     description: str
-    type: Literal["learn", "quiz", "boss"]
+    type: Literal["learn", "quiz"]
     layer: int
     pre_requisites: list[int]
     estimated_minutes: int
+    reward_multiplier: float = Field(..., ge=1.0, le=3.0, description="Reward multiplier (1.0-3.0)")
 
 
 class CourseMapGenerateResponse(BaseModel):
@@ -86,6 +91,7 @@ def get_llm_client() -> LLMClient:
 @router.post("/generate", response_model=CourseMapGenerateResponse)
 async def generate_course_map(
     request: CourseMapGenerateRequest,
+    background_tasks: BackgroundTasks,
     db: Annotated[AsyncSession, Depends(get_db_session)],
     llm_client: Annotated[LLMClient, Depends(get_llm_client)],
     user_id: UUID | None = Depends(get_optional_user_id),
@@ -99,7 +105,6 @@ async def generate_course_map(
     Hard constraints:
     - DAG must have branches and merges (no linear paths)
     - sum(nodes[].estimated_minutes) == total_commitment_minutes
-    - mode != Deep => no boss nodes allowed
 
     Args:
         request: Course map generation request with user profile.
@@ -122,10 +127,58 @@ async def generate_course_map(
         user_id=user_id,
     )
 
+    course_map_id = result["course_map_id"]
+    nodes = result["nodes"]
+    map_meta = result["map_meta"]
+
+    # Initialize node_contents records for all nodes
+    try:
+        await initialize_node_contents(
+            course_map_id=course_map_id,
+            nodes=nodes,
+            db=db,
+        )
+        logger.info(
+            "Initialized node_contents records",
+            course_map_id=str(course_map_id),
+            node_count=len(nodes),
+        )
+    except Exception as e:
+        logger.error(
+            "Failed to initialize node_contents",
+            course_map_id=str(course_map_id),
+            error=str(e),
+        )
+        # Don't fail the request, but log the error
+
+    # Trigger background generation for all learn nodes
+    course_context = {
+        "topic": request.topic,
+        "level": request.level,
+        "mode": request.mode,
+        "course_name": map_meta.get("course_name", ""),
+        "strategy_rationale": map_meta.get("strategy_rationale", ""),
+        "language": "en",  # Default language, can be made configurable
+    }
+
+    # Add background task (creates new DB session internally)
+    background_tasks.add_task(
+        _background_generate_learn_nodes,
+        course_map_id,
+        nodes,
+        course_context,
+        get_settings(),
+    )
+
+    logger.info(
+        "Triggered background generation for learn nodes",
+        course_map_id=str(course_map_id),
+        learn_nodes_count=len([n for n in nodes if n.get("type") == "learn"]),
+    )
+
     # 自动设置新生成的课程为活跃课程
     if user_id:
         try:
-            course_map_id = result["course_map_id"]
             await ProfileService.set_active_course_map(
                 user_id=user_id,
                 course_map_id=course_map_id,
@@ -334,3 +387,260 @@ async def get_course_map(
             status_code=500,
             detail={"code": ERROR_INTERNAL, "message": str(e)},
         )
+
+
+# ---------------------------------------------------------------------------
+# Progress endpoint
+# ---------------------------------------------------------------------------
+
+class NodeGenerationStatus(BaseModel):
+    """Generation status for a single node."""
+
+    node_id: int
+    type: str
+    status: str
+    error: str | None = None
+
+
+class GenerationProgressResponse(BaseModel):
+    """Response for generation progress endpoint."""
+
+    course_map_id: str
+    overall_status: Literal["initializing", "generating", "completed", "partial_failed"]
+    learn_progress: float
+    nodes_status: list[NodeGenerationStatus]
+
+
+@router.get("/{course_map_id}/progress", response_model=GenerationProgressResponse)
+async def get_generation_progress(
+    course_map_id: UUID,
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
+    db: Annotated[AsyncSession, Depends(get_db_session)],
+) -> dict[str, Any]:
+    """Get generation progress for a course map.
+
+    This endpoint returns the current generation status for all nodes
+    in a course map, including overall progress percentage.
+
+    Args:
+        course_map_id: Course map UUID.
+        user_id: Authenticated user ID from JWT.
+        db: Database session.
+
+    Returns:
+        Generation progress with node-level status details.
+
+    Raises:
+        NotFoundError: If course map does not exist or belongs to another user.
+    """
+    try:
+        # Verify course map ownership
+        course_stmt = select(CourseMap).where(
+            CourseMap.id == course_map_id,
+            CourseMap.user_id == user_id,
+        )
+        course_result = await db.execute(course_stmt)
+        course_map = course_result.scalar_one_or_none()
+
+        if course_map is None:
+            raise NotFoundError(resource="CourseMap", identifier=str(course_map_id))
+
+        # Query all node_contents for this course
+        from app.domain.models.node_content import NodeContent
+
+        stmt = select(NodeContent).where(
+            NodeContent.course_map_id == course_map_id
+        )
+        result = await db.execute(stmt)
+        node_contents = result.scalars().all()
+
+        # Count learn nodes
+        total_learn = sum(1 for nc in node_contents if nc.node_type == "learn")
+        completed_learn = sum(
+            1 for nc in node_contents
+            if nc.node_type == "learn" and nc.generation_status == "completed"
+        )
+
+        # Calculate progress
+        learn_progress = completed_learn / total_learn if total_learn > 0 else 1.0
+
+        # Determine overall status
+        statuses = [nc.generation_status for nc in node_contents if nc.node_type == "learn"]
+        if not statuses:
+            overall_status = "completed"
+        elif all(s == "completed" for s in statuses):
+            overall_status = "completed"
+        elif any(s == "failed" for s in statuses):
+            overall_status = "partial_failed"
+        elif any(s in ("generating", "pending") for s in statuses):
+            overall_status = "generating"
+        else:
+            overall_status = "initializing"
+
+        # Build node status list
+        nodes_status = [
+            {
+                "node_id": nc.node_id,
+                "type": nc.node_type or "unknown",
+                "status": nc.generation_status,
+                "error": nc.generation_error,
+            }
+            for nc in node_contents
+        ]
+
+        logger.info(
+            "Fetched generation progress",
+            course_map_id=str(course_map_id),
+            overall_status=overall_status,
+            learn_progress=learn_progress,
+        )
+
+        return {
+            "course_map_id": str(course_map_id),
+            "overall_status": overall_status,
+            "learn_progress": learn_progress,
+            "nodes_status": nodes_status,
+        }
+
+    except AppException:
+        raise
+    except Exception as e:
+        logger.error(
+            "Failed to fetch generation progress",
+            course_map_id=str(course_map_id),
+            error=str(e),
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail={"code": ERROR_INTERNAL, "message": str(e)},
+        )
+
+
+# ---------------------------------------------------------------------------
+# Admin endpoint for manual recovery
+# ---------------------------------------------------------------------------
+
+class RecoveryStatsResponse(BaseModel):
+    """Response for recovery endpoint."""
+
+    message: str
+    stats: dict[str, int]
+
+
+@router.post("/admin/recover-tasks", response_model=RecoveryStatsResponse)
+async def manually_recover_tasks(
+    db: Annotated[AsyncSession, Depends(get_db_session)],
+    llm_client: Annotated[LLMClient, Depends(get_llm_client)],
+) -> dict[str, Any]:
+    """Manually trigger recovery of incomplete generation tasks.
+
+    This endpoint can be used to manually restart background generation
+    for any courses that have nodes stuck in 'generating' or 'pending' status.
+
+    Useful for:
+    - Testing recovery logic
+    - Recovering from partial failures
+    - Debugging generation issues
+
+    Returns:
+        Recovery statistics including courses found and tasks restarted.
+    """
+    try:
+        from app.domain.services.content_generation_service import ContentGenerationService
+        from app.domain.services.recovery_service import RecoveryService
+
+        logger.info("Manual recovery triggered")
+
+        # Create services
+        content_generation_service = ContentGenerationService(
+            llm_client=llm_client,
+            db_session=db,
+        )
+        recovery_service = RecoveryService()
+
+        # Execute recovery
+        stats = await recovery_service.recover_incomplete_tasks(
+            db=db,
+            content_generation_service=content_generation_service,
+        )
+
+        logger.info(
+            "Manual recovery completed",
+            stats=stats,
+        )
+
+        return {
+            "message": "Recovery completed successfully",
+            "stats": stats,
+        }
+
+    except Exception as e:
+        logger.error(
+            "Manual recovery failed",
+            error=str(e),
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail={"code": ERROR_INTERNAL, "message": str(e)},
+        )
+
+
+# ---------------------------------------------------------------------------
+# Background task helper
+# ---------------------------------------------------------------------------
+
+async def _background_generate_learn_nodes(
+    course_map_id: UUID,
+    nodes: list[dict[str, Any]],
+    course_context: dict[str, Any],
+    settings: Any,
+) -> None:
+    """Background task to generate learn node contents.
+
+    This function runs in a background task and creates its own database session.
+
+    Args:
+        course_map_id: Course map UUID.
+        nodes: List of all nodes from the DAG.
+        course_context: Course metadata for generation.
+        settings: Application settings.
+    """
+    from app.infrastructure.database import get_async_session_maker
+
+    logger.info(
+        "Background task started for content generation",
+        course_map_id=str(course_map_id),
+    )
+
+    # Create a new database session for background task
+    async_session_maker = get_async_session_maker()
+    async with async_session_maker() as db:
+        try:
+            # Create LLM client and generation service
+            llm_client = LLMClient(settings)
+            generation_service = ContentGenerationService(
+                llm_client=llm_client,
+                db_session=db,
+            )
+
+            # Generate all learn nodes
+            await generation_service.generate_all_learn_nodes(
+                course_map_id=course_map_id,
+                nodes=nodes,
+                course_context=course_context,
+            )
+
+            logger.info(
+                "Background task completed successfully",
+                course_map_id=str(course_map_id),
+            )
+
+        except Exception as e:
+            logger.error(
+                "Background task failed",
+                course_map_id=str(course_map_id),
+                error=str(e),
+                exc_info=True,
+            )

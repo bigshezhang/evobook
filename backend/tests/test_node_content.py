@@ -46,32 +46,6 @@ class TestKnowledgeCardAPI:
         # Verify markdown contains page break for multi-page content
         if data["totalPagesInCard"] > 1:
             assert "<EVOBK_PAGE_BREAK />" in data["markdown"]
-
-    @pytest.mark.asyncio
-    async def test_knowledge_card_with_boss_node(self, client: AsyncClient):
-        """Test knowledge card generation for boss node type."""
-        response = await client.post(
-            "/api/v1/node-content/knowledge-card",
-            json={
-                "course": {
-                    "course_name": "Advanced Python",
-                    "course_context": "Deep dive into Python internals",
-                    "topic": "Python 高级编程",
-                    "level": "Advanced",
-                    "mode": "Deep",
-                },
-                "node": {
-                    "id": 5,
-                    "title": "Metaclasses Challenge",
-                    "description": "Master Python metaclasses",
-                    "type": "boss",
-                    "estimated_minutes": 30,
-                },
-            },
-        )
-
-        assert response.status_code == 200
-        data = response.json()
         assert data["type"] == "knowledge_card"
         assert data["node_id"] == 5
 

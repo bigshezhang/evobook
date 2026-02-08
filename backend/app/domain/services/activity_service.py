@@ -95,7 +95,7 @@ class ActivityService:
     ) -> None:
         """检查课程是否已全部完成，如果是则更新 completed_courses_count。
 
-        课程完成条件：所有 learn 和 boss 类型节点都有对应的 node_completed 活动记录。
+        课程完成条件：所有 learn 类型节点都有对应的 node_completed 活动记录。
 
         通过插入 activity_type="course_completed" 标记来避免重复计数。
 
@@ -114,11 +114,11 @@ class ActivityService:
 
         nodes = course_map.nodes
 
-        # 2. 找出所有 learn 和 boss 节点
+        # 2. 找出所有 learn 节点
         learning_node_ids = {
             node["id"]
             for node in nodes
-            if node.get("type") in ("learn", "boss")
+            if node.get("type") == "learn"
         }
 
         if not learning_node_ids:

@@ -30,6 +30,7 @@ class OnboardingPhase(str, Enum):
     CALIBRATION_R1 = "calibration_r1"
     CALIBRATION_R2 = "calibration_r2"
     FOCUS = "focus"
+    MODE = "mode"
     SOURCE = "source"
     HANDOFF = "handoff"
 
@@ -47,6 +48,7 @@ PHASE_ORDER = [
     OnboardingPhase.CALIBRATION_R1,
     OnboardingPhase.CALIBRATION_R2,
     OnboardingPhase.FOCUS,
+    OnboardingPhase.MODE,
     OnboardingPhase.SOURCE,
     OnboardingPhase.HANDOFF,
 ]
@@ -62,6 +64,7 @@ class OnboardingState:
     level: str | None = None
     verified_concept: str | None = None
     focus: str | None = None
+    mode: str | None = None
     source: str | None = None
     intent: UserIntent | None = None
     history: list[dict[str, Any]] = field(default_factory=list)
@@ -79,6 +82,7 @@ class OnboardingState:
             "level": self.level,
             "verified_concept": self.verified_concept,
             "focus": self.focus,
+            "mode": self.mode,
             "source": self.source,
             "intent": self.intent.value if self.intent else None,
             "history": self.history,
@@ -101,6 +105,7 @@ class OnboardingState:
             level=data.get("level"),
             verified_concept=data.get("verified_concept"),
             focus=data.get("focus"),
+            mode=data.get("mode"),
             source=data.get("source"),
             intent=UserIntent(data["intent"]) if data.get("intent") else None,
             history=data.get("history", []),
@@ -132,8 +137,9 @@ class OnboardingService:
     2. calibration_r1 - First round skill assessment
     3. calibration_r2 - Second round skill assessment
     4. focus - Collect learning goals
-    5. source - Collect traffic source
-    6. handoff - Complete and return profile
+    5. mode - Collect learning intensity preference
+    6. source - Collect traffic source
+    7. handoff - Complete and return profile
     """
 
     def __init__(self, llm_client: LLMClient, db_session: AsyncSession) -> None:
@@ -295,6 +301,7 @@ class OnboardingService:
             "level": session.level,
             "verified_concept": session.verified_concept,
             "focus": session.focus,
+            "mode": session.mode,
             "source": session.source,
             "intent": session.intent,
         })
@@ -321,6 +328,7 @@ class OnboardingService:
                 level=state.level,
                 verified_concept=state.verified_concept,
                 focus=state.focus,
+                mode=state.mode,
                 source=state.source,
                 intent=state.intent.value if state.intent else None,
                 state_json={"history": state.history},
@@ -333,6 +341,7 @@ class OnboardingService:
             session.level = state.level
             session.verified_concept = state.verified_concept
             session.focus = state.focus
+            session.mode = state.mode
             session.source = state.source
             session.intent = state.intent.value if state.intent else None
             session.state_json = {"history": state.history}
@@ -385,6 +394,7 @@ class OnboardingService:
             f"Level: {state.level or 'Not set'}",
             f"Verified Concept: {state.verified_concept or 'Not set'}",
             f"Focus: {state.focus or 'Not set'}",
+            f"Mode: {state.mode or 'Not set'}",
             f"Source: {state.source or 'Not set'}",
             "",
             "# Conversation History",
@@ -418,6 +428,7 @@ class OnboardingService:
             state.level = data.get("level", state.level)
             state.verified_concept = data.get("verified_concept", state.verified_concept)
             state.focus = data.get("focus", state.focus)
+            state.mode = data.get("mode", state.mode)
             state.source = data.get("source", state.source)
             intent_str = data.get("intent")
             if intent_str:

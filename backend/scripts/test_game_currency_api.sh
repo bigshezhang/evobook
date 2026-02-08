@@ -172,7 +172,7 @@ LEVELUP_RESPONSE=$(curl -s -X POST "$API_BASE/game/earn-exp" \
     "source_details": {
       "course_map_id": "00000000-0000-0000-0000-000000000001",
       "node_id": 10,
-      "activity_type": "boss_complete"
+      "activity_type": "node_complete"
     }
   }')
 
