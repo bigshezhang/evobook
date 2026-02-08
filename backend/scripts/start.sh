@@ -106,16 +106,11 @@ do_start() {
         exit 1
     fi
 
-    # 检查是否已有同名 screen 在运行
-    if screen -ls 2>/dev/null | grep -q "$SCREEN_BACKEND"; then
-        log_warn "Backend screen session '$SCREEN_BACKEND' already exists"
-        log_warn "Run '$0 stop' first or '$0 restart'"
-        exit 1
-    fi
-    if screen -ls 2>/dev/null | grep -q "$SCREEN_FRONTEND"; then
-        log_warn "Frontend screen session '$SCREEN_FRONTEND' already exists"
-        log_warn "Run '$0 stop' first or '$0 restart'"
-        exit 1
+    # 如果已有 screen session 或端口被占用，先清理
+    if screen -ls 2>/dev/null | grep -qE "(${SCREEN_BACKEND}|${SCREEN_FRONTEND})"; then
+        log_warn "Detected existing EvoBook sessions, stopping first..."
+        do_stop
+        sleep 1
     fi
 
     # 1. 确保 PostgreSQL 容器运行
@@ -197,15 +192,24 @@ do_start() {
         exit 1
     fi
 
-    # 5. 启动前端 (screen)
+    # 5. 构建并启动前端 (screen)
+    #    先 build 生产包，再用 vite preview 提供服务
     #    通过 BACKEND_URL 环境变量告诉 vite 代理目标
-    #    通过 --port 参数指定前端端口
+    log_step "Building frontend for production..."
+    (
+        export PATH="/root/.nvm/versions/node/v22.15.0/bin:$PATH"
+        export BACKEND_URL="http://localhost:${BACKEND_PORT}"
+        cd "$FRONTEND_DIR"
+        npx vite build 2>&1 | tail -5
+    )
+    log_info "Frontend build completed"
+
     log_step "Starting frontend on port $FRONTEND_PORT..."
     screen -dmS "$SCREEN_FRONTEND" bash -c "
         export PATH=\"/root/.nvm/versions/node/v22.15.0/bin:\$PATH\"
         export BACKEND_URL=\"http://localhost:${BACKEND_PORT}\"
         cd $FRONTEND_DIR
-        exec npx vite --host 0.0.0.0 --port $FRONTEND_PORT
+        exec npx vite preview --host 0.0.0.0 --port $FRONTEND_PORT
     "
 
     if wait_for_service "http://localhost:${FRONTEND_PORT}/" "Frontend" 15; then
