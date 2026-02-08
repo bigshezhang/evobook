@@ -3,9 +3,10 @@
 from datetime import datetime, timezone
 from uuid import UUID
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Text, text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, Text, text
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
+import sqlalchemy as sa
 
 from app.infrastructure.database import Base
 
@@ -39,6 +40,50 @@ class Profile(Base):
         default=False,
         server_default=text("false"),
         comment="Whether user has completed onboarding",
+    )
+
+    # 游戏货币系统字段
+    gold_balance: Mapped[int] = mapped_column(
+        sa.Integer,
+        nullable=False,
+        default=0,
+        server_default=text("0"),
+        comment="金币余额",
+    )
+    dice_rolls_count: Mapped[int] = mapped_column(
+        sa.Integer,
+        nullable=False,
+        default=15,
+        server_default=text("15"),
+        comment="骰子次数",
+    )
+    level: Mapped[int] = mapped_column(
+        sa.Integer,
+        nullable=False,
+        default=1,
+        server_default=text("1"),
+        comment="用户等级",
+    )
+    current_exp: Mapped[int] = mapped_column(
+        sa.Integer,
+        nullable=False,
+        default=0,
+        server_default=text("0"),
+        comment="当前经验值",
+    )
+    current_outfit: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default="default",
+        server_default="default",
+        comment="当前装备的服装",
+    )
+    travel_board_position: Mapped[int] = mapped_column(
+        sa.Integer,
+        nullable=False,
+        default=0,
+        server_default=text("0"),
+        comment="地图位置",
     )
 
     # 活跃课程相关字段

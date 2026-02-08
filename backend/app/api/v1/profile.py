@@ -34,6 +34,12 @@ class ProfileResponse(BaseModel):
     display_name: str | None = None
     mascot: str | None = None
     onboarding_completed: bool
+    gold_balance: int = Field(default=0, description="Gold balance")
+    dice_rolls_count: int = Field(default=15, description="Dice rolls count")
+    level: int = Field(default=1, description="User level")
+    current_exp: int = Field(default=0, description="Current EXP")
+    current_outfit: str = Field(default="default", description="Current outfit")
+    travel_board_position: int = Field(default=0, description="Travel board position")
     created_at: str
     updated_at: str
 
@@ -187,7 +193,7 @@ async def get_active_course(
             user_id=user_id,
             db=db,
         )
-        
+
         return {
             "course_map_id": str(course_map_id) if course_map_id else None,
         }
@@ -295,21 +301,21 @@ async def get_profile_stats(
     db: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> dict:
     """获取用户学习统计数据。
-    
+
     包括：
     - 用户名称和注册时间
     - 总学习时长（小时和秒）
     - 已完成课程数
     - 已掌握节点数
     - 全局排名和百分位
-    
+
     Args:
         user_id: 认证用户 ID（从 JWT 提取）
         db: 数据库会话
-    
+
     Returns:
         ProfileStatsResponse: 用户学习统计数据
-    
+
     Raises:
         401: 未认证
         404: 用户 Profile 不存在
@@ -321,21 +327,21 @@ async def get_profile_stats(
         profile_stmt = select(Profile).where(Profile.id == user_id)
         profile_result = await db.execute(profile_stmt)
         profile = profile_result.scalar_one_or_none()
-        
+
         if profile is None:
             raise HTTPException(
                 status_code=404,
                 detail={"code": "PROFILE_NOT_FOUND", "message": "User profile not found"},
             )
-        
+
         # 2. 获取用户统计数据
         stats_stmt = select(UserStats).where(UserStats.user_id == user_id)
         stats_result = await db.execute(stats_stmt)
         stats = stats_result.scalar_one_or_none()
-        
+
         # 3. 获取排名数据
         ranking = await RankingService.get_user_rank(user_id=user_id, db=db)
-        
+
         # 4. 构建响应
         if stats:
             total_study_seconds = stats.total_study_seconds
@@ -345,11 +351,11 @@ async def get_profile_stats(
             total_study_seconds = 0
             completed_courses_count = 0
             mastered_nodes_count = 0
-        
+
         # 向上取整计算小时数
         import math
         total_study_hours = math.ceil(total_study_seconds / 3600)
-        
+
         return {
             "user_name": profile.display_name or "EvoBook Learner",
             "joined_date": profile.created_at.isoformat(),
@@ -361,7 +367,7 @@ async def get_profile_stats(
             "rank_percentile": ranking["rank_percentile"],
             "total_users": ranking["total_users"],
         }
-    
+
     except AppException:
         raise
     except HTTPException:

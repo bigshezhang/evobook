@@ -45,7 +45,7 @@ echo "$BODY" | jq '.'
 
 if [ "$HTTP_CODE" = "200" ]; then
   echo -e "\n${GREEN}✓ Profile stats fetched successfully${NC}"
-  
+
   # Extract fields
   USER_NAME=$(echo "$BODY" | jq -r '.user_name')
   JOINED_DATE=$(echo "$BODY" | jq -r '.joined_date')
@@ -53,14 +53,14 @@ if [ "$HTTP_CODE" = "200" ]; then
   STUDY_HOURS=$(echo "$BODY" | jq -r '.total_study_hours')
   COMPLETED=$(echo "$BODY" | jq -r '.completed_courses_count')
   RANK=$(echo "$BODY" | jq -r '.global_rank')
-  
+
   echo -e "\n${YELLOW}User Stats Summary:${NC}"
   echo "  User Name: $USER_NAME"
   echo "  Joined: $JOINED_DATE"
   echo "  Study Time: ${STUDY_HOURS}h (${STUDY_SECONDS}s)"
   echo "  Completed Courses: $COMPLETED"
   echo "  Global Rank: $RANK"
-  
+
 else
   echo -e "\n${RED}✗ Failed to fetch profile stats${NC}"
   exit 1

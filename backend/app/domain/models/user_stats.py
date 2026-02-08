@@ -12,7 +12,7 @@ from app.infrastructure.database import Base
 
 class UserStats(Base):
     """用户学习统计数据模型。
-    
+
     用于存储和跟踪用户的学习时长、已完成课程数、掌握节点数等统计信息。
     主要用于 Profile 页面展示和全局排名计算。
     """

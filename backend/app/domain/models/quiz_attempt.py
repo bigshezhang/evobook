@@ -33,6 +33,11 @@ class QuizAttempt(Base):
         nullable=False,
         comment="Which course map this quiz belongs to",
     )
+    node_id: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        comment="Which node (quiz node) this attempt belongs to",
+    )
     quiz_json: Mapped[dict[str, Any]] = mapped_column(
         JSONB,
         nullable=False,
@@ -53,6 +58,8 @@ class QuizAttempt(Base):
     __table_args__ = (
         Index("idx_quiz_attempts_user_id", "user_id"),
         Index("idx_quiz_attempts_course_map_id", "course_map_id"),
+        Index("idx_quiz_attempts_node_id", "node_id"),
+        Index("idx_quiz_attempts_course_map_node", "course_map_id", "node_id"),
         Index("idx_quiz_attempts_created_at", "created_at"),
     )
 

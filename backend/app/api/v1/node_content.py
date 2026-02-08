@@ -50,6 +50,7 @@ class NodeInfo(BaseModel):
 class KnowledgeCardRequest(BaseModel):
     """Request body for knowledge-card endpoint."""
 
+    language: str = Field(default="en", description="Response language (ISO 639-1 code)")
     course: CourseInfo
     node: NodeInfo
     course_map_id: str | None = Field(
@@ -71,7 +72,7 @@ class KnowledgeCardResponse(BaseModel):
 class ClarificationRequest(BaseModel):
     """Request body for clarification endpoint."""
 
-    language: Literal["en", "zh"] = Field(..., description="Response language")
+    language: str = Field(..., description="Response language (ISO 639-1 code)")
     user_question_raw: str = Field(..., description="User's raw question text")
     page_markdown: str = Field(..., description="Current page markdown content")
     course_map_id: str | None = Field(
@@ -95,7 +96,7 @@ class ClarificationResponse(BaseModel):
 class QADetailRequest(BaseModel):
     """Request body for qa-detail endpoint."""
 
-    language: Literal["en", "zh"] = Field(..., description="Response language")
+    language: str = Field(..., description="Response language (ISO 639-1 code)")
     qa_title: str = Field(..., description="Title of the QA")
     qa_short_answer: str = Field(..., description="Short answer to expand upon")
     course_map_id: str | None = Field(
@@ -172,6 +173,7 @@ async def generate_knowledge_card(
     service = NodeContentService(llm_client=llm_client, db_session=db)
 
     result = await service.generate_knowledge_card(
+        language=request.language,
         course_name=request.course.course_name,
         course_context=request.course.course_context,
         topic=request.course.topic,

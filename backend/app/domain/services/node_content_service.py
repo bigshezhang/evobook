@@ -51,6 +51,7 @@ class NodeContentService:
     
     async def generate_knowledge_card(
         self,
+        language: str,
         course_name: str,
         course_context: str,
         topic: str,
@@ -71,6 +72,7 @@ class NodeContentService:
         LLM generation the result is persisted for future cache hits.
         
         Args:
+            language: Response language ("en" or "zh").
             course_name: Name of the course.
             course_context: Context description for the course.
             topic: Learning topic.
@@ -92,6 +94,7 @@ class NodeContentService:
         """
         logger.info(
             "Generating knowledge card",
+            language=language,
             node_id=node_id,
             node_title=node_title,
             mode=mode,
@@ -116,6 +119,7 @@ class NodeContentService:
         # Build prompt context
         prompt_text = PromptRegistry.get_prompt(PromptName.KNOWLEDGE_CARD)
         context = self._build_knowledge_card_context(
+            language=language,
             course_name=course_name,
             course_context=course_context,
             topic=topic,
@@ -174,6 +178,7 @@ class NodeContentService:
     
     def _build_knowledge_card_context(
         self,
+        language: str,
         course_name: str,
         course_context: str,
         topic: str,
@@ -188,12 +193,14 @@ class NodeContentService:
         """Build context string for knowledge card prompt.
         
         Args:
-            All parameters from generate_knowledge_card.
+            language: Response language.
+            All other parameters from generate_knowledge_card.
             
         Returns:
             Formatted JSON context string.
         """
         return json.dumps({
+            "language": language,
             "course": {
                 "course_name": course_name,
                 "course_context": course_context,

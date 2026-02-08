@@ -97,15 +97,15 @@ UPDATE profiles SET display_name = 'Your Name' WHERE id = 'your-user-id';
 
 ### 查看所有用户 Profile
 ```sql
-SELECT id, display_name, created_at 
-FROM profiles 
-ORDER BY created_at DESC 
+SELECT id, display_name, created_at
+FROM profiles
+ORDER BY created_at DESC
 LIMIT 10;
 ```
 
 ### 查看所有用户统计
 ```sql
-SELECT 
+SELECT
   p.display_name,
   us.total_study_seconds,
   us.completed_courses_count,
@@ -117,7 +117,7 @@ ORDER BY us.total_study_seconds DESC;
 
 ### 查看全局排名
 ```sql
-SELECT 
+SELECT
   p.display_name,
   us.total_study_seconds,
   ROW_NUMBER() OVER (ORDER BY us.total_study_seconds DESC) as rank

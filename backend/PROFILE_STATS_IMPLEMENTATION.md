@@ -96,8 +96,8 @@ export interface ProfileStats {
 
 // 邀请码（动态生成）
 <span className="text-slate-900 font-black">
-  {stats?.user_name 
-    ? stats.user_name.toUpperCase().replace(/\s+/g, '').slice(0, 8) + '99' 
+  {stats?.user_name
+    ? stats.user_name.toUpperCase().replace(/\s+/g, '').slice(0, 8) + '99'
     : 'EVOBOOK99'}
 </span>
 ```
@@ -304,8 +304,8 @@ HTTP Status: 404
 ### 检查 Profile 表
 
 ```sql
-SELECT id, display_name, created_at 
-FROM profiles 
+SELECT id, display_name, created_at
+FROM profiles
 WHERE id = 'your-user-id';
 ```
 
@@ -318,7 +318,7 @@ WHERE id = 'your-user-id';
 
 ```sql
 SELECT user_id, total_study_seconds, completed_courses_count, mastered_nodes_count
-FROM user_stats 
+FROM user_stats
 WHERE user_id = 'your-user-id';
 ```
 
@@ -330,7 +330,7 @@ WHERE user_id = 'your-user-id';
 
 ```sql
 -- 查看所有用户的学习时长排名
-SELECT 
+SELECT
   user_id,
   total_study_seconds,
   ROW_NUMBER() OVER (ORDER BY total_study_seconds DESC) as rank

@@ -55,23 +55,23 @@ async def record_heartbeat(
     db: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> dict:
     """接收学习心跳包。
-    
+
     客户端每 30 秒发送一次心跳，后端记录学习时长。
-    
+
     防刷机制：
     - 单个节点累计时长超过 `estimated_minutes * 2` 后，心跳不再计入
-    
+
     Args:
         request: 心跳请求
         user_id: 认证用户 ID（从 JWT 提取）
         db: 数据库会话
-    
+
     Returns:
         HeartbeatResponse:
             - acknowledged: True 表示心跳被接受并计入学习时长
             - total_study_seconds: 用户总学习时长（秒）
             - reason: 如果 acknowledged=False，说明原因（如 TIME_LIMIT_REACHED）
-    
+
     Raises:
         400: 无效的请求参数
         401: 未认证
@@ -88,7 +88,7 @@ async def record_heartbeat(
                 "message": "Invalid course_map_id format",
             },
         )
-    
+
     try:
         result = await LearningSessionService.process_heartbeat(
             user_id=user_id,
@@ -96,9 +96,9 @@ async def record_heartbeat(
             node_id=request.node_id,
             db=db,
         )
-        
+
         return result
-    
+
     except AppException:
         raise
     except Exception as e:

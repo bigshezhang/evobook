@@ -3,15 +3,20 @@
 This module provides API endpoints for quiz generation.
 """
 
+from datetime import datetime
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
+from sqlalchemy import desc, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
-from app.core.auth import get_optional_user_id
+from app.core.auth import get_optional_user_id, get_current_user_id
+from app.domain.models.quiz_attempt import QuizAttempt
 from app.domain.services.quiz_service import QuizService
+from app.infrastructure.database import get_db_session
 from app.llm.client import LLMClient
 
 router = APIRouter(prefix="/quiz", tags=["quiz"])
@@ -29,7 +34,7 @@ class LearnedTopic(BaseModel):
 class QuizGenerateRequest(BaseModel):
     """Request body for quiz/generate endpoint."""
 
-    language: Literal["en", "zh"] = Field(..., description="Response language")
+    language: str = Field(..., description="Response language (ISO 639-1 code)")
     mode: Literal["Deep", "Fast", "Light"] = Field(
         ..., description="Learning mode (affects difficulty)"
     )
@@ -62,6 +67,49 @@ class QuizGenerateResponse(BaseModel):
     title: str
     greeting: QuizGreeting
     questions: list[QuizQuestion]
+
+
+class QuizSubmitRequest(BaseModel):
+    """Request body for quiz/submit endpoint."""
+
+    course_map_id: UUID = Field(..., description="Course map ID")
+    node_id: int = Field(..., description="Quiz node ID")
+    quiz_json: dict[str, Any] = Field(..., description="Quiz data including questions and user answers")
+    score: int = Field(..., ge=0, le=100, description="Quiz score (0-100)")
+
+
+class QuizSubmitResponse(BaseModel):
+    """Response body for quiz/submit endpoint."""
+
+    attempt_id: UUID = Field(..., description="Created attempt ID")
+    created_at: datetime = Field(..., description="Attempt creation timestamp")
+
+
+class QuizAttemptSummary(BaseModel):
+    """Summary of a quiz attempt for history list."""
+
+    id: UUID
+    node_id: int
+    score: int | None
+    total_questions: int
+    created_at: datetime
+
+
+class QuizHistoryResponse(BaseModel):
+    """Response body for quiz/history endpoint."""
+
+    attempts: list[QuizAttemptSummary]
+
+
+class QuizAttemptDetail(BaseModel):
+    """Full detail of a quiz attempt."""
+
+    id: UUID
+    course_map_id: UUID
+    node_id: int
+    quiz_json: dict[str, Any]
+    score: int | None
+    created_at: datetime
 
 
 # --- Dependencies ---
@@ -119,3 +167,144 @@ async def generate_quiz(
     )
 
     return result
+
+
+@router.post("/submit", response_model=QuizSubmitResponse, status_code=status.HTTP_201_CREATED)
+async def submit_quiz(
+    request: QuizSubmitRequest,
+    db: Annotated[AsyncSession, Depends(get_db_session)],
+    user_id: UUID = Depends(get_current_user_id),
+) -> QuizSubmitResponse:
+    """Submit a quiz attempt and save results.
+
+    This endpoint records a quiz attempt with the user's answers and score.
+    All attempts are saved for history tracking.
+
+    Args:
+        request: Quiz submission data including course_map_id, node_id, quiz_json, score.
+        db: Database session.
+        user_id: Authenticated user ID from JWT.
+
+    Returns:
+        QuizSubmitResponse with attempt_id and created_at.
+
+    Raises:
+        HTTPException: 401 if user is not authenticated.
+    """
+    # Create quiz attempt record
+    attempt = QuizAttempt(
+        user_id=user_id,
+        course_map_id=request.course_map_id,
+        node_id=request.node_id,
+        quiz_json=request.quiz_json,
+        score=request.score,
+    )
+
+    db.add(attempt)
+    await db.commit()
+    await db.refresh(attempt)
+
+    return QuizSubmitResponse(
+        attempt_id=attempt.id,
+        created_at=attempt.created_at,
+    )
+
+
+@router.get("/history", response_model=QuizHistoryResponse)
+async def get_quiz_history(
+    course_map_id: UUID,
+    node_id: int,
+    db: Annotated[AsyncSession, Depends(get_db_session)],
+    user_id: UUID = Depends(get_current_user_id),
+) -> QuizHistoryResponse:
+    """Get quiz attempt history for a specific node.
+
+    Returns all quiz attempts for the given course map and node,
+    ordered by creation time (newest first).
+
+    Args:
+        course_map_id: Course map ID to filter by.
+        node_id: Quiz node ID to filter by.
+        db: Database session.
+        user_id: Authenticated user ID from JWT.
+
+    Returns:
+        QuizHistoryResponse with list of attempt summaries.
+
+    Raises:
+        HTTPException: 401 if user is not authenticated.
+    """
+    # Query attempts for this user, course_map, and node
+    stmt = (
+        select(QuizAttempt)
+        .where(
+            QuizAttempt.user_id == user_id,
+            QuizAttempt.course_map_id == course_map_id,
+            QuizAttempt.node_id == node_id,
+        )
+        .order_by(desc(QuizAttempt.created_at))
+    )
+
+    result = await db.execute(stmt)
+    attempts = result.scalars().all()
+
+    # Build summary list
+    summaries = [
+        QuizAttemptSummary(
+            id=attempt.id,
+            node_id=attempt.node_id,
+            score=attempt.score,
+            total_questions=len(attempt.quiz_json.get("questions", [])),
+            created_at=attempt.created_at,
+        )
+        for attempt in attempts
+    ]
+
+    return QuizHistoryResponse(attempts=summaries)
+
+
+@router.get("/attempt/{attempt_id}", response_model=QuizAttemptDetail)
+async def get_quiz_attempt_detail(
+    attempt_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db_session)],
+    user_id: UUID = Depends(get_current_user_id),
+) -> QuizAttemptDetail:
+    """Get full details of a quiz attempt.
+
+    Returns the complete quiz attempt including all questions and user answers.
+
+    Args:
+        attempt_id: Quiz attempt ID.
+        db: Database session.
+        user_id: Authenticated user ID from JWT.
+
+    Returns:
+        QuizAttemptDetail with full attempt data.
+
+    Raises:
+        HTTPException: 401 if user is not authenticated.
+        HTTPException: 404 if attempt not found or not owned by user.
+    """
+    # Query the attempt
+    stmt = select(QuizAttempt).where(
+        QuizAttempt.id == attempt_id,
+        QuizAttempt.user_id == user_id,
+    )
+
+    result = await db.execute(stmt)
+    attempt = result.scalar_one_or_none()
+
+    if not attempt:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Quiz attempt not found",
+        )
+
+    return QuizAttemptDetail(
+        id=attempt.id,
+        course_map_id=attempt.course_map_id,
+        node_id=attempt.node_id,
+        quiz_json=attempt.quiz_json,
+        score=attempt.score,
+        created_at=attempt.created_at,
+    )

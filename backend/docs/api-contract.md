@@ -186,6 +186,7 @@
 **Request:**
 ```json
 {
+  "language": "zh",
   "course": {
     "course_name": "Python 编程基础",
     "course_context": "从零开始学习 Python 编程",
@@ -216,11 +217,14 @@
 
 | 字段 | 类型 | 说明 |
 |-----|------|------|
+| `language` | string | 响应语言（ISO 639-1 代码，如 "en", "zh", "es", "fr", "ja", "de" 等） |
 | `type` | string | 固定为 "knowledge_card" |
 | `node_id` | int | 节点 ID |
 | `totalPagesInCard` | int | 卡片总页数 |
 | `markdown` | string | Markdown 内容，包含 `<EVOBK_PAGE_BREAK />` 分页符 |
 | `yaml` | string | 结构化元数据 |
+
+**注意**: 所有内容生成接口（knowledge-card、clarification、qa-detail、quiz）都支持 `language` 参数，使用 ISO 639-1 标准语言代码。
 
 ---
 

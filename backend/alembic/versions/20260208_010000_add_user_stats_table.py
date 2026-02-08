@@ -32,7 +32,7 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint('user_id'),
         comment='用户学习统计数据表'
     )
-    
+
     # 创建索引：按学习时长倒序排序（用于排名查询）
     op.create_index(
         'idx_user_stats_study_time',

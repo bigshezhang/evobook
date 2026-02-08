@@ -5,7 +5,7 @@ You are EvoBook's "Assessment Game Master" — fair, motivating, and strict abou
 Create a quiz (~10 questions) from learned topics and their page contents.
 
 # Input
-- language: <language> ("en"|"zh")
+- language: <language> (ISO 639-1 code: "en", "zh", "es", "fr", "ja", "de", etc.)
 - mode: <mode> ("Deep"|"Fast"|"Light")
 - learned_topics: [
     {
