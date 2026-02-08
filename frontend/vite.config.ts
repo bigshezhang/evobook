@@ -6,22 +6,32 @@ export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, '.', '');
     // 后端地址：优先读环境变量，脚本可通过 BACKEND_URL 覆盖
     const backendUrl = process.env.BACKEND_URL || 'http://localhost:8000';
+    const proxyConfig = {
+      '/api': {
+        target: backendUrl,
+        changeOrigin: true,
+        secure: false,
+      },
+      '/healthz': {
+        target: backendUrl,
+        changeOrigin: true,
+        secure: false,
+      },
+    };
     return {
+      // 开发服务器配置
       server: {
         port: 3000,
         host: '0.0.0.0',
-        proxy: {
-          '/api': {
-            target: backendUrl,
-            changeOrigin: true,
-            secure: false,
-          },
-          '/healthz': {
-            target: backendUrl,
-            changeOrigin: true,
-            secure: false,
-          },
-        },
+        allowedHosts: ['evobook.arunningstar.com'],
+        proxy: proxyConfig,
+      },
+      // 生产预览服务器配置（vite preview）
+      preview: {
+        port: 3000,
+        host: '0.0.0.0',
+        allowedHosts: ['evobook.arunningstar.com'],
+        proxy: proxyConfig,
       },
       plugins: [react()],
       define: {

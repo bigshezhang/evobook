@@ -30,8 +30,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <!-- 分别加载字体 -->
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" fetchpriority="high">
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block" rel="stylesheet">
     <script>
         tailwind.config = {
             darkMode: "class",
@@ -255,7 +255,30 @@
         .animate-fade-out-left {
             animation: fade-out-left 0.8s ease-out forwards !important;
         }
+        /* 字体加载前隐藏图标，避免显示文字 */
+        .material-symbols-rounded:not(.fonts-loaded),
+        .material-symbols-outlined:not(.fonts-loaded) {
+            visibility: hidden;
+        }
     </style>
+    <script>
+        // 检测字体加载状态
+        if (document.fonts) {
+            Promise.all([
+                document.fonts.load('24px "Material Symbols Rounded"'),
+                document.fonts.load('24px "Material Symbols Outlined"')
+            ]).then(() => {
+                document.documentElement.classList.add('fonts-loaded');
+                document.querySelectorAll('.material-symbols-rounded, .material-symbols-outlined').forEach(el => {
+                    el.classList.add('fonts-loaded');
+                });
+            }).catch(err => {
+                console.warn('Font loading failed:', err);
+                // 即使失败也显示，避免永久隐藏
+                document.documentElement.classList.add('fonts-loaded');
+            });
+        }
+    </script>
 <script type="importmap">
 {
   "imports": {
