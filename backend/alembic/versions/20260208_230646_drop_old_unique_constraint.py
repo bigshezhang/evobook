@@ -20,9 +20,10 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """Upgrade database schema."""
-    # Drop the old unique index that uses COALESCE
-    # This index conflicts with the new partial indexes
-    op.drop_index('uq_node_contents_cache_key', 'node_contents')
+    # 先删除约束，再删除索引
+    # 约束依赖于索引，必须先删约束
+    op.execute("ALTER TABLE node_contents DROP CONSTRAINT IF EXISTS uq_node_contents_cache_key")
+    op.execute("DROP INDEX IF EXISTS uq_node_contents_cache_key")
 
 
 def downgrade() -> None:
