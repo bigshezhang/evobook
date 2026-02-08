@@ -6,8 +6,26 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.error_codes import (
+    ERROR_INSUFFICIENT_DICE,
+    ERROR_INVALID_AMOUNT,
+    ERROR_INVALID_REWARD_TYPE,
+    ERROR_PROFILE_NOT_FOUND,
+)
 from app.core.exceptions import AppException
 from app.core.logging import get_logger
+from app.domain.constants import (
+    DICE_MAX_VALUE,
+    DICE_MIN_VALUE,
+    NODE_REWARD_BOSS_EXP,
+    NODE_REWARD_QUIZ_EXP,
+    NODE_REWARD_REGULAR_EXP,
+    NODE_TYPE_BOSS,
+    NODE_TYPE_QUIZ,
+    REWARD_TYPE_DICE,
+    REWARD_TYPE_EXP,
+    REWARD_TYPE_GOLD,
+)
 from app.domain.models.game_transaction import GameTransaction
 from app.domain.models.profile import Profile
 
@@ -141,19 +159,19 @@ class GameService:
         if not profile:
             raise AppException(
                 status_code=404,
-                error_code="PROFILE_NOT_FOUND",
+                error_code=ERROR_PROFILE_NOT_FOUND,
                 message="User profile not found",
             )
 
         if profile.dice_rolls_count <= 0:
             raise AppException(
                 status_code=400,
-                error_code="INSUFFICIENT_DICE",
+                error_code=ERROR_INSUFFICIENT_DICE,
                 message="No dice rolls available",
             )
 
-        # Roll dice (1-4)
-        dice_result = random.randint(1, 4)
+        # Roll dice (min-max range from constants)
+        dice_result = random.randint(DICE_MIN_VALUE, DICE_MAX_VALUE)
 
         # Deduct dice roll
         profile.dice_rolls_count -= 1
@@ -219,16 +237,17 @@ class GameService:
         if amount <= 0:
             raise AppException(
                 status_code=400,
-                error_code="INVALID_AMOUNT",
+                error_code=ERROR_INVALID_AMOUNT,
                 message="Reward amount must be positive",
             )
 
         # Validate reward type
-        if reward_type not in ["gold", "dice", "exp"]:
+        valid_types = {REWARD_TYPE_GOLD, REWARD_TYPE_DICE, REWARD_TYPE_EXP}
+        if reward_type not in valid_types:
             raise AppException(
                 status_code=400,
-                error_code="INVALID_REWARD_TYPE",
-                message=f"Invalid reward type: {reward_type}. Must be 'gold', 'dice', or 'exp'",
+                error_code=ERROR_INVALID_REWARD_TYPE,
+                message=f"Invalid reward type: {reward_type}. Must be one of {valid_types}",
             )
 
         stmt = select(Profile).where(Profile.id == user_id)
@@ -238,7 +257,7 @@ class GameService:
         if not profile:
             raise AppException(
                 status_code=404,
-                error_code="PROFILE_NOT_FOUND",
+                error_code=ERROR_PROFILE_NOT_FOUND,
                 message="User profile not found",
             )
 
@@ -332,7 +351,7 @@ class GameService:
         if amount <= 0:
             raise AppException(
                 status_code=400,
-                error_code="INVALID_AMOUNT",
+                error_code=ERROR_INVALID_AMOUNT,
                 message="EXP amount must be positive",
             )
 
@@ -343,7 +362,7 @@ class GameService:
         if not profile:
             raise AppException(
                 status_code=404,
-                error_code="PROFILE_NOT_FOUND",
+                error_code=ERROR_PROFILE_NOT_FOUND,
                 message="User profile not found",
             )
 
@@ -475,10 +494,10 @@ class GameService:
         base_exp = estimated_minutes * 5    # 5 exp per minute
 
         # Bonus for node type
-        if node_type == "quiz":
+        if node_type == NODE_TYPE_QUIZ:
             base_gold = int(base_gold * 1.5)
             base_exp = int(base_exp * 1.5)
-        elif node_type == "boss":
+        elif node_type == NODE_TYPE_BOSS:
             base_gold = int(base_gold * 2.0)
             base_exp = int(base_exp * 2.0)
 

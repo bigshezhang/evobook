@@ -25,30 +25,30 @@ logger = get_logger(__name__)
 
 class NodeContentService:
     """Service for generating node content using LLM.
-    
+
     This service handles:
     1. Knowledge Card generation (paginated markdown content)
     2. Clarification generation (quick answer to user questions)
     3. QA Detail generation (expanded explanation with image spec)
-    
+
     When a db_session and course_map_id are provided, generated content
     is cached in the node_contents table and returned on subsequent requests.
     """
-    
+
     def __init__(
         self,
         llm_client: LLMClient,
         db_session: AsyncSession | None = None,
     ) -> None:
         """Initialize node content service.
-        
+
         Args:
             llm_client: LLM client for generating content.
             db_session: Optional database session for caching.
         """
         self.llm = llm_client
         self.db = db_session
-    
+
     async def generate_knowledge_card(
         self,
         language: str,
@@ -66,11 +66,11 @@ class NodeContentService:
         user_id: UUID | None = None,
     ) -> dict[str, Any]:
         """Generate a knowledge card for a node.
-        
+
         If course_map_id is provided and a cached entry exists in node_contents,
         the cached content is returned without calling LLM. After a successful
         LLM generation the result is persisted for future cache hits.
-        
+
         Args:
             language: Response language ("en" or "zh").
             course_name: Name of the course.
@@ -85,10 +85,10 @@ class NodeContentService:
             estimated_minutes: Estimated learning time.
             course_map_id: Optional course map ID for caching.
             user_id: Optional authenticated user ID (reserved for future use).
-            
+
         Returns:
             Dict containing type, node_id, totalPagesInCard, markdown, yaml.
-            
+
         Raises:
             LLMValidationError: If LLM response parsing fails.
         """
@@ -101,7 +101,7 @@ class NodeContentService:
             estimated_minutes=estimated_minutes,
             course_map_id=str(course_map_id) if course_map_id else None,
         )
-        
+
         # Check cache before calling LLM
         cached = await self._get_cached_content(
             course_map_id=course_map_id,
@@ -115,7 +115,7 @@ class NodeContentService:
                 course_map_id=str(course_map_id),
             )
             return cached
-        
+
         # Build prompt context
         prompt_text = PromptRegistry.get_prompt(PromptName.KNOWLEDGE_CARD)
         context = self._build_knowledge_card_context(
@@ -132,14 +132,14 @@ class NodeContentService:
             estimated_minutes=estimated_minutes,
         )
         full_prompt = f"{prompt_text}\n\n# User Input\n{context}"
-        
+
         # Call LLM
         response = await self.llm.complete(
             prompt_name="knowledge_card",
             prompt_text=full_prompt,
             output_format=OutputFormat.JSON,
         )
-        
+
         # Parse and validate response
         data = response.parsed_data
         if not isinstance(data, dict):
@@ -147,16 +147,16 @@ class NodeContentService:
                 message="LLM returned invalid knowledge card structure",
                 details={"raw_text": response.raw_text[:500]},
             )
-        
+
         # Validate required fields
         self._validate_knowledge_card_response(data, node_id)
-        
+
         logger.info(
             "Knowledge card generated",
             node_id=node_id,
             total_pages=data.get("totalPagesInCard"),
         )
-        
+
         # Always use the request's node_id, not the LLM response
         response_data: dict[str, Any] = {
             "type": "knowledge_card",
@@ -165,7 +165,7 @@ class NodeContentService:
             "markdown": data.get("markdown", ""),
             "yaml": data.get("yaml", ""),
         }
-        
+
         # Cache the result (best-effort)
         await self._save_cached_content(
             course_map_id=course_map_id,
@@ -173,9 +173,9 @@ class NodeContentService:
             content_type="knowledge_card",
             content_json=response_data,
         )
-        
+
         return response_data
-    
+
     def _build_knowledge_card_context(
         self,
         language: str,
@@ -191,11 +191,11 @@ class NodeContentService:
         estimated_minutes: int,
     ) -> str:
         """Build context string for knowledge card prompt.
-        
+
         Args:
             language: Response language.
             All other parameters from generate_knowledge_card.
-            
+
         Returns:
             Formatted JSON context string.
         """
@@ -216,16 +216,16 @@ class NodeContentService:
                 "estimated_minutes": estimated_minutes,
             },
         }, ensure_ascii=False, indent=2)
-    
+
     def _validate_knowledge_card_response(
         self, data: dict[str, Any], expected_node_id: int
     ) -> None:
         """Validate knowledge card response structure.
-        
+
         Args:
             data: Parsed response data.
             expected_node_id: Expected node ID.
-            
+
         Raises:
             LLMValidationError: If validation fails.
         """
@@ -236,13 +236,13 @@ class NodeContentService:
                 message=f"Knowledge card missing required fields: {missing}",
                 details={"missing_fields": missing},
             )
-        
+
         if data.get("type") != "knowledge_card":
             raise LLMValidationError(
                 message=f"Invalid knowledge card type: {data.get('type')}",
                 details={"expected": "knowledge_card", "actual": data.get("type")},
             )
-        
+
         # Validate page break presence in markdown
         markdown = data.get("markdown", "")
         if "<EVOBK_PAGE_BREAK />" not in markdown and data.get("totalPagesInCard", 1) > 1:
@@ -251,7 +251,7 @@ class NodeContentService:
                 node_id=expected_node_id,
                 total_pages=data.get("totalPagesInCard"),
             )
-    
+
     async def generate_clarification(
         self,
         language: str,
@@ -262,9 +262,9 @@ class NodeContentService:
         user_id: UUID | None = None,
     ) -> dict[str, Any]:
         """Generate a clarification answer for a user question.
-        
+
         If course_map_id and node_id are provided the result is cached.
-        
+
         Args:
             language: Response language (en|zh).
             user_question_raw: User's raw question text.
@@ -272,10 +272,10 @@ class NodeContentService:
             course_map_id: Optional course map ID for caching.
             node_id: Optional node ID for caching.
             user_id: Optional authenticated user ID (reserved for future use).
-            
+
         Returns:
             Dict containing type, corrected_title, short_answer.
-            
+
         Raises:
             LLMValidationError: If LLM response parsing fails.
         """
@@ -291,7 +291,7 @@ class NodeContentService:
             course_map_id=str(course_map_id) if course_map_id else None,
             node_id=node_id,
         )
-        
+
         # Check cache before calling LLM
         if node_id is not None:
             cached = await self._get_cached_content(
@@ -308,7 +308,7 @@ class NodeContentService:
                     course_map_id=str(course_map_id),
                 )
                 return cached
-        
+
         # Build prompt context
         prompt_text = PromptRegistry.get_prompt(PromptName.CLARIFICATION)
         context = json.dumps({
@@ -317,14 +317,14 @@ class NodeContentService:
             "page_markdown": page_markdown,
         }, ensure_ascii=False, indent=2)
         full_prompt = f"{prompt_text}\n\n# User Input\n{context}"
-        
+
         # Call LLM
         response = await self.llm.complete(
             prompt_name="clarification",
             prompt_text=full_prompt,
             output_format=OutputFormat.JSON,
         )
-        
+
         # Parse and validate response
         data = response.parsed_data
         if not isinstance(data, dict):
@@ -332,7 +332,7 @@ class NodeContentService:
                 message="LLM returned invalid clarification structure",
                 details={"raw_text": response.raw_text[:500]},
             )
-        
+
         # Validate required fields
         required_fields = ["type", "corrected_title", "short_answer"]
         missing = [f for f in required_fields if f not in data]
@@ -341,18 +341,18 @@ class NodeContentService:
                 message=f"Clarification missing required fields: {missing}",
                 details={"missing_fields": missing},
             )
-        
+
         logger.info(
             "Clarification generated",
             corrected_title=data.get("corrected_title", "")[:50],
         )
-        
+
         response_data: dict[str, Any] = {
             "type": "clarification",
             "corrected_title": data.get("corrected_title", ""),
             "short_answer": data.get("short_answer", ""),
         }
-        
+
         # Cache the result (best-effort)
         if node_id is not None:
             await self._save_cached_content(
@@ -362,9 +362,9 @@ class NodeContentService:
                 content_json=response_data,
                 question_key=question_key,
             )
-        
+
         return response_data
-    
+
     async def generate_qa_detail(
         self,
         language: str,
@@ -375,9 +375,9 @@ class NodeContentService:
         user_id: UUID | None = None,
     ) -> dict[str, Any]:
         """Generate a detailed QA explanation with image spec.
-        
+
         If course_map_id and node_id are provided the result is cached.
-        
+
         Args:
             language: Response language (en|zh).
             qa_title: Title of the QA.
@@ -385,10 +385,10 @@ class NodeContentService:
             course_map_id: Optional course map ID for caching.
             node_id: Optional node ID for caching.
             user_id: Optional authenticated user ID (reserved for future use).
-            
+
         Returns:
             Dict containing type, title, body_markdown, image.
-            
+
         Raises:
             LLMValidationError: If LLM response parsing fails.
         """
@@ -404,7 +404,7 @@ class NodeContentService:
             course_map_id=str(course_map_id) if course_map_id else None,
             node_id=node_id,
         )
-        
+
         # Check cache before calling LLM
         if node_id is not None:
             cached = await self._get_cached_content(
@@ -421,7 +421,7 @@ class NodeContentService:
                     course_map_id=str(course_map_id),
                 )
                 return cached
-        
+
         # Build prompt context
         prompt_text = PromptRegistry.get_prompt(PromptName.QA_DETAIL)
         context = json.dumps({
@@ -430,14 +430,14 @@ class NodeContentService:
             "qa_short_answer": qa_short_answer,
         }, ensure_ascii=False, indent=2)
         full_prompt = f"{prompt_text}\n\n# User Input\n{context}"
-        
+
         # Call LLM
         response = await self.llm.complete(
             prompt_name="qa_detail",
             prompt_text=full_prompt,
             output_format=OutputFormat.JSON,
         )
-        
+
         # Parse and validate response
         data = response.parsed_data
         if not isinstance(data, dict):
@@ -445,7 +445,7 @@ class NodeContentService:
                 message="LLM returned invalid QA detail structure",
                 details={"raw_text": response.raw_text[:500]},
             )
-        
+
         # Validate required fields
         required_fields = ["type", "title", "body_markdown", "image"]
         missing = [f for f in required_fields if f not in data]
@@ -454,7 +454,7 @@ class NodeContentService:
                 message=f"QA detail missing required fields: {missing}",
                 details={"missing_fields": missing},
             )
-        
+
         # Validate image structure
         image = data.get("image", {})
         if not isinstance(image, dict) or "placeholder" not in image or "prompt" not in image:
@@ -462,12 +462,12 @@ class NodeContentService:
                 message="QA detail image must have placeholder and prompt fields",
                 details={"image": image},
             )
-        
+
         logger.info(
             "QA detail generated",
             title=data.get("title", "")[:50],
         )
-        
+
         response_data: dict[str, Any] = {
             "type": "qa_detail",
             "title": data.get("title", ""),
@@ -477,7 +477,7 @@ class NodeContentService:
                 "prompt": image.get("prompt", ""),
             },
         }
-        
+
         # Cache the result (best-effort)
         if node_id is not None:
             await self._save_cached_content(
@@ -487,9 +487,9 @@ class NodeContentService:
                 content_json=response_data,
                 question_key=question_key,
             )
-        
+
         return response_data
-    
+
     # ------------------------------------------------------------------
     # Cache helpers
     # ------------------------------------------------------------------
@@ -497,13 +497,13 @@ class NodeContentService:
     @staticmethod
     def _compute_question_key(text: str) -> str:
         """Compute a short hash key from a question/title string.
-        
+
         The text is stripped, lowercased, and SHA-256 hashed.
         Only the first 16 hex characters are returned.
-        
+
         Args:
             text: Raw question or title text.
-            
+
         Returns:
             16-character hex digest string.
         """
@@ -517,23 +517,23 @@ class NodeContentService:
         question_key: str | None = None,
     ) -> dict[str, Any] | None:
         """Look up a cached content row in node_contents.
-        
+
         Returns the stored content_json dict when a cache hit is found,
         or None on miss or when caching is unavailable.
-        
+
         Args:
             course_map_id: Course map identifier.
             node_id: Node identifier within the course map.
             content_type: Content type discriminator (e.g. "knowledge_card").
             question_key: Optional hash key to distinguish different questions
                 for the same node.  NULL for knowledge cards.
-            
+
         Returns:
             Cached content dict or None.
         """
         if course_map_id is None or self.db is None:
             return None
-        
+
         try:
             result = await self.db.execute(
                 select(NodeContent).where(
@@ -574,10 +574,10 @@ class NodeContentService:
         question_key: str | None = None,
     ) -> None:
         """Persist generated content to node_contents for future cache hits.
-        
+
         This is best-effort: if the save fails the caller still returns
         the freshly generated response.
-        
+
         Args:
             course_map_id: Course map identifier.
             node_id: Node identifier within the course map.
@@ -588,7 +588,7 @@ class NodeContentService:
         """
         if course_map_id is None or self.db is None:
             return
-        
+
         try:
             # Use ON CONFLICT DO NOTHING to safely handle duplicate inserts.
             # If a row with the same (course_map_id, node_id, content_type, question_key)

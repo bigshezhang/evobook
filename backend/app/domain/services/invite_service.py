@@ -8,20 +8,24 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logging import get_logger
+from app.domain.constants import INVITE_CODE_LENGTH, INVITE_CODE_MAX_RETRIES
 from app.domain.models.invite import InviteBinding, UserInvite, UserReward
 from app.domain.models.profile import Profile
 
 logger = get_logger(__name__)
 
 
-def generate_invite_code() -> str:
-    """Generate a 6-character random invite code (a-z A-Z).
+def generate_invite_code(length: int = INVITE_CODE_LENGTH) -> str:
+    """Generate a random invite code (a-z A-Z).
+    
+    Args:
+        length: Length of invite code (default from constants).
     
     Returns:
-        6-character string with mixed case letters.
+        Random string with mixed case letters.
     """
     chars = string.ascii_letters  # a-z A-Z
-    return ''.join(random.choices(chars, k=6))
+    return ''.join(random.choices(chars, k=length))
 
 
 def format_invite_code(code: str) -> str:
@@ -43,21 +47,26 @@ class InviteService:
     async def get_or_create_invite_code(
         user_id: UUID,
         db: AsyncSession,
-        base_url: str = "https://evobook.app"
+        base_url: str | None = None
     ) -> dict:
         """Get existing invite code or create a new one.
         
         Args:
             user_id: User ID to get/create invite code for.
             db: Database session.
-            base_url: Base URL for invite links.
+            base_url: Base URL for invite links (defaults to config value).
         
         Returns:
             Dictionary with invite_code, formatted_code, invite_url, and successful_invites_count.
         
         Raises:
-            Exception: If unable to generate unique invite code after 3 attempts.
+            Exception: If unable to generate unique invite code after max retries.
         """
+        # Use config base_url if not provided
+        if base_url is None:
+            from app.config import get_settings
+            base_url = get_settings().frontend_base_url
+        
         # Check if user already has an invite code
         stmt = select(UserInvite).where(UserInvite.user_id == user_id)
         result = await db.execute(stmt)
@@ -68,7 +77,7 @@ class InviteService:
             logger.info("User invite code found", user_id=str(user_id), code=invite_code)
         else:
             # Generate new invite code with collision avoidance
-            for attempt in range(3):
+            for attempt in range(INVITE_CODE_MAX_RETRIES):
                 invite_code = generate_invite_code()
                 # Check if code already exists
                 check_stmt = select(UserInvite).where(UserInvite.invite_code == invite_code)
@@ -77,7 +86,7 @@ class InviteService:
                     break
             else:
                 logger.error("Failed to generate unique invite code", user_id=str(user_id))
-                raise Exception("Failed to generate unique invite code after 3 attempts")
+                raise Exception(f"Failed to generate unique invite code after {INVITE_CODE_MAX_RETRIES} attempts")
             
             # Save new invite code
             new_invite = UserInvite(user_id=user_id, invite_code=invite_code)
@@ -121,8 +130,9 @@ class InviteService:
         existing_binding = binding_result.scalar_one_or_none()
         
         if existing_binding:
+            from app.core.error_codes import ERROR_INVITE_ALREADY_BOUND
             logger.warning("User already bound to an invite", invitee_id=str(invitee_id))
-            return {"success": False, "error": "already_bound"}
+            return {"success": False, "error": ERROR_INVITE_ALREADY_BOUND.lower().replace("_", "")}
         
         # Validate invite code exists
         invite_stmt = select(UserInvite).where(UserInvite.invite_code == invite_code)
@@ -130,13 +140,15 @@ class InviteService:
         invite = invite_result.scalar_one_or_none()
         
         if not invite:
+            from app.core.error_codes import ERROR_INVITE_INVALID_CODE
             logger.warning("Invalid invite code", code=invite_code)
-            return {"success": False, "error": "invalid_code"}
+            return {"success": False, "error": ERROR_INVITE_INVALID_CODE.lower().replace("_", "")}
         
         # Check self-invite
         if invite.user_id == invitee_id:
+            from app.core.error_codes import ERROR_INVITE_SELF_INVITE
             logger.warning("User tried to use own invite code", user_id=str(invitee_id))
-            return {"success": False, "error": "self_invite"}
+            return {"success": False, "error": ERROR_INVITE_SELF_INVITE.lower().replace("_", "")}
         
         # Create binding
         binding = InviteBinding(

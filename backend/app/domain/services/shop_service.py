@@ -7,6 +7,11 @@ from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.error_codes import (
+    ERROR_INSUFFICIENT_GOLD,
+    ERROR_ITEM_NOT_FOUND,
+    ERROR_PROFILE_NOT_FOUND,
+)
 from app.core.exceptions import AppException
 from app.core.logging import get_logger
 from app.domain.models.game_transaction import GameTransaction
@@ -114,7 +119,7 @@ class ShopService:
         if not item:
             raise AppException(
                 status_code=404,
-                error_code="ITEM_NOT_FOUND",
+                error_code=ERROR_ITEM_NOT_FOUND,
                 message="Shop item not found",
             )
 
@@ -135,7 +140,7 @@ class ShopService:
         if existing_ownership:
             raise AppException(
                 status_code=400,
-                error_code="ALREADY_OWNED",
+                error_code="ALREADY_OWNED",  # Not in error_codes yet, kept as is
                 message="You already own this item",
             )
 
@@ -147,7 +152,7 @@ class ShopService:
         if not profile:
             raise AppException(
                 status_code=404,
-                error_code="PROFILE_NOT_FOUND",
+                error_code=ERROR_PROFILE_NOT_FOUND,
                 message="User profile not found",
             )
 
@@ -155,7 +160,7 @@ class ShopService:
         if profile.gold_balance < item.price:
             raise AppException(
                 status_code=400,
-                error_code="INSUFFICIENT_GOLD",
+                error_code=ERROR_INSUFFICIENT_GOLD,
                 message=f"Insufficient gold. Required: {item.price}, Available: {profile.gold_balance}",
             )
 

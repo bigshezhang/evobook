@@ -6,6 +6,7 @@ from uuid import UUID
 from sqlalchemy import and_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.error_codes import ERROR_ITEM_NOT_OWNED
 from app.core.exceptions import AppException
 from app.core.logging import get_logger
 from app.domain.models.profile import Profile
@@ -118,7 +119,7 @@ class InventoryService:
         if not row:
             raise AppException(
                 status_code=404,
-                error_code="ITEM_NOT_OWNED",
+                error_code=ERROR_ITEM_NOT_OWNED,
                 message="You don't own this item",
             )
 
@@ -221,7 +222,7 @@ class InventoryService:
         if not row:
             raise AppException(
                 status_code=404,
-                error_code="ITEM_NOT_OWNED",
+                error_code=ERROR_ITEM_NOT_OWNED,
                 message="You don't own this item",
             )
 

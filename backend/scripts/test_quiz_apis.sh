@@ -34,7 +34,7 @@ if [ -z "$TOKEN" ]; then
 else
   COURSE_MAP_ID="${TEST_COURSE_MAP_ID:-00000000-0000-0000-0000-000000000001}"
   NODE_ID="${TEST_NODE_ID:-1}"
-  
+
   SUBMIT_RESPONSE=$(curl -s -X POST "$API_BASE/quiz/submit" \
     -H "Content-Type: application/json" \
     -H "$AUTH_HEADER" \
@@ -47,21 +47,21 @@ else
       },
       \"score\": 100
     }")
-  
+
   echo "$SUBMIT_RESPONSE" | jq '.'
-  
+
   # Extract attempt_id for next tests
   ATTEMPT_ID=$(echo "$SUBMIT_RESPONSE" | jq -r '.attempt_id // empty')
-  
+
   if [ -n "$ATTEMPT_ID" ]; then
     echo "✓ Created attempt: $ATTEMPT_ID"
-    
+
     # Test 3: Get History
     echo ""
     echo "▸ Test 3: Get Quiz History"
     curl -s "$API_BASE/quiz/history?course_map_id=$COURSE_MAP_ID&node_id=$NODE_ID" \
       -H "$AUTH_HEADER" | jq '.'
-    
+
     # Test 4: Get Attempt Detail
     echo ""
     echo "▸ Test 4: Get Attempt Detail"

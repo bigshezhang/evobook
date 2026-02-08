@@ -12,12 +12,13 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logging import get_logger
+from app.domain.constants import VALID_NODE_STATUSES
 from app.domain.models.node_progress import NodeProgress
 
 logger = get_logger(__name__)
 
-# Valid status values for node progress
-VALID_STATUSES = {"locked", "unlocked", "in_progress", "completed"}
+# Valid status values for node progress (imported from constants)
+VALID_STATUSES = VALID_NODE_STATUSES
 
 
 class NodeProgressService:
