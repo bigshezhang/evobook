@@ -525,57 +525,61 @@ const KnowledgeTree: React.FC = () => {
       <div className="flex-1 overflow-y-auto no-scrollbar pb-40">
         {/* Course Progress Banner with Navigation */}
         <div className="px-6 mb-4 relative mt-4">
-          <div data-course-banner className={`${bannerColor} rounded-[28px] p-6 text-white shadow-xl relative overflow-hidden transition-colors duration-500`}>
+          <div data-course-banner className={`${bannerColor} rounded-[28px] py-9 px-4 sm:py-11 sm:px-6 text-white shadow-xl relative overflow-hidden transition-colors duration-500`}>
             {/* Content Container */}
-            <div className="relative z-10 flex items-center gap-4">
-              {/* Left Arrow */}
-              {allCourses.length > 1 && (
-                <button
-                  onClick={handlePreviousCourse}
-                  disabled={currentCourseIndex === 0}
-                  className={`w-11 h-11 rounded-full flex items-center justify-center transition-all ${
-                    currentCourseIndex === 0
-                      ? 'opacity-30 cursor-not-allowed'
-                      : 'bg-white/20 hover:bg-white/30 active:scale-95 backdrop-blur-sm'
-                  }`}
-                >
-                  <span className="material-symbols-rounded text-white text-2xl" style={{ fontVariationSettings: "'FILL' 0, 'wght' 300" }}>arrow_back_ios_new</span>
-                </button>
-              )}
+            <div className="relative z-10 flex items-center gap-2 sm:gap-4">
+              {/* Left Arrow - Always Reserve Space */}
+              <div className="w-9 sm:w-11 h-9 sm:h-11 flex-shrink-0">
+                {allCourses.length > 1 && (
+                  <button
+                    onClick={handlePreviousCourse}
+                    disabled={currentCourseIndex === 0}
+                    className={`w-full h-full rounded-full flex items-center justify-center transition-all ${
+                      currentCourseIndex === 0
+                        ? 'opacity-30 cursor-not-allowed'
+                        : 'bg-white/20 hover:bg-white/30 active:scale-95 backdrop-blur-sm'
+                    }`}
+                  >
+                    <span className="material-symbols-rounded text-white text-xl sm:text-2xl" style={{ fontVariationSettings: "'FILL' 0, 'wght' 300" }}>arrow_back_ios_new</span>
+                  </button>
+                )}
+              </div>
 
               {/* Course Info - Centered */}
               <div
                 onClick={() => navigate(buildLearningPath(ROUTES.COURSE_DETAIL, { cid }))}
-                className="flex-1 cursor-pointer"
+                className="flex-1 cursor-pointer min-w-0"
               >
-                <h2 className="text-[19px] font-extrabold tracking-tight text-center mb-3 leading-tight">{courseName}</h2>
+                <h2 className="text-[17px] sm:text-[20px] font-extrabold tracking-tight text-center mb-3 sm:mb-4 leading-tight px-1">{courseName}</h2>
 
                 {/* Progress Bar - Centered */}
-                <div className="flex items-center justify-center gap-3">
-                  <div className="w-[180px] bg-white/25 h-2 rounded-full overflow-hidden border border-white/10 shadow-inner">
+                <div className="flex items-center justify-center gap-2 sm:gap-3">
+                  <div className="w-[140px] sm:w-[180px] bg-white/25 h-2 rounded-full overflow-hidden border border-white/10 shadow-inner flex-shrink-0">
                     <div
                       className="bg-white h-full shadow-[0_0_8px_rgba(255,255,255,0.8)] transition-all duration-700 ease-out rounded-full"
                       style={{ width: `${progressPercent}%` }}
                     ></div>
                   </div>
-                  <span className="text-[11px] font-extrabold opacity-90 uppercase tracking-[0.15em] min-w-[65px]">{progressPercent}% DONE</span>
+                  <span className="text-[10px] sm:text-[11px] font-extrabold opacity-90 uppercase tracking-[0.1em] sm:tracking-[0.15em] min-w-[50px] sm:min-w-[65px] text-center">{progressPercent}% DONE</span>
                 </div>
               </div>
 
-              {/* Right Arrow */}
-              {allCourses.length > 1 && (
-                <button
-                  onClick={handleNextCourse}
-                  disabled={currentCourseIndex === allCourses.length - 1}
-                  className={`w-11 h-11 rounded-full flex items-center justify-center transition-all ${
-                    currentCourseIndex === allCourses.length - 1
-                      ? 'opacity-30 cursor-not-allowed'
-                      : 'bg-white/20 hover:bg-white/30 active:scale-95 backdrop-blur-sm'
-                  }`}
-                >
-                  <span className="material-symbols-rounded text-white text-2xl" style={{ fontVariationSettings: "'FILL' 0, 'wght' 300" }}>arrow_forward_ios</span>
-                </button>
-              )}
+              {/* Right Arrow - Always Reserve Space */}
+              <div className="w-9 sm:w-11 h-9 sm:h-11 flex-shrink-0">
+                {allCourses.length > 1 && (
+                  <button
+                    onClick={handleNextCourse}
+                    disabled={currentCourseIndex === allCourses.length - 1}
+                    className={`w-full h-full rounded-full flex items-center justify-center transition-all ${
+                      currentCourseIndex === allCourses.length - 1
+                        ? 'opacity-30 cursor-not-allowed'
+                        : 'bg-white/20 hover:bg-white/30 active:scale-95 backdrop-blur-sm'
+                    }`}
+                  >
+                    <span className="material-symbols-rounded text-white text-xl sm:text-2xl" style={{ fontVariationSettings: "'FILL' 0, 'wght' 300" }}>arrow_forward_ios</span>
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Background Decorations */}
