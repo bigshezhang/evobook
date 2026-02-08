@@ -56,7 +56,7 @@ const DiscoveryList: React.FC = () => {
                 onClick={() => navigate(buildLearningPath('/course-detail', { cid: getStoredCourseMapId() }))}
                 className="aspect-[4/3] clay-img overflow-hidden relative group cursor-pointer"
               >
-                <img alt={item.title} className="w-full h-full object-cover opacity-95 mix-blend-multiply" src={item.img}/>
+                <img alt={item.title} className="w-full h-full object-cover opacity-95 mix-blend-multiply" src={item.img} loading="lazy"/>
                 <div className="absolute inset-0 bg-gradient-to-tr from-indigo-100/30 to-transparent"></div>
               </div>
               <div className="flex justify-between items-start gap-1">

@@ -6,7 +6,6 @@ import {
   MascotCharacter, 
   MascotOutfit,
   SceneType,
-  FALLBACK_MASCOT,
   getSelectedCharacter,
   getSelectedOutfit
 } from '../utils/mascotUtils';
@@ -36,7 +35,7 @@ const Mascot: React.FC<MascotProps> = ({
   const activeCharacter = character || getSelectedCharacter();
   const activeOutfit = outfit || getSelectedOutfit();
   
-  const [currentSrc, setCurrentSrc] = useState<string>(src || FALLBACK_MASCOT);
+  const [currentSrc, setCurrentSrc] = useState<string>(src || '');
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [hasError, setHasError] = useState(false);
 
@@ -88,7 +87,7 @@ const Mascot: React.FC<MascotProps> = ({
     } catch (error) {
       console.error('Failed to load mascot resource:', error);
       setHasError(true);
-      setCurrentSrc(FALLBACK_MASCOT);
+      setCurrentSrc(''); // 不显示 fallback 图片
     }
   };
 
@@ -101,7 +100,7 @@ const Mascot: React.FC<MascotProps> = ({
     console.warn(`Failed to load mascot resource: ${currentSrc}`);
     if (!hasError) {
       setHasError(true);
-      setCurrentSrc(FALLBACK_MASCOT);
+      setCurrentSrc(''); // 不显示 fallback 图片
     }
   };
 
@@ -109,6 +108,11 @@ const Mascot: React.FC<MascotProps> = ({
   const resourceType = src 
     ? (currentSrc.match(/\.(mp4|webm|mov|ogg)$/i) ? 'video' : 'image')
     : getResourceType(scene);
+
+  // 如果没有有效的资源路径，不渲染任何内容
+  if (!currentSrc || hasError) {
+    return null;
+  }
 
   return (
     <div 
@@ -124,6 +128,7 @@ const Mascot: React.FC<MascotProps> = ({
           loop
           muted
           playsInline
+          preload="metadata"
           onError={handleError}
         />
       ) : (
@@ -132,6 +137,7 @@ const Mascot: React.FC<MascotProps> = ({
           src={currentSrc}
           className="w-full h-full pointer-events-none object-contain"
           alt="Mascot"
+          loading="lazy"
           onError={handleError}
         />
       )}

@@ -268,6 +268,7 @@ const OutfitView: React.FC = () => {
                           src={`/compressed_output/cloth_processed/${item.outfit}.webp`}
                           alt={item.name}
                           className="w-full h-full object-contain drop-shadow-sm"
+                          loading="lazy"
                         />
                       )
                     ) : item.image ? (
@@ -276,6 +277,7 @@ const OutfitView: React.FC = () => {
                         src={`/compressed_output/furniture/${item.image}`}
                         alt={item.name}
                         className="w-full h-full object-contain drop-shadow-sm"
+                        loading="lazy"
                       />
                     ) : null}
                   </div>
@@ -314,6 +316,7 @@ const OutfitView: React.FC = () => {
                     src={`/compressed_output/cloth_processed/${selectedItem.outfit}.webp`}
                     alt={selectedItem.name}
                     className="w-full h-full object-contain"
+                    loading="lazy"
                   />
                 )
               ) : selectedItem.image ? (
@@ -321,6 +324,7 @@ const OutfitView: React.FC = () => {
                   src={`/compressed_output/furniture/${selectedItem.image}`}
                   alt={selectedItem.name}
                   className="w-full h-full object-contain p-4"
+                  loading="lazy"
                 />
               ) : null}
             </div>

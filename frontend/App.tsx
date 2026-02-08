@@ -5,6 +5,8 @@ import { AuthProvider, useAuth } from './utils/AuthContext';
 import { LanguageProvider } from './utils/LanguageContext';
 import { storeInviteCode, processPendingInvite } from './utils/inviteHandler';
 import { STORAGE_KEYS } from './utils/constants';
+import { getSelectedCharacter } from './utils/mascotUtils';
+import { CHARACTER_MAPPING } from './utils/mascotConfig';
 import SuccessFeedbackPill from './components/SuccessFeedbackPill';
 
 // Reset localStorage when ?reset=1 is in URL
@@ -236,6 +238,33 @@ const RootRedirect: React.FC = () => {
 
 const App: React.FC = () => {
   useResetOnParam();
+  
+  // 预加载用户当前选择的角色头像（关键资源）
+  useEffect(() => {
+    try {
+      const character = getSelectedCharacter();
+      const resourceCharacter = CHARACTER_MAPPING[character];
+      const avatarPath = `/compressed_output/processed_image_profile/${resourceCharacter}_profile.jpg`;
+      
+      // 创建 link 标签预加载头像
+      const link = document.createElement('link');
+      link.rel = 'preload';
+      link.as = 'image';
+      link.href = avatarPath;
+      link.setAttribute('fetchpriority', 'high');
+      document.head.appendChild(link);
+      
+      return () => {
+        // 清理：移除预加载链接
+        const existingLink = document.querySelector(`link[href="${avatarPath}"]`);
+        if (existingLink) {
+          document.head.removeChild(existingLink);
+        }
+      };
+    } catch (error) {
+      console.debug('Failed to preload avatar:', error);
+    }
+  }, []);
 
   return (
     <AuthProvider>

@@ -479,6 +479,7 @@ const ProfileView: React.FC = () => {
                     alt="Mascot"
                     className="w-full h-full object-cover"
                     src={getStaticMascotImage()}
+                    loading="lazy"
                   />
                   {/* Floating sparkle icon badge */}
                   <div className={`absolute ${isSmallScreen ? '-right-1.5 -top-1.5 w-9 h-9' : '-right-2 -top-2 w-11 h-11'} bg-white rounded-xl shadow-lg flex items-center justify-center rotate-12 z-20 border border-slate-50`}>

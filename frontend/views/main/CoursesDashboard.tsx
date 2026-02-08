@@ -113,6 +113,7 @@ const CoursesDashboard: React.FC = () => {
           alt={course.title}
           className="w-full h-full object-cover mix-blend-multiply opacity-90 group-hover:scale-105 transition-transform duration-500"
           src={course.img}
+          loading="lazy"
         />
         {/* Friends Avatars Overlay if applicable */}
         {course.hasFriends && (
@@ -121,7 +122,7 @@ const CoursesDashboard: React.FC = () => {
                <span className="material-symbols-rounded text-white text-[12px]" style={{ fontVariationSettings: "'FILL' 1" }}>lightbulb</span>
             </div>
             <div className="w-6 h-6 rounded-full border-2 border-white bg-lavender-pale flex items-center justify-center overflow-hidden">
-               <img className="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCt71Z-R952rZoA5Dyxy1LTH2p1HWPZR02z3jKmrMAXMrghRSZGERWb-ClPhuYMDF-r-Zyr7Yod05-ut9OEF0prOA3_1WTbYusVxBtqn_5-Z_BZdkblCi0zAsqs7wAl-_eFZUWVf1OWUkHxiR_myf2LvObP77Rvsn5ht2k7QVasiJvwCrY5KGSrMw4itZvqEPQV5qQcZ1lY8AneuvV-XXSRMCCij31eKLWT8WxeEmSDvINmqAZb737upyCZTPBC9ao0r36RWikhSm8y" />
+               <img className="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCt71Z-R952rZoA5Dyxy1LTH2p1HWPZR02z3jKmrMAXMrghRSZGERWb-ClPhuYMDF-r-Zyr7Yod05-ut9OEF0prOA3_1WTbYusVxBtqn_5-Z_BZdkblCi0zAsqs7wAl-_eFZUWVf1OWUkHxiR_myf2LvObP77Rvsn5ht2k7QVasiJvwCrY5KGSrMw4itZvqEPQV5qQcZ1lY8AneuvV-XXSRMCCij31eKLWT8WxeEmSDvINmqAZb737upyCZTPBC9ao0r36RWikhSm8y" loading="lazy" />
             </div>
           </div>
         )}

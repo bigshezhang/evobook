@@ -28,6 +28,7 @@ const NotificationPermission: React.FC = () => {
               loop
               muted
               playsInline
+              preload="metadata"
               className="w-full h-full object-cover rounded-[3rem] shadow-2xl"
               src={getSmileVideoPath()}
             />

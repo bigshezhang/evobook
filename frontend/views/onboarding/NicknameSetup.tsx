@@ -97,6 +97,7 @@ const NicknameSetup: React.FC = () => {
               src={getMascotAvatar()}
               alt="Mascot"
               className="w-full h-full object-cover"
+              loading="lazy"
             />
           </div>
           {/* Floating badge */}

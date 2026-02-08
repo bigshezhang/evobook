@@ -76,6 +76,7 @@ const CompanionSelection: React.FC = () => {
                 src={pet.profileImage}
                 alt={pet.name}
                 className="w-16 h-16 object-cover rounded-xl mb-1"
+                loading="lazy"
               />
               <span className="font-bold text-[10px]">{pet.name}</span>
             </button>
