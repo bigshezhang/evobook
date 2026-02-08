@@ -4,10 +4,10 @@ import { useNavigate } from 'react-router-dom';
 import { MascotCharacter, setSelectedCharacter } from '../../utils/mascotUtils';
 import Mascot from '../../components/Mascot';
 
-const companions: { id: MascotCharacter; name: string; title: string; desc: string; icon: string; color: string }[] = [
-  { id: 'oliver', name: 'Oliver', title: 'Oliver the Owl', desc: 'WISE & FOCUSED', icon: 'skillet', color: 'bg-card-purple' },
-  { id: 'luna', name: 'Luna', title: 'Luna the Bee', desc: 'PLAYFUL & ALERT', icon: 'pets', color: 'bg-card-yellow' },
-  { id: 'bolt', name: 'Bolt', title: 'Bolt the Sheep', desc: 'LOGICAL & FAST', icon: 'smart_toy', color: 'bg-card-blue' },
+const companions: { id: MascotCharacter; name: string; title: string; desc: string; icon: string; color: string; profileImage: string }[] = [
+  { id: 'oliver', name: 'Oliver', title: 'Oliver the Owl', desc: 'WISE & FOCUSED', icon: 'skillet', color: 'bg-card-purple', profileImage: '/compressed_output/processed_image_profile/owl_profile.jpg' },
+  { id: 'luna', name: 'Luna', title: 'Luna the Bee', desc: 'PLAYFUL & ALERT', icon: 'pets', color: 'bg-card-yellow', profileImage: '/compressed_output/processed_image_profile/bee_profile.jpg' },
+  { id: 'bolt', name: 'Bolt', title: 'Bolt the Sheep', desc: 'LOGICAL & FAST', icon: 'smart_toy', color: 'bg-card-blue', profileImage: '/compressed_output/processed_image_profile/sheep_profile.jpg' },
 ];
 
 const CompanionSelection: React.FC = () => {
@@ -53,9 +53,13 @@ const CompanionSelection: React.FC = () => {
             <button 
               key={pet.id}
               onClick={() => setSelected(pet)}
-              className={`flex-shrink-0 w-24 h-28 rounded-[24px] ${pet.color} flex flex-col items-center justify-center border-2 ${selected.id === pet.id ? 'border-black' : 'border-transparent opacity-80'}`}
+              className={`flex-shrink-0 w-24 h-28 rounded-[24px] ${pet.color} flex flex-col items-center justify-center border-2 ${selected.id === pet.id ? 'border-black' : 'border-transparent opacity-80'} overflow-hidden`}
             >
-              <span className="material-symbols-outlined text-3xl text-white mb-1">{pet.icon}</span>
+              <img 
+                src={pet.profileImage} 
+                alt={pet.name}
+                className="w-16 h-16 object-cover rounded-xl mb-1"
+              />
               <span className="font-bold text-[10px]">{pet.name}</span>
             </button>
           ))}
@@ -65,9 +69,9 @@ const CompanionSelection: React.FC = () => {
       <footer className="px-8 pb-10">
         <div className="flex flex-col items-center gap-6">
           <div className="w-full flex items-center gap-4">
-            <span className="text-xs font-bold text-gray-400">2 / 4</span>
+            <span className="text-xs font-bold text-gray-400">3 / 4</span>
             <div className="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden">
-              <div className="h-full bg-black rounded-full" style={{ width: '50%' }}></div>
+              <div className="h-full bg-black rounded-full" style={{ width: '75%' }}></div>
             </div>
           </div>
           <button 

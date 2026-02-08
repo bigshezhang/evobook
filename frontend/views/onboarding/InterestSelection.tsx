@@ -131,9 +131,9 @@ const InterestSelection: React.FC = () => {
 
       <footer className="absolute bottom-0 left-0 right-0 p-8 bg-white/80 backdrop-blur-md flex flex-col gap-6">
         <div className="flex items-center gap-4">
-          <span className="text-xs font-bold text-gray-400">1 / 2</span>
+          <span className="text-xs font-bold text-gray-400">1 / 4</span>
           <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
-            <div className="h-full bg-black rounded-full" style={{ width: '50%' }}></div>
+            <div className="h-full bg-black rounded-full" style={{ width: '25%' }}></div>
           </div>
         </div>
         <button

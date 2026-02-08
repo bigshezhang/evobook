@@ -5,6 +5,8 @@ import { useAuth } from '../../utils/AuthContext';
 import Header from '../../components/Header';
 import BottomNav from '../../components/BottomNav';
 import { getProfileStats, ProfileStats } from '../../utils/api';
+import { getSelectedCharacter } from '../../utils/mascotUtils';
+import { CHARACTER_MAPPING } from '../../utils/mascotConfig';
 
 const ProfileView: React.FC = () => {
   const navigate = useNavigate();
@@ -12,6 +14,20 @@ const ProfileView: React.FC = () => {
   const [showInvite, setShowInvite] = useState(false);
   const [stats, setStats] = useState<ProfileStats | null>(null);
   const [loading, setLoading] = useState(true);
+  
+  // 获取用户选择的角色头像
+  const getProfileAvatar = (): string => {
+    const character = getSelectedCharacter();
+    const resourceCharacter = CHARACTER_MAPPING[character];
+    return `/compressed_output/processed_image_profile/${resourceCharacter}_profile.jpg`;
+  };
+  
+  // 获取静态图片路径（用于邀请海报）- 使用 processed_image_profile 目录
+  const getStaticMascotImage = (): string => {
+    const character = getSelectedCharacter();
+    const resourceCharacter = CHARACTER_MAPPING[character];
+    return `/compressed_output/processed_image_profile/${resourceCharacter}_profile.jpg`;
+  };
 
   // The high-fidelity mascot image for the poster
   const POSTER_MASCOT = "https://lh3.googleusercontent.com/aida-public/AB6AXuA46trIZajUdPDtcb5Mve4AANhBVcFPf7hD1VJlypb0dFYRxS2hXKwdShsNFVNhbqxXKQFSjVVMsE3mxGpTikZ_57rFFad-Wac1TeLu7mkLVUcNcXHe1dMp94PSQWv0zRukZyCVX_0DBZ2YWtZ3z95XJoYIk-kHHf_jOtCXVxwOascf_uy1-xN9B6LDuY7LUnDzKY4Em18_6PP7pnkilqsGpMh1-4xyIUGnBpFdw5egLxog1wDMZwcwvb0tgobqJaobQeIGVn7VCUfO";
@@ -71,8 +87,12 @@ const ProfileView: React.FC = () => {
         {/* User Profile Header - Square Avatar style */}
         <section className="flex flex-col items-center text-center pt-2">
           <div className="relative mb-6">
-            <div className="w-32 h-32 bg-white rounded-[2.5rem] flex items-center justify-center relative z-10 shadow-xl border border-slate-50">
-              <span className="material-symbols-outlined text-5xl text-primary/60" style={{ fontVariationSettings: "'opsz' 48, 'FILL' 1" }}>auto_awesome</span>
+            <div className="w-32 h-32 bg-white rounded-[2.5rem] flex items-center justify-center relative z-10 shadow-xl border border-slate-50 overflow-hidden">
+              <img 
+                src={getProfileAvatar()} 
+                alt="Profile Avatar"
+                className="w-full h-full object-cover"
+              />
             </div>
             {/* Online indicator */}
             <div className="absolute -bottom-1 -right-1 bg-green-500 w-8 h-8 rounded-full border-4 border-[#F8F9FB] z-20"></div>
@@ -182,10 +202,10 @@ const ProfileView: React.FC = () => {
 
       {/* Social Invitation Poster Modal Overlay */}
       {showInvite && (
-        <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-md flex flex-col items-center justify-center p-6 animate-in fade-in duration-300">
+        <div className="fixed inset-0 z-[100] bg-white flex flex-col items-center justify-center p-6 animate-in fade-in duration-300">
           
-          {/* Poster Content Card */}
-          <div className="w-full max-w-[340px] max-h-[80vh] bg-vibrant-gradient rounded-[3.5rem] shadow-2xl relative overflow-hidden flex flex-col animate-in zoom-in duration-400">
+          {/* Poster Content Card - 淡紫色渐变背景 */}
+          <div className="w-full max-w-[340px] bg-gradient-to-br from-purple-50 via-purple-100/80 to-indigo-50 rounded-[3.5rem] shadow-2xl relative overflow-hidden flex flex-col animate-in zoom-in duration-400">
             
             {/* Close Button Inside Card (X icon) */}
             <button 
@@ -195,13 +215,13 @@ const ProfileView: React.FC = () => {
               <span className="material-symbols-outlined text-slate-400 text-[22px] font-bold">close</span>
             </button>
 
-            {/* Square Mascot Container */}
-            <div className="w-full pt-10 px-10 flex justify-center">
-              <div className="relative w-full aspect-square bg-[#223344] rounded-none overflow-hidden shadow-2xl border-4 border-white/20">
+            {/* Square Mascot Container - 更紧凑 */}
+            <div className="w-full pt-8 px-8 flex justify-center">
+              <div className="relative w-full aspect-square bg-[#223344] rounded-[2rem] overflow-hidden shadow-2xl border-4 border-white/20">
                 <img 
-                  alt="Mascot" 
+                  alt="Mascot"
                   className="w-full h-full object-cover"
-                  src={POSTER_MASCOT} 
+                  src={getStaticMascotImage()}
                 />
                 {/* Floating sparkle icon badge */}
                 <div className="absolute -right-3 top-6 w-12 h-12 bg-white rounded-2xl shadow-xl flex items-center justify-center rotate-12 z-20 border border-slate-50">
@@ -210,33 +230,33 @@ const ProfileView: React.FC = () => {
               </div>
             </div>
 
-            {/* Poster Text Content */}
-            <div className="flex flex-col items-center py-6 px-10 text-center">
-              <p className="text-[10px] font-black uppercase tracking-[0.45em] text-primary/40 mb-3">Invited By</p>
-              <h1 className="text-4xl font-black text-slate-900 tracking-tighter mb-8 leading-none">Alex Rivers</h1>
+            {/* Poster Text Content - 更紧凑 */}
+            <div className="flex flex-col items-center py-4 px-8 text-center">
+              <p className="text-[10px] font-black uppercase tracking-[0.45em] text-primary/40 mb-2">Invited By</p>
+              <h1 className="text-3xl font-black text-slate-900 tracking-tighter mb-4 leading-none">Alex Rivers</h1>
 
               {/* Reward Pill - Yellow style */}
-              <div className="w-full bg-[#FFFBEB] rounded-[28px] p-5 flex items-center gap-4 border border-amber-100/60 shadow-sm relative overflow-hidden">
-                <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-sm flex-shrink-0">
-                  <span className="material-symbols-outlined text-amber-500 text-2xl" style={{ fontVariationSettings: "'FILL' 1" }}>card_giftcard</span>
+              <div className="w-full bg-[#FFFBEB] rounded-[24px] p-4 flex items-center gap-3 border border-amber-100/60 shadow-sm relative overflow-hidden">
+                <div className="w-10 h-10 bg-white rounded-2xl flex items-center justify-center shadow-sm flex-shrink-0">
+                  <span className="material-symbols-outlined text-amber-500 text-xl" style={{ fontVariationSettings: "'FILL' 1" }}>card_giftcard</span>
                 </div>
                 <div className="flex-1 text-left">
-                  <p className="text-[13px] font-bold text-slate-800 leading-snug">
+                  <p className="text-[12px] font-bold text-slate-800 leading-snug">
                     Help Alex get <span className="text-amber-500 font-black">+500 EXP</span>,<br/>and you'll get it too!
                   </p>
                 </div>
               </div>
             </div>
 
-            {/* Bottom White Section - QR style */}
-            <div className="bg-white rounded-t-[4rem] p-10 mt-auto flex flex-col items-center shadow-[0_-20px_50px_rgba(0,0,0,0.02)]">
-              <div className="text-center mb-8">
-                <h3 className="text-xl font-black text-slate-900 tracking-tight">Scan to Download</h3>
-                <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mt-1.5">Join the learning revolution</p>
+            {/* Bottom White Section - QR style - 更紧凑 */}
+            <div className="bg-white rounded-t-[3rem] p-6 flex flex-col items-center shadow-[0_-20px_50px_rgba(0,0,0,0.02)]">
+              <div className="text-center mb-4">
+                <h3 className="text-lg font-black text-slate-900 tracking-tight">Scan to Download</h3>
+                <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mt-1">Join the learning revolution</p>
               </div>
 
               {/* Abstract QR Grid */}
-              <div className="w-28 h-28 p-4 bg-slate-50 rounded-[2.5rem] border border-slate-100 flex items-center justify-center">
+              <div className="w-32 h-32 p-4 bg-slate-50 rounded-[2rem] border border-slate-100 flex items-center justify-center">
                  <div className="grid grid-cols-7 gap-1.5 w-full h-full">
                     {[...Array(49)].map((_, i) => (
                       <div key={i} className={`w-1.5 h-1.5 rounded-[2px] ${(i % 3 === 0 || i % 7 === 0 || i % 11 === 0) ? 'bg-slate-800' : 'bg-transparent'}`}></div>
@@ -251,10 +271,10 @@ const ProfileView: React.FC = () => {
           </div>
 
           {/* Floating Share Button at the bottom of the screen */}
-          <div className="w-full max-w-[440px] px-2 mt-8 animate-in slide-in-from-bottom-6 duration-500">
-            <button className="w-full bg-white py-5 rounded-[2.5rem] font-black text-slate-900 shadow-2xl active:scale-[0.97] transition-all flex items-center justify-center gap-3">
+          <div className="w-full max-w-[440px] px-2 mt-4 animate-in slide-in-from-bottom-6 duration-500">
+            <button className="w-full bg-white py-4 rounded-[2.5rem] font-black text-slate-900 shadow-2xl active:scale-[0.97] transition-all flex items-center justify-center gap-3 border border-slate-100">
               <span className="material-symbols-outlined text-slate-900 font-bold">share</span>
-              <span className="text-[16px] tracking-tight">Share Image</span>
+              <span className="text-[15px] tracking-tight">Share Image</span>
             </button>
           </div>
 

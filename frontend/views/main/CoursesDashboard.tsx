@@ -5,6 +5,8 @@ import BottomNav from '../../components/BottomNav';
 import SuccessFeedbackPill from '../../components/SuccessFeedbackPill';
 import { buildLearningPath, getUserCourses, CourseListItem, getLearningActivities, getStoredCourseMapId } from '../../utils/api';
 import { aggregateActivitiesToHeatmap, DayActivity } from '../../utils/activityAggregator';
+import { getSelectedCharacter } from '../../utils/mascotUtils';
+import { CHARACTER_MAPPING } from '../../utils/mascotConfig';
 
 const CoursesDashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -161,9 +163,13 @@ const CoursesDashboard: React.FC = () => {
             </button>
             <button 
               onClick={() => navigate('/profile')}
-              className="w-11 h-11 rounded-full bg-[#E0E2D1] border border-slate-100 shadow-sm flex items-center justify-center active:scale-95 transition-transform"
+              className="w-11 h-11 rounded-full bg-[#E0E2D1] border border-slate-100 shadow-sm flex items-center justify-center active:scale-95 transition-transform overflow-hidden"
             >
-               <span className="material-symbols-rounded text-white text-xl" style={{ fontVariationSettings: "'FILL' 1" }}>person</span>
+              <img 
+                src={`/compressed_output/processed_image_profile/${CHARACTER_MAPPING[getSelectedCharacter()]}_profile.jpg`}
+                alt="Profile"
+                className="w-full h-full object-cover"
+              />
             </button>
           </div>
         </div>
