@@ -46,6 +46,7 @@ class ProfileService:
 
         return {
             "id": str(profile.id),
+            "email": profile.email,
             "display_name": profile.display_name,
             "mascot": profile.mascot,
             "onboarding_completed": profile.onboarding_completed,
@@ -109,6 +110,7 @@ class ProfileService:
 
         return {
             "id": str(profile.id),
+            "email": profile.email,
             "display_name": profile.display_name,
             "mascot": profile.mascot,
             "onboarding_completed": profile.onboarding_completed,

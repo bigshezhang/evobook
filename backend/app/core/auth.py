@@ -90,28 +90,45 @@ def _decode_supabase_token(token: str) -> dict:
         )
 
 
-async def _ensure_profile_exists(user_id: UUID) -> None:
-    """Create a profiles row if it doesn't exist yet.
+async def _ensure_profile_exists(user_id: UUID, email: str | None = None) -> None:
+    """Create a profiles row if it doesn't exist yet; sync email on every login.
 
     Uses its own isolated DB session to avoid polluting the request-scoped
     session with commits/rollbacks that would break subsequent business logic.
 
     Args:
         user_id: The Supabase user UUID.
+        email: User email extracted from JWT (synced on each request).
     """
     from app.domain.models.profile import Profile
 
     session_factory = get_session_factory()
     async with session_factory() as db:
         result = await db.execute(select(Profile).where(Profile.id == user_id))
-        if result.scalar_one_or_none() is not None:
-            return  # Profile already exists
+        existing = result.scalar_one_or_none()
+
+        if existing is not None:
+            # Profile exists — sync email if changed or missing
+            if email and existing.email != email:
+                existing.email = email
+                db.add(existing)
+                await db.commit()
+                logger.info(
+                    "Synced email to profile",
+                    user_id=str(user_id),
+                    email=email,
+                )
+            return
 
         try:
-            profile = Profile(id=user_id)
+            profile = Profile(id=user_id, email=email)
             db.add(profile)
             await db.commit()
-            logger.info("Auto-created profile for new user", user_id=str(user_id))
+            logger.info(
+                "Auto-created profile for new user",
+                user_id=str(user_id),
+                email=email,
+            )
         except IntegrityError:
             # Race condition: another request created the profile concurrently
             await db.rollback()
@@ -218,7 +235,10 @@ async def get_current_user_id(
             detail={"code": ERROR_INVALID_TOKEN, "message": "Token 'sub' is not a valid UUID"},
         )
 
-    await _ensure_profile_exists(user_id)
+    # Extract email from JWT for local storage
+    email = payload.get("email")
+
+    await _ensure_profile_exists(user_id, email=email)
     await _ensure_user_stats_exists(user_id)
     return user_id
 
@@ -249,6 +269,9 @@ async def get_optional_user_id(
     except ValueError:
         return None
 
-    await _ensure_profile_exists(user_id)
+    # Extract email from JWT for local storage
+    email = payload.get("email")
+
+    await _ensure_profile_exists(user_id, email=email)
     await _ensure_user_stats_exists(user_id)
     return user_id

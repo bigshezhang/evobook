@@ -24,6 +24,12 @@ class Profile(Base):
         primary_key=True,
         comment="Matches Supabase auth.users.id",
     )
+    email: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+        unique=True,
+        comment="User email, synced from Supabase JWT on each login",
+    )
     display_name: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,

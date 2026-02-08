@@ -38,6 +38,7 @@ class ProfileResponse(BaseModel):
     """Full profile response."""
 
     id: str
+    email: str | None = None
     display_name: str | None = None
     mascot: str | None = None
     onboarding_completed: bool
