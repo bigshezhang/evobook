@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { onboardingNext, isChatResponse, isFinishResponse, type OnboardingResponse } from '../../utils/api';
 import { STORAGE_KEY_SELECTED_TOPIC } from './InterestSelection';
+import { getSelectedCharacter, type MascotCharacter } from '../../utils/mascotUtils';
 
 // Storage key for session data
 export const STORAGE_KEY_SESSION_ID = 'evo_assessment_session_id';
@@ -27,6 +28,21 @@ const AssessmentChat: React.FC = () => {
 
   // Check if this is onboarding or returning user
   const [isOnboarding, setIsOnboarding] = useState(true);
+
+  // Get selected mascot character
+  const [mascotCharacter, setMascotCharacter] = useState<MascotCharacter>(getSelectedCharacter());
+
+  // Get mascot name and avatar based on character
+  const getMascotInfo = (character: MascotCharacter) => {
+    const mascotMap = {
+      oliver: { name: 'Oliver', avatar: '/compressed_output/processed_image_profile/owl_profile.jpg' },
+      luna: { name: 'Luna', avatar: '/compressed_output/processed_image_profile/bee_profile.jpg' },
+      bolt: { name: 'Bolt', avatar: '/compressed_output/processed_image_profile/sheep_profile.jpg' },
+    };
+    return mascotMap[character];
+  };
+
+  const mascotInfo = getMascotInfo(mascotCharacter);
 
   // Function to clear all session-related data
   const clearSessionData = useCallback(() => {
@@ -64,6 +80,16 @@ const AssessmentChat: React.FC = () => {
     if (topic) {
       setSelectedTopic(topic);
     }
+
+    // Listen for mascot character changes
+    const handleMascotChange = () => {
+      setMascotCharacter(getSelectedCharacter());
+    };
+    window.addEventListener('mascot-character-changed', handleMascotChange);
+    
+    return () => {
+      window.removeEventListener('mascot-character-changed', handleMascotChange);
+    };
   }, []);
 
   // Scroll to bottom when messages update
@@ -206,10 +232,10 @@ const AssessmentChat: React.FC = () => {
             <span className="material-symbols-outlined text-slate-400">arrow_back_ios</span>
           </button>
           <div className="relative w-10 h-10 rounded-full bg-white shadow-soft flex items-center justify-center border-2 border-white overflow-hidden">
-            <img alt="AI Avatar" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBufi6vIupd79iwaMItI7pa065WbcFVQYd5Eb83gyp9Uu72dPsWgYGV6uhObIyOffgBUNsGns6F_BOXaFKsFFgmw1fKdqyqaJMe6665WGqw7KHwGVPLF2gZmkzMBPOPMf4vehRlyltv0HV6CCpxW_cWDoaqsNvsmcFd8UiG0z6dPvs4PdToxv50Lba_48fdo8EXhWPFsCPBbwQafVJHbAc2DPeOth4efr8KWT7Uin3IM_6luU4WxD_OKNYTsGnVR0FxlGov9KUMfl6U" />
+            <img alt={mascotInfo.name} src={mascotInfo.avatar} className="w-full h-full object-cover" />
           </div>
           <div>
-            <h2 className="text-sm font-extrabold text-[#1a1b23]">Athena AI</h2>
+            <h2 className="text-sm font-extrabold text-[#1a1b23]">{mascotInfo.name}</h2>
             <div className="flex items-center gap-1">
               <span className={`w-1.5 h-1.5 rounded-full ${loading ? 'bg-yellow-400' : 'bg-green-400'} animate-pulse`}></span>
               <span className="text-[10px] font-bold text-black/40 uppercase tracking-tight">
