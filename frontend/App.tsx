@@ -169,7 +169,7 @@ const RootRedirect: React.FC = () => {
     const checkUserCourses = async () => {
       try {
         // Check localStorage first for quick decision
-        const onboardingDone = localStorage.getItem('evo_onboarding_completed') === 'true';
+        const onboardingDone = localStorage.getItem(STORAGE_KEYS.ONBOARDING_COMPLETED) === 'true';
         
         if (onboardingDone) {
           // User has completed onboarding before, go to dashboard
@@ -184,7 +184,7 @@ const RootRedirect: React.FC = () => {
         
         if (data.courses && data.courses.length > 0) {
           // User has courses, mark onboarding as done and go to dashboard
-          localStorage.setItem('evo_onboarding_completed', 'true');
+          localStorage.setItem(STORAGE_KEYS.ONBOARDING_COMPLETED, 'true');
           setHasCourses(true);
         } else {
           // New user, show onboarding

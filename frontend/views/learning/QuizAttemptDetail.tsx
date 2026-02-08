@@ -2,8 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import Header from '../../components/Header';
-import { 
-  getQuizAttemptDetail, 
+import {
+  getQuizAttemptDetail,
   QuizAttemptDetail as QuizAttemptDetailType,
   QuizQuestion,
 } from '../../utils/api';
@@ -46,9 +46,9 @@ const QuizAttemptDetail: React.FC = () => {
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { 
-      month: 'long', 
-      day: 'numeric', 
+    return date.toLocaleDateString('en-US', {
+      month: 'long',
+      day: 'numeric',
       year: 'numeric',
       hour: '2-digit',
       minute: '2-digit'
@@ -56,18 +56,18 @@ const QuizAttemptDetail: React.FC = () => {
   };
 
   const getOptionClasses = (
-    question: QuizQuestion, 
-    userAnswer: UserAnswer, 
+    question: QuizQuestion,
+    userAnswer: UserAnswer,
     option: string
   ) => {
     const isUserSelected = question.qtype === 'multi'
       ? ((userAnswer.selected as string[]) || []).includes(option)
       : userAnswer.selected === option;
-    
+
     const isCorrect = question.qtype === 'multi'
       ? (question.answers || []).includes(option)
       : question.answer === option;
-    
+
     let baseStyles = "border-2 transition-all";
 
     if (isCorrect) {
@@ -87,7 +87,7 @@ const QuizAttemptDetail: React.FC = () => {
     const isUserSelected = userAnswer.selected === value;
     const correctBool = question.answer?.toLowerCase() === 'true';
     const isCorrect = value === correctBool;
-    
+
     if (isCorrect) {
       return "border-emerald-500 bg-emerald-50/50 translate-y-0.5";
     }
@@ -112,7 +112,7 @@ const QuizAttemptDetail: React.FC = () => {
         <span className="material-symbols-rounded text-rose-500 text-5xl mb-4">error</span>
         <p className="text-rose-600 font-bold text-lg mb-2">Failed to load</p>
         <p className="text-slate-500 text-center mb-6">{error || 'Unknown error'}</p>
-        <button 
+        <button
           onClick={() => navigate(-1)}
           className="px-6 py-3 bg-secondary text-white rounded-full font-bold"
         >
@@ -127,7 +127,7 @@ const QuizAttemptDetail: React.FC = () => {
 
   return (
     <div className="flex flex-col h-screen bg-white font-display overflow-hidden">
-      <Header 
+      <Header
         title="Quiz Review"
         subtitle={`Score: ${attemptData.score !== null ? `${attemptData.score}%` : 'N/A'}`}
         onBack={() => navigate(-1)}
@@ -164,16 +164,16 @@ const QuizAttemptDetail: React.FC = () => {
         <div className="space-y-8">
           {questions.map((question, qIdx) => {
             const userAnswer = userAnswers[qIdx];
-            
+
             return (
               <React.Fragment key={qIdx}>
                 {qIdx > 0 && <div className="h-px bg-slate-100 mx-2"></div>}
-                
+
                 <section className="animate-in fade-in slide-in-from-bottom-4 duration-500" style={{ animationDelay: `${qIdx * 100}ms` }}>
                   <div className="flex items-start gap-3">
                     <div className="size-8 rounded-xl bg-[#e7f3ff] shadow-sm flex items-center justify-center flex-shrink-0 mt-0.5">
                       <span className="material-symbols-rounded text-[#0d7ff2] text-xl" style={{ fontVariationSettings: "'FILL' 1" }}>
-                        {question.qtype === 'single' ? 'radio_button_checked' : 
+                        {question.qtype === 'single' ? 'radio_button_checked' :
                          question.qtype === 'multi' ? 'checklist' : 'bolt'}
                       </span>
                     </div>
@@ -181,11 +181,11 @@ const QuizAttemptDetail: React.FC = () => {
                       <p className="text-[14px] font-bold mb-3 leading-snug text-slate-900">
                         {question.prompt}
                       </p>
-                      
+
                       {question.qtype === 'boolean' ? (
                         <div className="grid grid-cols-2 gap-2">
                           {[true, false].map((value) => (
-                            <div 
+                            <div
                               key={String(value)}
                               className={`h-14 rounded-xl border-2 flex items-center justify-center gap-2 shadow-sm ${getTFClasses(question, userAnswer, value)}`}
                             >
@@ -198,7 +198,7 @@ const QuizAttemptDetail: React.FC = () => {
                       ) : (
                         <div className={question.qtype === 'multi' ? 'grid grid-cols-2 gap-2' : 'flex flex-col gap-2'}>
                           {question.options?.map((option, optIdx) => (
-                            <div 
+                            <div
                               key={optIdx}
                               className={`flex items-center gap-3 rounded-xl px-4 py-3 ${getOptionClasses(question, userAnswer, option)}`}
                             >

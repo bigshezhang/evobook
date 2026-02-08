@@ -19,10 +19,10 @@ const LanguageContext = createContext<LanguageContextType | undefined>(undefined
 function detectBrowserLanguage(): Language {
   // Get browser language preference
   const browserLang = navigator.language || navigator.languages?.[0] || 'en';
-  
+
   // Extract primary language code (e.g., 'en' from 'en-US', 'zh' from 'zh-CN')
   const primaryLang = browserLang.split('-')[0].toLowerCase();
-  
+
   return primaryLang;
 }
 

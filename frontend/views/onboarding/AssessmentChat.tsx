@@ -72,7 +72,7 @@ const AssessmentChat: React.FC = () => {
   }, [clearSessionData, resetState, navigate]);
 
   useEffect(() => {
-    const completed = localStorage.getItem('evo_onboarding_completed') === 'true';
+    const completed = localStorage.getItem(STORAGE_KEYS.ONBOARDING_COMPLETED) === 'true';
     setIsOnboarding(!completed);
 
     // Read selected topic from localStorage
@@ -86,7 +86,7 @@ const AssessmentChat: React.FC = () => {
       setMascotCharacter(getSelectedCharacter());
     };
     window.addEventListener('mascot-character-changed', handleMascotChange);
-    
+
     return () => {
       window.removeEventListener('mascot-character-changed', handleMascotChange);
     };
@@ -155,7 +155,7 @@ const AssessmentChat: React.FC = () => {
 
       // Save data and navigate after a brief delay
       setTimeout(() => {
-        localStorage.setItem('evo_onboarding_data', JSON.stringify(response.data));
+        localStorage.setItem(STORAGE_KEYS.ONBOARDING_DATA, JSON.stringify(response.data));
         // Clear the selected topic as it's no longer needed
         localStorage.removeItem(STORAGE_KEY_SELECTED_TOPIC);
         // Navigate to companion selection (next step in onboarding flow)

@@ -42,12 +42,12 @@ const GeneratingCourse: React.FC = () => {
         const onboardingData: FinishData = JSON.parse(onboardingDataStr);
         setTopicName(onboardingData.topic);
 
-        // Animate progress to 30%
-        setState({ status: 'loading', progress: 30 });
+        // Animate progress
+        setState({ status: 'loading', progress: BUSINESS_CONFIG.INITIAL_PROGRESS_PERCENT });
 
         // Default mode and time - could be made configurable via UI later
-        const mode: Mode = 'Fast';
-        const totalCommitmentMinutes = 120;
+        const mode: Mode = BUSINESS_CONFIG.DEFAULT_MODE;
+        const totalCommitmentMinutes = BUSINESS_CONFIG.DEFAULT_COMMITMENT_MINUTES;
 
         // Check if aborted before API call
         if (abortController.signal.aborted) return;
@@ -75,7 +75,7 @@ const GeneratingCourse: React.FC = () => {
         setState({ status: 'success', progress: 100 });
 
         // Mark onboarding as completed
-        localStorage.setItem('evo_onboarding_completed', 'true');
+        localStorage.setItem(STORAGE_KEYS.ONBOARDING_COMPLETED, 'true');
 
         // Navigate to knowledge tree after brief delay
         setTimeout(() => navigate(buildLearningPath('/knowledge-tree', { cid: response.course_map_id })), 800);

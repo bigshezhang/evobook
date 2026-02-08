@@ -5,8 +5,9 @@
  */
 
 import { bindInviteCode } from './api';
+import { STORAGE_KEYS } from './constants';
 
-const STORAGE_KEY = 'pending_invite_code';
+const STORAGE_KEY = STORAGE_KEYS.PENDING_INVITE_CODE;
 
 /**
  * Store an invite code to localStorage for later binding.

@@ -4,8 +4,8 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import Header from '../../components/Header';
 import RewardModal from '../../components/RewardModal';
 import Mascot from '../../components/Mascot';
-import { 
-  generateQuiz, 
+import {
+  generateQuiz,
   getCourseDetail,
   getNodeProgress,
   updateNodeProgress,
@@ -35,20 +35,20 @@ const QuizView: React.FC = () => {
   const [submitted, setSubmitted] = useState(false);
   const [showReward, setShowReward] = useState(false);
   const [quizStats, setQuizStats] = useState({ correct: 0, total: 0, gold: 0 });
-  
+
   // Loading states
   const [initialLoading, setInitialLoading] = useState(true); // Loading course data
   const [generatingQuiz, setGeneratingQuiz] = useState(false); // Generating quiz
   const [error, setError] = useState<string | null>(null);
-  
+
   // Course and topics data (loaded initially)
   const [courseData, setCourseData] = useState<any>(null);
   const [completedTopics, setCompletedTopics] = useState<Array<{ topic_name: string; pages_markdown: string }>>([]);
-  
+
   // Quiz data from API (loaded after clicking start)
   const [quizData, setQuizData] = useState<QuizGenerateResponse | null>(null);
   const [userAnswers, setUserAnswers] = useState<UserAnswer[]>([]);
-  
+
   const MASCOT_SRC = "https://lh3.googleusercontent.com/aida-public/AB6AXuCnRMVMv3VQCalsOm2RCkci09ous1fHuESh9sMZOzls1ru6VuE5HAlxYcKU6AswyAOsq12l9kr0vdwHeD8hswbrsxz4xZRK5oDlUPQMkmsbBJks_RVJ7JpcWNSLbPi4ISfkMH__idCAOv8RTmRLMNFkIzfyPwb3vJzSQ628ux_fwHE7XdjKa0LbGIrGOhhEmLaWRqfg-nPFNVhkih46KYodq5ipAZkQGeaLwK99YG7Az-UcKbMDqfxhd6RQqOg4faz2K3kd90U7PsXV";
 
   // Start/stop heartbeat when entering/leaving the quiz page
@@ -69,34 +69,34 @@ const QuizView: React.FC = () => {
     const loadCourseData = async () => {
       setInitialLoading(true);
       setError(null);
-      
+
       if (!cidFromUrl) {
         setError('No course ID provided');
         setInitialLoading(false);
         return;
       }
-      
+
       try {
         // Get course data and node progress from backend
         const [fetchedCourseData, progressData] = await Promise.all([
           getCourseDetail(cidFromUrl),
           getNodeProgress(cidFromUrl),
         ]);
-        
+
         setCourseMapId(fetchedCourseData.course_map_id);
         setCourseData(fetchedCourseData);
-        
+
         // Find all completed nodes
         const completedNodeIds = progressData.progress
           .filter(p => p.status === 'completed')
           .map(p => p.node_id);
-        
+
         if (completedNodeIds.length === 0) {
           setError('Please complete some learning content first');
           setInitialLoading(false);
           return;
         }
-        
+
         // Prepare learned topics for quiz generation (will be used when user clicks start)
         const topics = (fetchedCourseData.nodes as DAGNode[])
           .filter(node => completedNodeIds.includes(node.id))
@@ -104,9 +104,9 @@ const QuizView: React.FC = () => {
             topic_name: node.title,
             pages_markdown: node.description, // Use description as fallback
           }));
-        
+
         setCompletedTopics(topics);
-        
+
       } catch (err) {
         console.error('Failed to load course data:', err);
         setError(err instanceof Error ? err.message : 'Failed to load course data');
@@ -114,17 +114,17 @@ const QuizView: React.FC = () => {
         setInitialLoading(false);
       }
     };
-    
+
     loadCourseData();
   }, [cidFromUrl]);
 
   // Generate quiz when user clicks start button
   const handleStartQuiz = async () => {
     if (!courseData || completedTopics.length === 0) return;
-    
+
     setGeneratingQuiz(true);
     setError(null);
-    
+
     try {
       // Call LLM to generate quiz
       const response = await generateQuiz({
@@ -132,18 +132,18 @@ const QuizView: React.FC = () => {
         mode: courseData.map_meta.mode,
         learned_topics: completedTopics,
       });
-      
+
       setQuizData(response);
-      
+
       // Initialize user answers
       setUserAnswers(response.questions.map((_, idx) => ({
         questionIdx: idx,
         selected: null,
       })));
-      
+
       // Hide greeting and show quiz
       setShowGreeting(false);
-      
+
     } catch (err) {
       console.error('Failed to generate quiz:', err);
       setError(err instanceof Error ? err.message : 'Failed to generate quiz');
@@ -154,8 +154,8 @@ const QuizView: React.FC = () => {
 
   const handleSingleSelect = (questionIdx: number, optionIdx: number) => {
     if (submitted) return;
-    setUserAnswers(prev => prev.map(a => 
-      a.questionIdx === questionIdx 
+    setUserAnswers(prev => prev.map(a =>
+      a.questionIdx === questionIdx
         ? { ...a, selected: quizData!.questions[questionIdx].options![optionIdx] }
         : a
     ));
@@ -176,8 +176,8 @@ const QuizView: React.FC = () => {
 
   const handleBooleanSelect = (questionIdx: number, value: boolean) => {
     if (submitted) return;
-    setUserAnswers(prev => prev.map(a => 
-      a.questionIdx === questionIdx 
+    setUserAnswers(prev => prev.map(a =>
+      a.questionIdx === questionIdx
         ? { ...a, selected: value }
         : a
     ));
@@ -185,11 +185,11 @@ const QuizView: React.FC = () => {
 
   const calculateScore = () => {
     if (!quizData) return;
-    
+
     let correct = 0;
     quizData.questions.forEach((q, idx) => {
       const userAnswer = userAnswers[idx].selected;
-      
+
       if (q.qtype === 'single') {
         if (userAnswer === q.answer) correct++;
       } else if (q.qtype === 'multi') {
@@ -203,7 +203,7 @@ const QuizView: React.FC = () => {
         if (userAnswer === correctBool) correct++;
       }
     });
-    
+
     const gold = correct * 100;
     setQuizStats({ correct, total: quizData.questions.length, gold });
   };
@@ -214,7 +214,7 @@ const QuizView: React.FC = () => {
     const isSelected = question.qtype === 'multi'
       ? ((userAnswer as string[]) || []).includes(option)
       : userAnswer === option;
-    
+
     let baseStyles = "border-2 transition-all duration-200 cursor-pointer";
 
     if (!submitted) {
@@ -224,7 +224,7 @@ const QuizView: React.FC = () => {
     const isCorrect = question.qtype === 'multi'
       ? (question.answers || []).includes(option)
       : question.answer === option;
-    
+
     let stateStyles = "";
     if (isCorrect) stateStyles = "border-emerald-500 bg-emerald-50/50";
     else if (isSelected && !isCorrect) stateStyles = "border-rose-500 bg-rose-50/50";
@@ -239,7 +239,7 @@ const QuizView: React.FC = () => {
     const question = quizData!.questions[questionIdx];
     const correctBool = question.answer?.toLowerCase() === 'true';
     const isCorrect = value === correctBool;
-    
+
     if (!submitted) return isSelected ? "border-[#0d7ff2] bg-[#e7f3ff]/50 translate-y-0.5" : "border-slate-100 bg-white";
     if (isCorrect) return "border-emerald-500 bg-emerald-50/50 translate-y-0.5";
     if (isSelected && !isCorrect) return "border-rose-500 bg-rose-50/50 translate-y-0.5";
@@ -263,7 +263,7 @@ const QuizView: React.FC = () => {
         <span className="material-symbols-rounded text-rose-500 text-5xl mb-4">error</span>
         <p className="text-rose-600 font-bold text-lg mb-2">Loading Failed</p>
         <p className="text-slate-500 text-center mb-6">{error}</p>
-        <button 
+        <button
           onClick={() => navigate(buildLearningPath('/knowledge-tree', { cid: courseMapId }))}
           className="px-6 py-3 bg-secondary text-white rounded-full font-bold"
         >
@@ -287,10 +287,10 @@ const QuizView: React.FC = () => {
     return (
       <div className="relative flex flex-col h-screen bg-white font-display overflow-y-auto no-scrollbar">
         {/* Header with History Button */}
-        <Header 
+        <Header
           onBack={() => navigate(buildLearningPath('/knowledge-tree', { cid: courseMapId }))}
           rightAction={
-            <button 
+            <button
               onClick={() => navigate(buildLearningPath('/quiz-history', { cid: courseMapId, nid: nodeId }))}
               className="w-10 h-10 flex items-center justify-center rounded-full bg-black/5 active:scale-90 transition-transform"
             >
@@ -330,7 +330,7 @@ const QuizView: React.FC = () => {
               ))}
             </div>
 
-            <button 
+            <button
               onClick={handleStartQuiz}
               className="w-full py-5 bg-black text-white rounded-[28px] font-black text-base shadow-[0_20px_40px_rgba(0,0,0,0.15)] active:scale-95 transition-all flex items-center justify-center gap-3 group"
             >
@@ -350,7 +350,7 @@ const QuizView: React.FC = () => {
         <span className="material-symbols-rounded text-rose-500 text-5xl mb-4">error</span>
         <p className="text-rose-600 font-bold text-lg mb-2">Quiz not loaded</p>
         <p className="text-slate-500 text-center mb-6">Please try again</p>
-        <button 
+        <button
           onClick={() => navigate(buildLearningPath('/knowledge-tree', { cid: courseMapId }))}
           className="px-6 py-3 bg-secondary text-white rounded-full font-bold"
         >
@@ -369,7 +369,7 @@ const QuizView: React.FC = () => {
 
   return (
     <div className="relative flex flex-col h-screen bg-white font-display overflow-hidden">
-      <Header 
+      <Header
         onBack={() => navigate(buildLearningPath('/knowledge-tree', { cid: courseMapId }))}
         subtitle={`Answered ${answeredCount}/${quizData.questions.length}`}
         rightAction={
@@ -386,12 +386,12 @@ const QuizView: React.FC = () => {
         {quizData.questions.map((question, qIdx) => (
           <React.Fragment key={qIdx}>
             {qIdx > 0 && <div className="h-px bg-slate-100 mx-2"></div>}
-            
+
             <section className="animate-in fade-in slide-in-from-bottom-4 duration-500" style={{ animationDelay: `${qIdx * 100}ms` }}>
               <div className="flex items-start gap-3">
                 <div className="size-8 rounded-xl bg-[#e7f3ff] shadow-sm flex items-center justify-center flex-shrink-0 mt-0.5">
                   <span className="material-symbols-rounded text-[#0d7ff2] text-xl" style={{ fontVariationSettings: "'FILL' 1" }}>
-                    {question.qtype === 'single' ? 'radio_button_checked' : 
+                    {question.qtype === 'single' ? 'radio_button_checked' :
                      question.qtype === 'multi' ? 'checklist' : 'bolt'}
                   </span>
                 </div>
@@ -399,11 +399,11 @@ const QuizView: React.FC = () => {
                   <p className="text-[14px] font-bold mb-3 leading-snug text-slate-900">
                     {question.prompt}
                   </p>
-                  
+
                   {question.qtype === 'boolean' ? (
                     <div className="grid grid-cols-2 gap-2">
                       {[true, false].map((value) => (
-                        <div 
+                        <div
                           key={String(value)}
                           onClick={() => handleBooleanSelect(qIdx, value)}
                           className={`h-14 rounded-xl border-2 flex items-center justify-center gap-2 shadow-sm transition-all duration-300 cursor-pointer ${getTFClasses(qIdx, value)}`}
@@ -417,10 +417,10 @@ const QuizView: React.FC = () => {
                   ) : (
                     <div className={question.qtype === 'multi' ? 'grid grid-cols-2 gap-2' : 'flex flex-col gap-2'}>
                       {question.options?.map((option, optIdx) => (
-                        <div 
+                        <div
                           key={optIdx}
-                          onClick={() => question.qtype === 'single' 
-                            ? handleSingleSelect(qIdx, optIdx) 
+                          onClick={() => question.qtype === 'single'
+                            ? handleSingleSelect(qIdx, optIdx)
                             : handleMultiSelect(qIdx, optIdx)
                           }
                           className={`flex items-center gap-3 rounded-xl px-4 py-3 ${getOptionClasses(question, qIdx, optIdx)}`}
@@ -439,7 +439,7 @@ const QuizView: React.FC = () => {
 
       <div className="absolute bottom-6 left-0 right-0 px-6 z-40 pointer-events-none">
         <div className="flex items-center justify-between gap-3 pointer-events-auto max-w-[400px] mx-auto">
-          <button 
+          <button
             onClick={() => {
               if (submitted) {
                 calculateScore();
@@ -461,8 +461,8 @@ const QuizView: React.FC = () => {
         </div>
       </div>
 
-      <RewardModal 
-        isOpen={showReward} 
+      <RewardModal
+        isOpen={showReward}
         onClose={async () => {
           // Submit quiz attempt to backend
           if (courseMapId && nodeId && quizData) {
@@ -481,7 +481,7 @@ const QuizView: React.FC = () => {
               // Check if this is the first completion - update node progress
               const progressData = await getNodeProgress(courseMapId);
               const currentNodeProgress = progressData.progress.find(p => p.node_id === nodeId);
-              
+
               if (currentNodeProgress?.status !== 'completed') {
                 await updateNodeProgress(courseMapId, nodeId, 'completed');
                 console.log('[QuizView] Node marked as completed');
@@ -493,7 +493,7 @@ const QuizView: React.FC = () => {
             }
           }
           navigate(buildLearningPath('/knowledge-tree', { cid: courseMapId }));
-        }} 
+        }}
         diceRolls={2}
         expEarned={50}
       />

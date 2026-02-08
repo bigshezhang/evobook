@@ -2,8 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import Header from '../../components/Header';
-import { 
-  getQuizHistory, 
+import {
+  getQuizHistory,
   QuizAttemptSummary,
   buildLearningPath,
 } from '../../utils/api';
@@ -53,7 +53,7 @@ const QuizHistoryList: React.FC = () => {
     if (diffMins < 60) return `${diffMins} min ago`;
     if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
     if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
-    
+
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
@@ -88,7 +88,7 @@ const QuizHistoryList: React.FC = () => {
         <span className="material-symbols-rounded text-rose-500 text-5xl mb-4">error</span>
         <p className="text-rose-600 font-bold text-lg mb-2">Failed to load</p>
         <p className="text-slate-500 text-center mb-6">{error}</p>
-        <button 
+        <button
           onClick={() => navigate(-1)}
           className="px-6 py-3 bg-secondary text-white rounded-full font-bold"
         >
@@ -100,7 +100,7 @@ const QuizHistoryList: React.FC = () => {
 
   return (
     <div className="flex flex-col h-screen bg-white font-display overflow-hidden">
-      <Header 
+      <Header
         title="Quiz History"
         subtitle={`${attempts.length} Attempt${attempts.length !== 1 ? 's' : ''}`}
         onBack={() => navigate(-1)}
@@ -116,12 +116,12 @@ const QuizHistoryList: React.FC = () => {
         ) : (
           <div className="space-y-3">
             {attempts.map((attempt, idx) => (
-              <div 
+              <div
                 key={attempt.id}
-                onClick={() => navigate(buildLearningPath('/quiz-attempt', { 
-                  cid: courseMapId, 
+                onClick={() => navigate(buildLearningPath('/quiz-attempt', {
+                  cid: courseMapId,
                   nid: nodeId,
-                  aid: attempt.id 
+                  aid: attempt.id
                 }))}
                 className="bg-white border-2 border-slate-100 rounded-3xl p-5 shadow-sm active:scale-[0.98] transition-all cursor-pointer animate-in fade-in slide-in-from-bottom-4"
                 style={{ animationDelay: `${idx * 50}ms` }}

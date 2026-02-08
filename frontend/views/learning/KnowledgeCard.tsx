@@ -5,7 +5,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import ClarificationSection, { QAItem } from './ClarificationSection';
 import RewardModal from '../../components/RewardModal';
-import { 
+import {
   getClarification,
   getKnowledgeCard,
   getCourseDetail,
@@ -42,7 +42,7 @@ interface ExpertTipData {
   content: string;
 }
 
-type ContentSegment = 
+type ContentSegment =
   | { type: 'markdown'; content: string }
   | { type: 'key_elements'; data: KeyElementsData }
   | { type: 'expert_tip'; data: ExpertTipData };
@@ -56,13 +56,13 @@ type ContentSegment =
  */
 function parseDSLContent(markdown: string): ContentSegment[] {
   const segments: ContentSegment[] = [];
-  
+
   // Combined regex to match all DSL tags
   const dslPattern = /(<EVOBK_KEY_ELEMENTS\s+title="([^"]*)">([\s\S]*?)<\/EVOBK_KEY_ELEMENTS>)|(<EVOBK_EXPERT_TIP\s+title="([^"]*)">([\s\S]*?)<\/EVOBK_EXPERT_TIP>)/g;
-  
+
   let lastIndex = 0;
   let match;
-  
+
   while ((match = dslPattern.exec(markdown)) !== null) {
     // Add any markdown content before this DSL block
     if (match.index > lastIndex) {
@@ -71,7 +71,7 @@ function parseDSLContent(markdown: string): ContentSegment[] {
         segments.push({ type: 'markdown', content: mdContent });
       }
     }
-    
+
     if (match[1]) {
       // KEY_ELEMENTS block
       const title = match[2];
@@ -90,10 +90,10 @@ function parseDSLContent(markdown: string): ContentSegment[] {
         data: { title, content }
       });
     }
-    
+
     lastIndex = match.index + match[0].length;
   }
-  
+
   // Add any remaining markdown content after the last DSL block
   if (lastIndex < markdown.length) {
     const mdContent = markdown.slice(lastIndex).trim();
@@ -101,12 +101,12 @@ function parseDSLContent(markdown: string): ContentSegment[] {
       segments.push({ type: 'markdown', content: mdContent });
     }
   }
-  
+
   // If no DSL tags found, return the entire content as markdown
   if (segments.length === 0 && markdown.trim()) {
     segments.push({ type: 'markdown', content: markdown });
   }
-  
+
   return segments;
 }
 
@@ -116,7 +116,7 @@ function parseDSLContent(markdown: string): ContentSegment[] {
 function parseKeyItems(content: string): KeyItem[] {
   const items: KeyItem[] = [];
   const keyPattern = /<EVOBK_KEY\s+title="([^"]*)">([\s\S]*?)<\/EVOBK_KEY>/g;
-  
+
   let match;
   while ((match = keyPattern.exec(content)) !== null) {
     items.push({
@@ -124,7 +124,7 @@ function parseKeyItems(content: string): KeyItem[] {
       content: match[2].trim()
     });
   }
-  
+
   return items;
 }
 
@@ -287,8 +287,8 @@ const markdownComponents = {
   ),
   // Links
   a: ({ href, children }: { href?: string; children?: React.ReactNode }) => (
-    <a 
-      href={href} 
+    <a
+      href={href}
       className="text-accent-blue hover:underline"
       target="_blank"
       rel="noopener noreferrer"
@@ -327,7 +327,7 @@ const ContentSegmentRenderer: React.FC<{ segment: ContentSegment; index: number 
  */
 const ParsedContentRenderer: React.FC<{ content: string }> = ({ content }) => {
   const segments = useMemo(() => parseDSLContent(content), [content]);
-  
+
   return (
     <>
       {segments.map((segment, index) => (
@@ -347,14 +347,14 @@ const KnowledgeCard: React.FC = () => {
   const [inputValue, setInputValue] = useState('');
   const [dynamicQuestions, setDynamicQuestions] = useState<string[]>([]);
   const [qaList, setQaList] = useState<QAItem[]>([]);
-  
+
   // Reward data from backend
   const [rewardData, setRewardData] = useState<{
     diceRolls: number;
     expEarned: number;
     levelUp?: boolean;
   }>({ diceRolls: 2, expEarned: 50 });
-  
+
   // Course map ID for server-side caching
   const [courseMapId, setCourseMapId] = useState<string | undefined>(cidFromUrl || undefined);
 
@@ -367,43 +367,43 @@ const KnowledgeCard: React.FC = () => {
   const [currentNodeId, setCurrentNodeId] = useState<number>(0);
   const [totalNodes, setTotalNodes] = useState<number>(20);
   const [completedNodes, setCompletedNodes] = useState<number>(12);
-  
+
   // Internal card paging state
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPagesInCard, setTotalPagesInCard] = useState(1);
-  
+
   // Knowledge card content from API
   const [markdownContent, setMarkdownContent] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
+
   // Language for API calls
   const language = useLanguage();
-  
+
   // Split markdown content into pages
   const pages = useMemo(() => {
     if (!markdownContent) return [];
     return markdownContent.split(PAGE_BREAK_DELIMITER).map(page => page.trim()).filter(Boolean);
   }, [markdownContent]);
-  
+
   // Get current page content
   const currentPageContent = useMemo(() => {
     return pages[currentPage - 1] || '';
   }, [pages, currentPage]);
-  
+
   // Extract the first H2 as page title
   const pageTitle = useMemo(() => {
     if (!currentPageContent) return '';
     const h2Match = currentPageContent.match(/^##\s+(.+)$/m);
     return h2Match ? h2Match[1].trim() : '';
   }, [currentPageContent]);
-  
+
   // Remove the first H2 from content (since it's displayed separately)
   const contentWithoutTitle = useMemo(() => {
     if (!currentPageContent) return '';
     return currentPageContent.replace(/^##\s+.+$/m, '').trim();
   }, [currentPageContent]);
-  
+
   // Update total pages when pages array changes
   useEffect(() => {
     if (pages.length > 0) {
@@ -431,31 +431,31 @@ const KnowledgeCard: React.FC = () => {
     // ==========================================
     setIsLoading(true);
     setError(null);
-    
+
     // 使用 abort controller 来取消过期的请求
     const abortController = new AbortController();
-    
+
     const loadData = async () => {
       if (!cidFromUrl) {
         setError('No course ID provided');
         setIsLoading(false);
         return;
       }
-      
+
       const targetNodeId = nidFromUrl ? Number(nidFromUrl) : null;
       if (!targetNodeId) {
         setError('No node ID provided');
         setIsLoading(false);
         return;
       }
-      
+
       // 先检查缓存，如果有缓存就直接用（避免加载课程数据的延迟）
-      const cacheKey = `evo_kc_${cidFromUrl}_${targetNodeId}`;
+      const cacheKey = `${STORAGE_KEYS.KC_CACHE_PREFIX}${cidFromUrl}_${targetNodeId}`;
       try {
         const cachedStr = sessionStorage.getItem(cacheKey);
         if (cachedStr) {
-          const cached = JSON.parse(cachedStr) as { 
-            markdown: string; 
+          const cached = JSON.parse(cachedStr) as {
+            markdown: string;
             totalPagesInCard: number;
             nodeTitle: string;
             courseMapId: string;
@@ -464,7 +464,7 @@ const KnowledgeCard: React.FC = () => {
             totalNodes: number;
             completedNodes: number;
           };
-          
+
           // 批量更新所有状态（React 18 会自动批处理）
           setMarkdownContent(cached.markdown);
           setTotalPagesInCard(cached.totalPagesInCard || 1);
@@ -481,7 +481,7 @@ const KnowledgeCard: React.FC = () => {
           setShowComplete(false);
           setInputValue('');
           setIsLoading(false);
-          
+
           console.log('[KnowledgeCard] Loaded from cache', cacheKey);
           return;
         }
@@ -489,7 +489,7 @@ const KnowledgeCard: React.FC = () => {
         // Corrupted cache — ignore and re-fetch
         sessionStorage.removeItem(cacheKey);
       }
-      
+
       // 没有缓存，需要加载数据
       // 清空旧内容（但 isLoading 已经在函数开头设置了）
       setMarkdownContent('');
@@ -499,13 +499,13 @@ const KnowledgeCard: React.FC = () => {
       setDynamicQuestions([]);
       setShowComplete(false);
       setInputValue('');
-      
+
       try {
         // Load course data from backend
         const courseData = await getCourseDetail(cidFromUrl);
-        
+
         if (abortController.signal.aborted) return;
-        
+
         const courseMapData = {
           course_map_id: courseData.course_map_id,
           topic: courseData.topic,
@@ -514,7 +514,7 @@ const KnowledgeCard: React.FC = () => {
           map_meta: courseData.map_meta as MapMeta,
           nodes: courseData.nodes as DAGNode[],
         };
-        
+
         // Find current node by URL parameter
         const currentNode = courseMapData.nodes.find(n => n.id === targetNodeId);
         if (!currentNode) {
@@ -522,11 +522,11 @@ const KnowledgeCard: React.FC = () => {
           setIsLoading(false);
           return;
         }
-        
+
         const courseNameValue = (courseMapData.map_meta as any).course_name || courseMapData.topic;
         const moduleInfoValue = `Module ${String(currentNode.layer).padStart(2, '0')}`;
         const completedCountValue = courseMapData.nodes.filter(n => n.layer < currentNode.layer).length;
-        
+
         // Fetch knowledge card from API
         const request: KnowledgeCardRequest = {
           language: language,
@@ -546,11 +546,11 @@ const KnowledgeCard: React.FC = () => {
             estimated_minutes: currentNode.estimated_minutes,
           },
         };
-        
+
         const response = await getKnowledgeCard(request);
-        
+
         if (abortController.signal.aborted) return;
-        
+
         // 批量更新所有状态（一次性完成，减少渲染）
         setMarkdownContent(response.markdown);
         setTotalPagesInCard(response.totalPagesInCard || 1);
@@ -583,15 +583,15 @@ const KnowledgeCard: React.FC = () => {
         }
       } catch (err) {
         if (abortController.signal.aborted) return;
-        
+
         console.error('Failed to load course data:', err);
         setError(err instanceof Error ? err.message : 'Failed to load course');
         setIsLoading(false);
       }
     };
-    
+
     loadData();
-    
+
     // Cleanup: abort any pending requests when component unmounts or deps change
     return () => {
       abortController.abort();
@@ -601,7 +601,7 @@ const KnowledgeCard: React.FC = () => {
   // Page transition animation state
   const [isPageTransitioning, setIsPageTransitioning] = useState(false);
   const previousNodeId = React.useRef<number | null>(null);
-  
+
   // Reset transition state when switching nodes
   useEffect(() => {
     if (currentNodeId !== previousNodeId.current) {
@@ -620,7 +620,7 @@ const KnowledgeCard: React.FC = () => {
       // Mark current node as completed
       await updateNodeProgress(courseMapId, currentNodeId, 'completed');
       console.log('Node progress updated successfully');
-      
+
       // Fetch rewards from backend
       const expResponse = await earnExp({
         exp_amount: 50,
@@ -631,23 +631,23 @@ const KnowledgeCard: React.FC = () => {
           activity_type: 'knowledge_card_complete',
         },
       });
-      
+
       // Update reward data
       setRewardData({
         diceRolls: 2, // TODO: 后端可以配置骰子奖励
         expEarned: expResponse.exp_earned,
         levelUp: expResponse.level_up,
       });
-      
+
       // Dispatch exp change event for GameHeader
-      window.dispatchEvent(new CustomEvent('exp-changed', { 
-        detail: { 
+      window.dispatchEvent(new CustomEvent('exp-changed', {
+        detail: {
           newExp: expResponse.new_exp,
           levelUp: expResponse.level_up,
           newLevel: expResponse.new_level,
-        } 
+        }
       }));
-      
+
       console.log('Rewards earned:', expResponse);
     } catch (error) {
       console.error('Failed to update node progress or earn rewards:', error);
@@ -659,16 +659,16 @@ const KnowledgeCard: React.FC = () => {
     if (currentPage < totalPagesInCard) {
       // 先触发淡出动画
       setIsPageTransitioning(true);
-      
+
       // 等动画完成后切换页码
       setTimeout(() => {
         const nextPage = currentPage + 1;
         setCurrentPage(nextPage);
         window.scrollTo({ top: 0, behavior: 'auto' }); // 使用 auto 避免动画冲突
-        
+
         // 立即触发淡入
         setIsPageTransitioning(false);
-        
+
         // 当进入最后一页时自动标记完成
         if (nextPage === totalPagesInCard) {
           handleNodeCompletion();
@@ -684,12 +684,12 @@ const KnowledgeCard: React.FC = () => {
     if (currentPage > 1) {
       // 先触发淡出动画
       setIsPageTransitioning(true);
-      
+
       // 等动画完成后切换页码
       setTimeout(() => {
         setCurrentPage(prev => prev - 1);
         window.scrollTo({ top: 0, behavior: 'auto' });
-        
+
         // 立即触发淡入
         setIsPageTransitioning(false);
       }, 200); // 淡出动画时长
@@ -700,12 +700,12 @@ const KnowledgeCard: React.FC = () => {
 
   const handleSendQuestion = async () => {
     if (!inputValue.trim()) return;
-    
+
     const question = inputValue.trim();
     // Add to pending questions for loading UI
     setDynamicQuestions(prev => [...prev, question]);
     setInputValue('');
-    
+
     // Auto-scroll to bottom
     setTimeout(() => {
       const mainContainer = document.querySelector('main');
@@ -716,12 +716,12 @@ const KnowledgeCard: React.FC = () => {
         });
       }
     }, 100);
-    
+
     // Call API to get clarification
     try {
       // Use current page content as context
       const pageMarkdown = currentPageContent || `${nodeTitle}: Learning content about ${courseName}`;
-      
+
       const response = await getClarification({
         language,
         user_question_raw: question,
@@ -729,7 +729,7 @@ const KnowledgeCard: React.FC = () => {
         course_map_id: courseMapId,
         node_id: currentNodeId || undefined,
       });
-      
+
       // Create new QA item
       const newQA: QAItem = {
         id: Date.now(),
@@ -737,7 +737,7 @@ const KnowledgeCard: React.FC = () => {
         answer: response.short_answer,
         detail: null  // Will be fetched when user clicks "Details"
       };
-      
+
       // Remove from pending and add to answered list
       setDynamicQuestions(prev => prev.filter(q => q !== question));
       setQaList(prev => [...prev, newQA]);
@@ -753,7 +753,7 @@ const KnowledgeCard: React.FC = () => {
       {/* Top Header - Back Button + Progress Status from HTML template */}
       <header className="pt-12 px-5 pb-3 flex items-center justify-between w-full z-30 border-b border-black/[0.03] dark:border-white/[0.05] bg-white/80 backdrop-blur-md">
         <div className="flex items-center gap-3">
-          <button 
+          <button
             onClick={() => navigate(buildLearningPath('/knowledge-tree', { cid: courseMapId }))}
             className="w-8 h-8 flex items-center justify-center rounded-full bg-black/5 dark:bg-white/10 active:scale-90 transition-transform"
           >
@@ -767,7 +767,7 @@ const KnowledgeCard: React.FC = () => {
               {totalPagesInCard <= 5 ? (
                 // Show individual dots for 5 or fewer pages
                 [...Array(totalPagesInCard)].map((_, i) => (
-                  <div 
+                  <div
                     key={i}
                     className={`${i < currentPage ? 'w-4' : 'w-1.5'} h-1.5 rounded-full transition-all duration-300 ${i < currentPage ? 'bg-primary dark:bg-white' : 'bg-primary/10 dark:bg-white/10'}`}
                   ></div>
@@ -776,7 +776,7 @@ const KnowledgeCard: React.FC = () => {
                 // Show progress bar for more than 5 pages
                 <>
                   <div className="w-16 h-1.5 rounded-full bg-primary/10 dark:bg-white/10 overflow-hidden">
-                    <div 
+                    <div
                       className="h-full bg-primary dark:bg-white rounded-full transition-all duration-300"
                       style={{ width: `${(currentPage / totalPagesInCard) * 100}%` }}
                     ></div>
@@ -792,9 +792,9 @@ const KnowledgeCard: React.FC = () => {
       </header>
 
       {/* Main Content Area - Layout & Rich Text blocks from HTML template */}
-      <main 
+      <main
         className="flex-1 overflow-y-auto no-scrollbar px-6 pt-6 pb-48 transition-all duration-200 ease-out"
-        style={{ 
+        style={{
           opacity: isPageTransitioning ? 0 : 1,
           transform: isPageTransitioning ? 'translateY(8px)' : 'translateY(0)',
         }}
@@ -826,7 +826,7 @@ const KnowledgeCard: React.FC = () => {
             </div>
             <h3 className="text-lg font-bold text-primary dark:text-white mb-2">Failed to Load Content</h3>
             <p className="text-sm text-primary/60 dark:text-white/60 mb-4 max-w-[280px]">{error}</p>
-            <button 
+            <button
               onClick={() => window.location.reload()}
               className="px-6 py-2.5 bg-primary dark:bg-white text-white dark:text-black rounded-full font-semibold text-sm active:scale-95 transition-transform"
             >
@@ -845,14 +845,14 @@ const KnowledgeCard: React.FC = () => {
                 {pageTitle}
               </h1>
             </div>
-            
+
             {/* Main Content (with first H2 removed) */}
             <div className="prose prose-sm max-w-none text-primary/80 dark:text-white/80">
               <ParsedContentRenderer content={contentWithoutTitle} />
-              
+
               {/* Clarification Section */}
               <div id="clarification-section" className="mt-8">
-                <ClarificationSection 
+                <ClarificationSection
                   pendingQuestions={dynamicQuestions}
                   initialQAList={qaList}
                   pageMarkdown={currentPageContent || ''}
@@ -871,8 +871,8 @@ const KnowledgeCard: React.FC = () => {
         {/* Segmented Progress Bars logic preserved */}
         <div className="flex gap-1.5 mb-6 w-full">
           {[...Array(totalPagesInCard)].map((_, i) => (
-            <div 
-              key={i} 
+            <div
+              key={i}
               className={`h-1 flex-1 rounded-full transition-all duration-300 ${i < currentPage ? 'bg-primary dark:bg-white' : 'bg-black/10 dark:bg-white/10'}`}
             ></div>
           ))}
@@ -880,12 +880,12 @@ const KnowledgeCard: React.FC = () => {
 
         <div className="flex items-center justify-between gap-3">
           {/* Back Action - Disabled when loading or on first page */}
-          <button 
+          <button
             onClick={handleBack}
             disabled={isLoading || currentPage === 1}
             className={`w-12 h-12 flex items-center justify-center rounded-full bg-white dark:bg-white/5 neo-shadow transition-all border border-black/[0.03] dark:border-white/10 ${
-              isLoading || currentPage === 1 
-                ? 'opacity-30 cursor-not-allowed' 
+              isLoading || currentPage === 1
+                ? 'opacity-30 cursor-not-allowed'
                 : 'active:scale-95 hover:bg-black/[0.02]'
             }`}
           >
@@ -894,15 +894,15 @@ const KnowledgeCard: React.FC = () => {
 
           {/* Ask Input */}
           <div className="flex-1 relative flex items-center">
-            <input 
+            <input
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSendQuestion()}
-              className="w-full h-12 pl-12 pr-4 bg-white dark:bg-white/5 border border-black/[0.06] dark:border-white/10 rounded-full text-[14px] font-medium text-primary dark:text-white placeholder:text-black/20 dark:placeholder:text-white/20 focus:outline-none input-shadow" 
-              placeholder="ask me" 
+              className="w-full h-12 pl-12 pr-4 bg-white dark:bg-white/5 border border-black/[0.06] dark:border-white/10 rounded-full text-[14px] font-medium text-primary dark:text-white placeholder:text-black/20 dark:placeholder:text-white/20 focus:outline-none input-shadow"
+              placeholder="ask me"
               type="text"
             />
-            <button 
+            <button
               onClick={handleSendQuestion}
               className="absolute left-4 flex items-center justify-center text-accent-purple hover:scale-110 active:scale-95 transition-transform"
             >
@@ -912,7 +912,7 @@ const KnowledgeCard: React.FC = () => {
 
           {/* Forward Action - Transforms into Finish button on last page */}
           {currentPage === totalPagesInCard && !isLoading ? (
-            <button 
+            <button
               onClick={handleNext}
               className="h-14 px-8 flex items-center justify-center rounded-full bg-black dark:bg-white text-white dark:text-black shadow-xl active:scale-95 transition-transform duration-200"
             >
@@ -920,12 +920,12 @@ const KnowledgeCard: React.FC = () => {
               <span className="material-symbols-rounded text-[20px] ml-2">check_circle</span>
             </button>
           ) : (
-            <button 
+            <button
               onClick={handleNext}
               disabled={isLoading}
               className={`w-12 h-12 flex items-center justify-center rounded-full bg-white dark:bg-white/5 neo-shadow transition-all border border-black/[0.03] dark:border-white/10 ${
-                isLoading 
-                  ? 'opacity-30 cursor-not-allowed' 
+                isLoading
+                  ? 'opacity-30 cursor-not-allowed'
                   : 'active:scale-95 hover:bg-black/[0.02]'
               }`}
             >

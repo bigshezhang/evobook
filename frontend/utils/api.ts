@@ -3,6 +3,7 @@
  */
 
 import { supabase } from './supabase';
+import { STORAGE_KEYS, NODE_STATUS, NODE_TYPE, LEVEL, MODE } from './constants';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 
@@ -28,10 +29,10 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
 }
 
 // ==================== Common Types ====================
+// Re-export types from constants
+export type { Level, Mode, NodeType, NodeStatus, ActivityIntensity } from './constants';
+export { LEVEL, MODE, NODE_TYPE, NODE_STATUS, ACTIVITY_INTENSITY, STORAGE_KEYS, BUSINESS_CONFIG, TIME } from './constants';
 
-export type Level = 'Novice' | 'Beginner' | 'Intermediate' | 'Advanced';
-export type Mode = 'Deep' | 'Fast' | 'Light';
-export type NodeType = 'learn' | 'quiz' | 'boss';
 // Language is any ISO 639-1 language code (e.g., 'en', 'zh', 'es', 'fr', 'ja', 'de', etc.)
 export type Language = string;
 
@@ -136,7 +137,7 @@ export interface CourseDetailResponse {
 
 export interface NodeProgressItem {
   node_id: number;
-  status: 'locked' | 'unlocked' | 'in_progress' | 'completed';
+  status: NodeStatus;
   updated_at: string;
 }
 
@@ -145,12 +146,12 @@ export interface GetProgressResponse {
 }
 
 export interface UpdateProgressRequest {
-  status: 'locked' | 'unlocked' | 'in_progress' | 'completed';
+  status: NodeStatus;
 }
 
 export interface BatchUpdateItem {
   node_id: number;
-  status: 'locked' | 'unlocked' | 'in_progress' | 'completed';
+  status: NodeStatus;
 }
 
 export interface BatchUpdateRequest {
@@ -530,34 +531,7 @@ export function isFinishResponse(response: OnboardingResponse): response is Fini
 
 // ==================== LocalStorage Keys ====================
 
-/**
- * localStorage keys for temporary client-side state.
- * 
- * ⚠️ IMPORTANT: Only use localStorage for non-critical, temporary UI state.
- * All user data and learning progress should be stored in the backend.
- */
-export const STORAGE_KEYS = {
-  /** @deprecated Use backend API instead - kept for onboarding session only */
-  ONBOARDING_DATA: 'evo_onboarding_data',
-  
-  /** @deprecated All course data is now loaded from backend API */
-  COURSE_MAP: 'evo_course_map',
-  
-  /** @deprecated Node selection is now via URL parameters */
-  CURRENT_NODE: 'evo_current_node',
-  
-  /** @deprecated Learned topics are derived from backend node_progress API */
-  LEARNED_TOPICS: 'evo_learned_topics',
-  
-  /** @deprecated Node progress is now stored in backend database */
-  NODE_PROGRESS: 'evo_node_progress',
-  
-  /** 
-   * Prefix for per-node Q&A history: `${QA_HISTORY_PREFIX}${courseMapId}_${nodeId}`
-   * @note This is acceptable for localStorage as Q&A is ephemeral interaction state
-   */
-  QA_HISTORY_PREFIX: 'evo_qa_history_',
-} as const;
+// STORAGE_KEYS is now exported from constants.ts
 
 // ==================== Learning Activities API ====================
 
