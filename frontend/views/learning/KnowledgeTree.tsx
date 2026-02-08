@@ -62,6 +62,12 @@ const KnowledgeTree: React.FC = () => {
   // Guide state
   const [showGuide, setShowGuide] = useState(false);
 
+  // Toast state
+  const [toast, setToast] = useState<{ message: string; visible: boolean }>({
+    message: '',
+    visible: false,
+  });
+
   useEffect(() => {
     const loadCourseData = async () => {
       if (!cidFromUrl) {
@@ -119,6 +125,21 @@ const KnowledgeTree: React.FC = () => {
 
     loadCourseData();
   }, [cidFromUrl]);
+
+  // Toast auto-hide
+  useEffect(() => {
+    if (toast.visible) {
+      const timer = setTimeout(() => {
+        setToast({ message: '', visible: false });
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [toast.visible]);
+
+  // Show toast helper
+  const showToast = (message: string) => {
+    setToast({ message, visible: true });
+  };
 
   // Show guide for first-time users after data loads
   useEffect(() => {
@@ -649,8 +670,11 @@ const KnowledgeTree: React.FC = () => {
       {/* Knowledge Tree Guide */}
       {showGuide && (
         <KnowledgeTreeGuide
-          onComplete={() => {
+          onComplete={(shouldShowToast = true) => {
             setShowGuide(false);
+            if (shouldShowToast) {
+              showToast('You can restart the tutorial anytime from Profile page');
+            }
             // Remove showGuide parameter from URL but keep cid
             if (searchParams.has('showGuide')) {
               const cid = searchParams.get('cid');
@@ -659,6 +683,7 @@ const KnowledgeTree: React.FC = () => {
           }}
           onSkip={() => {
             setShowGuide(false);
+            showToast('You can restart the tutorial anytime from Profile page');
             // Remove showGuide parameter from URL but keep cid
             if (searchParams.has('showGuide')) {
               const cid = searchParams.get('cid');
@@ -671,6 +696,21 @@ const KnowledgeTree: React.FC = () => {
           }
           forceShow={searchParams.get('showGuide') === 'true'}
         />
+      )}
+
+      {/* Toast Notification */}
+      {toast.visible && (
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[10000] animate-in slide-in-from-bottom-4 fade-in duration-300 px-6 w-full max-w-md">
+          <div className="bg-slate-900 text-white px-6 py-3.5 rounded-2xl shadow-2xl flex items-center gap-3 border border-slate-700">
+            <span
+              className="material-symbols-outlined text-xl text-blue-400 flex-shrink-0"
+              style={{ fontVariationSettings: "'FILL' 1" }}
+            >
+              info
+            </span>
+            <span className="text-sm font-bold leading-relaxed">{toast.message}</span>
+          </div>
+        </div>
       )}
     </div>
   );

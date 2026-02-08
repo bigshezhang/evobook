@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useLayoutEffect, useState, useRef, useCallback } from 'react';
 
 export interface GuideStep {
   id: string;
@@ -34,11 +34,18 @@ interface TooltipPosition {
   arrowPosition?: 'top' | 'bottom' | 'left' | 'right';
 }
 
-/**
- * Animation phases:
- * 0 = invisible (measuring)
- * 1 = visible (fade in complete)
- */
+interface SpotlightRect {
+  top: number;
+  left: number;
+  width: number;
+  height: number;
+}
+
+// SSR-safe layoutEffect
+const useIsoLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
+
+const DURATION = 380;
+const EASE = 'cubic-bezier(0.4, 0, 0.2, 1)';
 
 const GuideOverlay: React.FC<GuideOverlayProps> = ({
   steps,
@@ -48,110 +55,147 @@ const GuideOverlay: React.FC<GuideOverlayProps> = ({
   onNext,
   onBack,
 }) => {
-  const [tooltipPosition, setTooltipPosition] = useState<TooltipPosition>({ top: 0, left: 0 });
-  const [targetRect, setTargetRect] = useState<DOMRect | null>(null);
-  // Controls the global fade-in for the entire overlay
-  const [visible, setVisible] = useState(false);
-  // Controls individual tooltip fade-in after position is ready
-  const [tooltipReady, setTooltipReady] = useState(false);
+  const [tooltipPos, setTooltipPos] = useState<TooltipPosition>({ top: 0, left: 0 });
+  const [spotlight, setSpotlight] = useState<SpotlightRect | null>(null);
+  // Overlay fade-in on first mount
+  const [mounted, setMounted] = useState(false);
+  // Controls tooltip text fade during step transitions
+  const [contentVisible, setContentVisible] = useState(false);
+  // Whether first position has been calculated (prevents showing tooltip at 0,0)
+  const [ready, setReady] = useState(false);
+  // Enable CSS transitions only after the first position is painted
+  const [animate, setAnimate] = useState(false);
+
   const tooltipRef = useRef<HTMLDivElement>(null);
+  const prevStepRef = useRef<number>(-1);
 
   const step = steps[currentStep];
-  const isLastStep = currentStep === steps.length - 1;
-  const isFirstStep = currentStep === 0;
+  const isLast = currentStep === steps.length - 1;
+  const isFirst = currentStep === 0;
+  const isCenter = step?.position === 'center';
 
-  // Global mount: fade in the whole overlay once
+  // Fade-in the whole overlay on mount
   useEffect(() => {
-    requestAnimationFrame(() => setVisible(true));
+    requestAnimationFrame(() => setMounted(true));
   }, []);
 
-  // When step changes, hide tooltip → reposition → show tooltip
-  useEffect(() => {
-    setTooltipReady(false);
-  }, [currentStep]);
+  // Before paint: immediately hide content text when step changes
+  // This prevents the new content flashing for 1 frame before the fade starts
+  useIsoLayoutEffect(() => {
+    if (prevStepRef.current !== -1 && prevStepRef.current !== currentStep && ready) {
+      setContentVisible(false);
+    }
+  }, [currentStep, ready]);
 
-  const computePosition = useCallback(() => {
+  const measure = useCallback(() => {
     if (!step || !tooltipRef.current) return;
 
-    const targetElement = document.querySelector(step.targetSelector);
-    if (!targetElement) return;
+    const targetEl = document.querySelector(step.targetSelector);
+    if (!targetEl) return;
 
-    const rect = targetElement.getBoundingClientRect();
-    const tooltipRect = tooltipRef.current.getBoundingClientRect();
-    const padding = 16;
+    const rect = targetEl.getBoundingClientRect();
+    const tipRect = tooltipRef.current.getBoundingClientRect();
+    const pad = 16;
 
-    setTargetRect(rect);
+    // Always compute spotlight rect (even for center) so the div always exists
+    // and CSS transitions have something to interpolate from/to
+    setSpotlight({
+      top: rect.top - 10,
+      left: rect.left - 10,
+      width: rect.width + 20,
+      height: rect.height + 20,
+    });
 
+    // Compute tooltip position
     let top = 0;
     let left = 0;
-    let arrowPosition: 'top' | 'bottom' | 'left' | 'right' | undefined;
-
+    let arrowPosition: TooltipPosition['arrowPosition'];
     const position = step.position || 'bottom';
 
     switch (position) {
       case 'top':
-        top = rect.top - tooltipRect.height - padding;
-        left = rect.left + rect.width / 2 - tooltipRect.width / 2;
+        top = rect.top - tipRect.height - pad;
+        left = rect.left + rect.width / 2 - tipRect.width / 2;
         arrowPosition = 'bottom';
         break;
       case 'bottom':
-        top = rect.bottom + padding;
-        left = rect.left + rect.width / 2 - tooltipRect.width / 2;
+        top = rect.bottom + pad;
+        left = rect.left + rect.width / 2 - tipRect.width / 2;
         arrowPosition = 'top';
         break;
       case 'left':
-        top = rect.top + rect.height / 2 - tooltipRect.height / 2;
-        left = rect.left - tooltipRect.width - padding;
+        top = rect.top + rect.height / 2 - tipRect.height / 2;
+        left = rect.left - tipRect.width - pad;
         arrowPosition = 'right';
         break;
       case 'right':
-        top = rect.top + rect.height / 2 - tooltipRect.height / 2;
-        left = rect.right + padding;
+        top = rect.top + rect.height / 2 - tipRect.height / 2;
+        left = rect.right + pad;
         arrowPosition = 'left';
         break;
       case 'center':
-        top = window.innerHeight / 2 - tooltipRect.height / 2;
-        left = window.innerWidth / 2 - tooltipRect.width / 2;
+        top = window.innerHeight / 2 - tipRect.height / 2;
+        left = window.innerWidth / 2 - tipRect.width / 2;
         arrowPosition = undefined;
         break;
     }
 
-    const maxTop = window.innerHeight - tooltipRect.height - padding;
-    const maxLeft = window.innerWidth - tooltipRect.width - padding;
+    const maxTop = window.innerHeight - tipRect.height - pad;
+    const maxLeft = window.innerWidth - tipRect.width - pad;
+    top = Math.max(pad, Math.min(top, maxTop));
+    left = Math.max(pad, Math.min(left, maxLeft));
 
-    top = Math.max(padding, Math.min(top, maxTop));
-    left = Math.max(padding, Math.min(left, maxLeft));
-
-    setTooltipPosition({ top, left, arrowPosition });
+    setTooltipPos({ top, left, arrowPosition });
   }, [step]);
 
-  // Position calculation + delayed reveal
+  // Position calculation + content reveal
   useEffect(() => {
     if (!step) return;
 
-    // Compute position, then reveal tooltip
-    const timer = setTimeout(() => {
-      computePosition();
-      requestAnimationFrame(() => setTooltipReady(true));
-    }, 60);
+    const isStepChange = prevStepRef.current !== currentStep;
+    prevStepRef.current = currentStep;
 
-    const handleReposition = () => computePosition();
-    window.addEventListener('resize', handleReposition);
-    window.addEventListener('scroll', handleReposition, true);
+    if (isStepChange && ready) {
+      // Step transition: recompute position, then fade content back in
+      const t1 = setTimeout(() => {
+        measure();
+        // Small delay so the position transition starts before content appears
+        const t2 = setTimeout(() => setContentVisible(true), 80);
+        return () => clearTimeout(t2);
+      }, 40);
+      return () => clearTimeout(t1);
+    } else if (!ready) {
+      // Initial mount: compute position then reveal
+      const t = setTimeout(() => {
+        measure();
+        setReady(true);
+        requestAnimationFrame(() => {
+          setContentVisible(true);
+          // Enable transitions only after the first position is painted
+          requestAnimationFrame(() => setAnimate(true));
+        });
+      }, 80);
+      return () => clearTimeout(t);
+    }
+  }, [step, currentStep, measure, ready]);
 
+  // Reposition on resize / scroll
+  useEffect(() => {
+    const handler = () => measure();
+    window.addEventListener('resize', handler);
+    window.addEventListener('scroll', handler, true);
     return () => {
-      clearTimeout(timer);
-      window.removeEventListener('resize', handleReposition);
-      window.removeEventListener('scroll', handleReposition, true);
+      window.removeEventListener('resize', handler);
+      window.removeEventListener('scroll', handler, true);
     };
-  }, [step, currentStep, computePosition]);
+  }, [measure]);
 
   if (!step) return null;
 
   const handlePrimaryAction = () => {
     if (step.actions?.primary?.onClick) {
       step.actions.primary.onClick();
-    } else if (isLastStep) {
+    } else if (isLast) {
       onComplete();
     } else {
       onNext();
@@ -161,130 +205,100 @@ const GuideOverlay: React.FC<GuideOverlayProps> = ({
   const handleSecondaryAction = () => {
     if (step.actions?.secondary?.onClick) {
       step.actions.secondary.onClick();
-    } else if (!isFirstStep) {
+    } else if (!isFirst) {
       onBack();
     }
   };
 
-  const hasSpotlight = targetRect && step.position !== 'center';
+  // Shared position transition string
+  const posTrans = animate
+    ? `top ${DURATION}ms ${EASE}, left ${DURATION}ms ${EASE}, width ${DURATION}ms ${EASE}, height ${DURATION}ms ${EASE}`
+    : 'none';
 
   return (
     <div
       className="fixed inset-0 z-[9999]"
       style={{
-        opacity: visible ? 1 : 0,
+        opacity: mounted ? 1 : 0,
         transition: 'opacity 0.4s ease-out',
       }}
     >
-      {/* Backdrop */}
-      {hasSpotlight ? (
-        <svg className="absolute inset-0 w-full h-full pointer-events-none">
-          <defs>
-            <mask id="spotlight-mask">
-              <rect x="0" y="0" width="100%" height="100%" fill="white" />
-              <rect
-                x={targetRect.left - 10}
-                y={targetRect.top - 10}
-                width={targetRect.width + 20}
-                height={targetRect.height + 20}
-                rx="12"
-                ry="12"
-                fill="black"
-              />
-            </mask>
-          </defs>
-          <rect
-            x="0"
-            y="0"
-            width="100%"
-            height="100%"
-            fill="rgba(0, 0, 0, 0.6)"
-            mask="url(#spotlight-mask)"
+      {/* Full dark overlay — visible in center mode, crossfades with spotlight */}
+      <div
+        className="absolute inset-0 bg-black/60 pointer-events-none"
+        style={{
+          opacity: isCenter ? 1 : 0,
+          transition: animate ? `opacity ${DURATION}ms ${EASE}` : 'none',
+        }}
+      />
+
+      {/* Spotlight hole via box-shadow — smoothly animatable */}
+      {spotlight && (
+        <>
+          <div
+            className="absolute rounded-xl pointer-events-none"
+            style={{
+              top: spotlight.top,
+              left: spotlight.left,
+              width: spotlight.width,
+              height: spotlight.height,
+              boxShadow: isCenter
+                ? '0 0 0 9999px rgba(0, 0, 0, 0)'
+                : '0 0 0 9999px rgba(0, 0, 0, 0.6)',
+              transition: animate
+                ? `${posTrans}, box-shadow ${DURATION}ms ${EASE}`
+                : 'none',
+            }}
           />
-        </svg>
-      ) : (
-        <div className="absolute inset-0 bg-black/60" />
+          {/* White border highlight */}
+          <div
+            className="absolute border-[3px] border-white pointer-events-none rounded-xl"
+            style={{
+              top: spotlight.top,
+              left: spotlight.left,
+              width: spotlight.width,
+              height: spotlight.height,
+              boxShadow: '0 0 24px rgba(255, 255, 255, 0.5)',
+              opacity: isCenter ? 0 : 1,
+              transition: animate
+                ? `${posTrans}, opacity ${DURATION}ms ${EASE}`
+                : 'none',
+            }}
+          />
+        </>
       )}
 
-      {/* White border highlight */}
-      {hasSpotlight && (
-        <div
-          className="absolute border-[3px] border-white pointer-events-none"
-          style={{
-            top: targetRect.top - 10,
-            left: targetRect.left - 10,
-            width: targetRect.width + 20,
-            height: targetRect.height + 20,
-            borderRadius: '12px',
-            boxShadow: '0 0 24px rgba(255, 255, 255, 0.5)',
-          }}
-        />
-      )}
+      {/* Click blocker over entire viewport */}
+      <div className="absolute inset-0" />
 
-      {/* Tooltip */}
+      {/* Tooltip — position animates, never hides entirely after first paint */}
       <div
         ref={tooltipRef}
         className="absolute bg-white rounded-2xl shadow-2xl p-6 max-w-sm"
         style={{
-          top: tooltipPosition.top,
-          left: tooltipPosition.left,
-          opacity: tooltipReady ? 1 : 0,
-          transform: tooltipReady ? 'translateY(0)' : 'translateY(8px)',
-          transition: 'opacity 0.25s ease-out, transform 0.25s ease-out',
+          top: tooltipPos.top,
+          left: tooltipPos.left,
+          opacity: ready ? 1 : 0,
+          transition: animate
+            ? `top ${DURATION}ms ${EASE}, left ${DURATION}ms ${EASE}, opacity 0.2s ease-out`
+            : 'opacity 0.25s ease-out',
         }}
       >
         {/* Arrow */}
-        {step.showArrow !== false && tooltipPosition.arrowPosition && (
+        {step.showArrow !== false && tooltipPos.arrowPosition && (
           <div
             className="absolute w-0 h-0"
-            style={{
-              ...(tooltipPosition.arrowPosition === 'top' && {
-                top: -8,
-                left: '50%',
-                marginLeft: -8,
-                borderLeft: '8px solid transparent',
-                borderRight: '8px solid transparent',
-                borderBottom: '8px solid white',
-              }),
-              ...(tooltipPosition.arrowPosition === 'bottom' && {
-                bottom: -8,
-                left: '50%',
-                marginLeft: -8,
-                borderLeft: '8px solid transparent',
-                borderRight: '8px solid transparent',
-                borderTop: '8px solid white',
-              }),
-              ...(tooltipPosition.arrowPosition === 'left' && {
-                left: -8,
-                top: '50%',
-                marginTop: -8,
-                borderTop: '8px solid transparent',
-                borderBottom: '8px solid transparent',
-                borderRight: '8px solid white',
-              }),
-              ...(tooltipPosition.arrowPosition === 'right' && {
-                right: -8,
-                top: '50%',
-                marginTop: -8,
-                borderTop: '8px solid transparent',
-                borderBottom: '8px solid transparent',
-                borderLeft: '8px solid white',
-              }),
-            }}
+            style={getArrowStyle(tooltipPos.arrowPosition)}
           />
         )}
 
-        {/* Close button */}
-        <button
-          onClick={onSkip}
-          className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors"
-          aria-label="Skip guide"
+        {/* Content — only the text fades, tooltip shell stays visible */}
+        <div
+          style={{
+            opacity: contentVisible ? 1 : 0,
+            transition: 'opacity 0.18s ease-out',
+          }}
         >
-          <span className="material-symbols-rounded text-xl">close</span>
-        </button>
-
-        {/* Content */}
-        <div className="pr-6">
           <h3 className="text-lg font-bold text-slate-900 mb-2">{step.title}</h3>
           <div className="text-sm text-slate-600 leading-relaxed mb-4">
             {typeof step.content === 'string' ? (
@@ -294,7 +308,7 @@ const GuideOverlay: React.FC<GuideOverlayProps> = ({
             )}
           </div>
 
-          {/* Progress indicator */}
+          {/* Progress dots */}
           <div className="flex items-center gap-1 mb-4">
             {steps.map((_, index) => (
               <div
@@ -311,16 +325,19 @@ const GuideOverlay: React.FC<GuideOverlayProps> = ({
           </div>
 
           {/* Actions */}
-          <div className="flex items-center justify-between gap-3">
-            <button
-              onClick={onSkip}
-              className="text-sm text-slate-500 hover:text-slate-700 font-medium transition-colors"
-            >
-              Skip
-            </button>
+          <div className={`flex items-center gap-3 ${isLast ? 'justify-end' : 'justify-between'}`}>
+            {/* Hide Skip button on the last step */}
+            {!isLast && (
+              <button
+                onClick={onSkip}
+                className="text-sm text-slate-500 hover:text-slate-700 font-medium transition-colors"
+              >
+                Skip
+              </button>
+            )}
 
             <div className="flex items-center gap-2">
-              {!isFirstStep && !step.actions?.secondary && (
+              {!isFirst && !step.actions?.secondary && (
                 <button
                   onClick={handleSecondaryAction}
                   className="px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-100 rounded-full transition-all"
@@ -342,7 +359,7 @@ const GuideOverlay: React.FC<GuideOverlayProps> = ({
                 onClick={handlePrimaryAction}
                 className="px-6 py-2 text-sm font-bold bg-secondary text-white rounded-full hover:bg-secondary/90 shadow-lg active:scale-95 transition-all"
               >
-                {step.actions?.primary?.label || (isLastStep ? 'Got it!' : 'Next')}
+                {step.actions?.primary?.label || (isLast ? 'Got it!' : 'Next')}
               </button>
             </div>
           </div>
@@ -351,5 +368,39 @@ const GuideOverlay: React.FC<GuideOverlayProps> = ({
     </div>
   );
 };
+
+/** Helper: returns inline styles for the tooltip arrow based on its direction */
+function getArrowStyle(position: 'top' | 'bottom' | 'left' | 'right'): React.CSSProperties {
+  switch (position) {
+    case 'top':
+      return {
+        top: -8, left: '50%', marginLeft: -8,
+        borderLeft: '8px solid transparent',
+        borderRight: '8px solid transparent',
+        borderBottom: '8px solid white',
+      };
+    case 'bottom':
+      return {
+        bottom: -8, left: '50%', marginLeft: -8,
+        borderLeft: '8px solid transparent',
+        borderRight: '8px solid transparent',
+        borderTop: '8px solid white',
+      };
+    case 'left':
+      return {
+        left: -8, top: '50%', marginTop: -8,
+        borderTop: '8px solid transparent',
+        borderBottom: '8px solid transparent',
+        borderRight: '8px solid white',
+      };
+    case 'right':
+      return {
+        right: -8, top: '50%', marginTop: -8,
+        borderTop: '8px solid transparent',
+        borderBottom: '8px solid transparent',
+        borderLeft: '8px solid white',
+      };
+  }
+}
 
 export default GuideOverlay;

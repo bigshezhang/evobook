@@ -3,7 +3,7 @@ import GuideOverlay, { GuideStep } from './GuideOverlay';
 import { getProfile, updateProfile } from '../../utils/api';
 
 interface KnowledgeTreeGuideProps {
-  onComplete: () => void;
+  onComplete: (showToast?: boolean) => void;
   onSkip: () => void;
   hasMultipleCourses: boolean;
   firstAvailableNodeId?: number;
@@ -33,26 +33,30 @@ const KnowledgeTreeGuide: React.FC<KnowledgeTreeGuideProps> = ({
     const checkGuideStatus = async () => {
       try {
         const profile = await getProfile();
-        if (profile.guides_completed.includes(GUIDE_ID)) {
-          onSkip();
+        const guidesCompleted = profile.guides_completed || [];
+        if (guidesCompleted.includes(GUIDE_ID)) {
+          // Already completed, silently don't show guide
+          setIsVisible(false);
           return;
         }
         setIsVisible(true);
       } catch (error) {
         console.error('Failed to check guide status:', error);
-        onSkip();
+        // On error, don't show guide
+        setIsVisible(false);
       }
     };
 
     checkGuideStatus();
-  }, [onSkip, forceShow]);
+  }, [forceShow]);
 
   const markGuideCompleted = async () => {
     try {
       const profile = await getProfile();
-      if (!profile.guides_completed.includes(GUIDE_ID)) {
+      const guidesCompleted = profile.guides_completed || [];
+      if (!guidesCompleted.includes(GUIDE_ID)) {
         await updateProfile({
-          guides_completed: [...profile.guides_completed, GUIDE_ID],
+          guides_completed: [...guidesCompleted, GUIDE_ID],
         });
       }
     } catch (error) {
@@ -60,10 +64,10 @@ const KnowledgeTreeGuide: React.FC<KnowledgeTreeGuideProps> = ({
     }
   };
 
-  const handleComplete = async () => {
+  const handleComplete = async (showToast = true) => {
     await markGuideCompleted();
     setIsVisible(false);
-    onComplete();
+    onComplete(showToast);
   };
 
   const handleSkip = async () => {
@@ -120,38 +124,6 @@ const KnowledgeTreeGuide: React.FC<KnowledgeTreeGuideProps> = ({
       position: 'bottom',
     },
     {
-      id: 'start-learning',
-      title: 'Start Your Journey',
-      content: 'Click on any black node to start learning. Complete it to unlock the next nodes!',
-      targetSelector: firstAvailableNodeId
-        ? `[data-node-id="${firstAvailableNodeId}"]`
-        : '[data-dag-container] button:not([disabled])',
-      position: 'bottom',
-      actions: {
-        primary: {
-          label: 'Start Learning',
-          onClick: () => {
-            // Find and click the first available node
-            const nodeElement = document.querySelector<HTMLButtonElement>(
-              firstAvailableNodeId
-                ? `[data-node-id="${firstAvailableNodeId}"]`
-                : '[data-dag-container] button:not([disabled])'
-            );
-            if (nodeElement) {
-              handleComplete();
-              setTimeout(() => nodeElement.click(), 300);
-            } else {
-              handleNext();
-            }
-          },
-        },
-        secondary: {
-          label: 'Later',
-          onClick: handleNext,
-        },
-      },
-    },
-    {
       id: 'progress-banner',
       title: 'Track Your Progress',
       content:
@@ -161,16 +133,46 @@ const KnowledgeTreeGuide: React.FC<KnowledgeTreeGuideProps> = ({
     },
   ];
 
-  // Add multiple courses step if applicable
-  if (hasMultipleCourses) {
-    steps.push({
-      id: 'multiple-courses',
-      title: 'Switch Between Courses',
-      content: 'You have multiple courses! Use the arrows to switch between them.',
-      targetSelector: '[data-course-banner]',
-      position: 'bottom',
-    });
-  }
+  // Add course navigation step
+  steps.push({
+    id: 'multiple-courses',
+    title: 'Switch Between Courses',
+    content: hasMultipleCourses
+      ? 'You have multiple courses! Use the arrows to switch between them.'
+      : 'When you have multiple courses, you can use the arrows to switch between them.',
+    targetSelector: '[data-course-banner]',
+    position: 'bottom',
+  });
+
+  // Add start learning step as the last step
+  steps.push({
+    id: 'start-learning',
+    title: 'Start Your Journey',
+    content: 'Click on any black node to start learning. Complete it to unlock the next nodes!',
+    targetSelector: firstAvailableNodeId
+      ? `[data-node-id="${firstAvailableNodeId}"]`
+      : '[data-dag-container] button:not([disabled])',
+    position: 'bottom',
+    actions: {
+      primary: {
+        label: 'Start Learning',
+        onClick: () => {
+          // Find and click the first available node
+          const nodeElement = document.querySelector<HTMLButtonElement>(
+            firstAvailableNodeId
+              ? `[data-node-id="${firstAvailableNodeId}"]`
+              : '[data-dag-container] button:not([disabled])'
+          );
+          if (nodeElement) {
+            handleComplete(false); // Don't show toast when starting learning
+            setTimeout(() => nodeElement.click(), 300);
+          } else {
+            handleNext();
+          }
+        },
+      },
+    },
+  });
 
   if (!isVisible) return null;
 
