@@ -32,6 +32,8 @@ interface TooltipPosition {
   top: number;
   left: number;
   arrowPosition?: 'top' | 'bottom' | 'left' | 'right';
+  // Pixel offset of the arrow from the tooltip edge (for precise targeting)
+  arrowOffset?: number;
 }
 
 interface SpotlightRect {
@@ -74,13 +76,23 @@ const GuideOverlay: React.FC<GuideOverlayProps> = ({
   const isFirst = currentStep === 0;
   const isCenter = step?.position === 'center';
 
+  // Check if current step has same position as previous step
+  const isSamePosition = () => {
+    if (prevStepRef.current === -1) return false;
+    const prevStep = steps[prevStepRef.current];
+    if (!prevStep || !step) return false;
+    return (
+      prevStep.targetSelector === step.targetSelector &&
+      (prevStep.position || 'bottom') === (step.position || 'bottom')
+    );
+  };
+
   // Fade-in the whole overlay on mount
   useEffect(() => {
     requestAnimationFrame(() => setMounted(true));
   }, []);
 
   // Before paint: immediately hide content text when step changes
-  // This prevents the new content flashing for 1 frame before the fade starts
   useIsoLayoutEffect(() => {
     if (prevStepRef.current !== -1 && prevStepRef.current !== currentStep && ready) {
       setContentVisible(false);
@@ -106,46 +118,59 @@ const GuideOverlay: React.FC<GuideOverlayProps> = ({
       height: rect.height + 20,
     });
 
-    // Compute tooltip position
+    // Compute tooltip vertical position
     let top = 0;
-    let left = 0;
     let arrowPosition: TooltipPosition['arrowPosition'];
+    let arrowOffset: number | undefined;
     const position = step.position || 'bottom';
+
+    // Target center coordinates
+    const targetCenterX = rect.left + rect.width / 2;
+    const targetCenterY = rect.top + rect.height / 2;
 
     switch (position) {
       case 'top':
         top = rect.top - tipRect.height - pad;
-        left = rect.left + rect.width / 2 - tipRect.width / 2;
         arrowPosition = 'bottom';
         break;
       case 'bottom':
         top = rect.bottom + pad;
-        left = rect.left + rect.width / 2 - tipRect.width / 2;
         arrowPosition = 'top';
         break;
       case 'left':
-        top = rect.top + rect.height / 2 - tipRect.height / 2;
-        left = rect.left - tipRect.width - pad;
+        top = targetCenterY - tipRect.height / 2;
         arrowPosition = 'right';
         break;
       case 'right':
-        top = rect.top + rect.height / 2 - tipRect.height / 2;
-        left = rect.right + pad;
+        top = targetCenterY - tipRect.height / 2;
         arrowPosition = 'left';
         break;
       case 'center':
-        top = window.innerHeight / 2 - tipRect.height / 2;
-        left = window.innerWidth / 2 - tipRect.width / 2;
-        arrowPosition = undefined;
-        break;
+        // Center mode: no JS positioning needed, handled by CSS
+        setTooltipPos({ top: 0, left: 0, arrowPosition: undefined });
+        return;
     }
 
+    // Clamp vertical position to viewport
     const maxTop = window.innerHeight - tipRect.height - pad;
-    const maxLeft = window.innerWidth - tipRect.width - pad;
-    top = Math.max(pad, Math.min(top, maxTop));
-    left = Math.max(pad, Math.min(left, maxLeft));
+    const clampedTop = Math.max(pad, Math.min(top, maxTop));
 
-    setTooltipPos({ top, left, arrowPosition });
+    // Tooltip is always horizontally centered via CSS (left: 50%; translateX(-50%))
+    // so its actual left = (viewportWidth - tooltipWidth) / 2
+    const tooltipLeft = (window.innerWidth - tipRect.width) / 2;
+
+    // Calculate arrow offset: how far the arrow should be from the tooltip's left/top edge
+    // to still point at the target center
+    if (arrowPosition === 'top' || arrowPosition === 'bottom') {
+      arrowOffset = targetCenterX - tooltipLeft;
+      // Clamp arrow within tooltip bounds (with 16px margin)
+      arrowOffset = Math.max(16, Math.min(arrowOffset, tipRect.width - 16));
+    } else if (arrowPosition === 'left' || arrowPosition === 'right') {
+      arrowOffset = targetCenterY - clampedTop;
+      arrowOffset = Math.max(16, Math.min(arrowOffset, tipRect.height - 16));
+    }
+
+    setTooltipPos({ top: clampedTop, left: tooltipLeft, arrowPosition, arrowOffset });
   }, [step]);
 
   // Position calculation + content reveal
@@ -153,14 +178,23 @@ const GuideOverlay: React.FC<GuideOverlayProps> = ({
     if (!step) return;
 
     const isStepChange = prevStepRef.current !== currentStep;
+    const samePosition = isSamePosition();
     prevStepRef.current = currentStep;
 
     if (isStepChange && ready) {
-      // Step transition: recompute position, wait for animation, then fade content back in
+      // Step transition
       measure();
-      // Wait for position animation to complete (DURATION = 380ms) before showing new content
-      const t = setTimeout(() => setContentVisible(true), DURATION + 50);
-      return () => clearTimeout(t);
+      
+      if (samePosition) {
+        // Same position: quick content swap with short fade
+        setContentVisible(false);
+        const t = setTimeout(() => setContentVisible(true), 120);
+        return () => clearTimeout(t);
+      } else {
+        // Different position: wait for position animation, then fade content back in
+        const t = setTimeout(() => setContentVisible(true), DURATION + 50);
+        return () => clearTimeout(t);
+      }
     } else if (!ready) {
       // Initial mount: compute position then reveal
       const t = setTimeout(() => {
@@ -271,22 +305,25 @@ const GuideOverlay: React.FC<GuideOverlayProps> = ({
       {/* Tooltip — position animates, never hides entirely after first paint */}
       <div
         ref={tooltipRef}
-        className="absolute bg-white rounded-2xl shadow-2xl p-6 max-w-sm"
-        style={{
-          top: isCenter ? '50%' : tooltipPos.top,
-          left: isCenter ? '50%' : tooltipPos.left,
-          transform: isCenter ? 'translate(-50%, -50%)' : undefined,
+        className="bg-white rounded-2xl shadow-2xl p-6 w-[calc(100vw-48px)] max-w-sm fixed left-1/2 -translate-x-1/2"
+        style={isCenter ? {
+          top: '50%',
+          transform: 'translate(-50%, -50%)',
+          opacity: ready ? 1 : 0,
+          transition: 'opacity 0.25s ease-out',
+        } : {
+          top: tooltipPos.top,
           opacity: ready ? 1 : 0,
           transition: animate
-            ? `${isCenter ? 'opacity 0.2s ease-out' : `top ${DURATION}ms ${EASE}, left ${DURATION}ms ${EASE}, opacity 0.2s ease-out`}`
+            ? `top ${DURATION}ms ${EASE}, opacity 0.2s ease-out`
             : 'opacity 0.25s ease-out',
         }}
       >
-        {/* Arrow */}
+        {/* Arrow pointing at target center */}
         {step.showArrow !== false && tooltipPos.arrowPosition && (
           <div
             className="absolute w-0 h-0"
-            style={getArrowStyle(tooltipPos.arrowPosition)}
+            style={getArrowStyle(tooltipPos.arrowPosition, tooltipPos.arrowOffset)}
           />
         )}
 
@@ -367,33 +404,44 @@ const GuideOverlay: React.FC<GuideOverlayProps> = ({
   );
 };
 
-/** Helper: returns inline styles for the tooltip arrow based on its direction */
-function getArrowStyle(position: 'top' | 'bottom' | 'left' | 'right'): React.CSSProperties {
+/** Helper: returns inline styles for the tooltip arrow, pointing at the target center */
+function getArrowStyle(
+  position: 'top' | 'bottom' | 'left' | 'right',
+  offset?: number,
+): React.CSSProperties {
   switch (position) {
     case 'top':
       return {
-        top: -8, left: '50%', marginLeft: -8,
+        top: -8,
+        left: offset != null ? offset - 8 : '50%',
+        marginLeft: offset != null ? 0 : -8,
         borderLeft: '8px solid transparent',
         borderRight: '8px solid transparent',
         borderBottom: '8px solid white',
       };
     case 'bottom':
       return {
-        bottom: -8, left: '50%', marginLeft: -8,
+        bottom: -8,
+        left: offset != null ? offset - 8 : '50%',
+        marginLeft: offset != null ? 0 : -8,
         borderLeft: '8px solid transparent',
         borderRight: '8px solid transparent',
         borderTop: '8px solid white',
       };
     case 'left':
       return {
-        left: -8, top: '50%', marginTop: -8,
+        left: -8,
+        top: offset != null ? offset - 8 : '50%',
+        marginTop: offset != null ? 0 : -8,
         borderTop: '8px solid transparent',
         borderBottom: '8px solid transparent',
         borderRight: '8px solid white',
       };
     case 'right':
       return {
-        right: -8, top: '50%', marginTop: -8,
+        right: -8,
+        top: offset != null ? offset - 8 : '50%',
+        marginTop: offset != null ? 0 : -8,
         borderTop: '8px solid transparent',
         borderBottom: '8px solid transparent',
         borderLeft: '8px solid white',
