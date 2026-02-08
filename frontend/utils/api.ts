@@ -29,8 +29,10 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
 }
 
 // ==================== Common Types ====================
-// Re-export types from constants
-export type { Level, Mode, NodeType, NodeStatus, ActivityIntensity } from './constants';
+// Import types for internal use
+import type { Level, Mode, NodeType, NodeStatus, ActivityIntensity } from './constants';
+// Re-export types and constants for external use
+export type { Level, Mode, NodeType, NodeStatus, ActivityIntensity };
 export { LEVEL, MODE, NODE_TYPE, NODE_STATUS, ACTIVITY_INTENSITY, STORAGE_KEYS, BUSINESS_CONFIG, TIME } from './constants';
 
 // Language is any ISO 639-1 language code (e.g., 'en', 'zh', 'es', 'fr', 'ja', 'de', etc.)
@@ -58,6 +60,7 @@ export interface FinishData {
   verified_concept: string;
   focus: string;
   source: string;
+  mode: Mode;
   intent: 'add_info' | 'change_topic';
 }
 
@@ -172,7 +175,7 @@ export interface NodeInfo {
   id: number;
   title: string;
   description: string;
-  type: 'learn' | 'boss';
+  type: 'learn';
   estimated_minutes: number;
 }
 
@@ -1172,6 +1175,48 @@ export async function equipItem(request: EquipItemRequest): Promise<EquipItemRes
     const errorData = await response.json().catch(() => ({}));
     throw new Error(
       errorData.detail?.message || `Failed to equip item: ${response.status}`
+    );
+  }
+
+  return response.json();
+}
+
+// ==================== Generation Progress API ====================
+
+export interface NodeGenerationStatus {
+  node_id: number;
+  type: string;
+  status: string;
+  error?: string | null;
+}
+
+export interface GenerationProgressResponse {
+  course_map_id: string;
+  overall_status: 'initializing' | 'generating' | 'completed' | 'partial_failed';
+  learn_progress: number;
+  nodes_status: NodeGenerationStatus[];
+}
+
+/**
+ * Get generation progress for a course map.
+ * Returns the current status of content generation for all nodes.
+ *
+ * @param courseMapId - Course map UUID
+ * @returns Generation progress with node-level status
+ */
+export async function getGenerationProgress(courseMapId: string): Promise<GenerationProgressResponse> {
+  const headers = await getAuthHeaders();
+  const response = await fetch(
+    `${API_BASE_URL}/api/v1/course-map/${courseMapId}/progress`,
+    {
+      headers,
+    }
+  );
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(
+      errorData.error?.message || `Failed to fetch generation progress: ${response.status}`
     );
   }
 

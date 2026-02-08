@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { generateCourseMap, STORAGE_KEYS, FinishData, Mode, buildLearningPath, BUSINESS_CONFIG } from '../../utils/api';
+import { generateCourseMap, STORAGE_KEYS, BUSINESS_CONFIG, FinishData, Mode, buildLearningPath } from '../../utils/api';
+import { ROUTES } from '../../utils/routes';
 
 interface GenerationState {
   status: 'loading' | 'success' | 'error';
@@ -35,7 +36,7 @@ const GeneratingCourse: React.FC = () => {
         if (!onboardingDataStr) {
           console.error('No onboarding data found in localStorage');
           setState({ status: 'error', progress: 0, errorMessage: 'Please complete onboarding first' });
-          setTimeout(() => navigate('/assessment'), 2000);
+          setTimeout(() => navigate(ROUTES.ASSESSMENT), 2000);
           return;
         }
 
@@ -45,8 +46,8 @@ const GeneratingCourse: React.FC = () => {
         // Animate progress
         setState({ status: 'loading', progress: BUSINESS_CONFIG.INITIAL_PROGRESS_PERCENT });
 
-        // Default mode and time - could be made configurable via UI later
-        const mode: Mode = BUSINESS_CONFIG.DEFAULT_MODE;
+        // Use mode from onboarding data (user selected during onboarding)
+        const mode: Mode = onboardingData.mode;
         const totalCommitmentMinutes = BUSINESS_CONFIG.DEFAULT_COMMITMENT_MINUTES;
 
         // Check if aborted before API call
@@ -78,7 +79,7 @@ const GeneratingCourse: React.FC = () => {
         localStorage.setItem(STORAGE_KEYS.ONBOARDING_COMPLETED, 'true');
 
         // Navigate to knowledge tree after brief delay
-        setTimeout(() => navigate(buildLearningPath('/knowledge-tree', { cid: response.course_map_id })), 800);
+        setTimeout(() => navigate(buildLearningPath(ROUTES.KNOWLEDGE_TREE, { cid: response.course_map_id })), 800);
       } catch (error) {
         if (abortController.signal.aborted) return;
         console.error('Failed to generate course map:', error);

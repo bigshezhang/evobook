@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { getCurrency } from '../utils/api';
+import { ROUTES } from '../utils/routes';
 
 const GameHeader: React.FC = () => {
   const navigate = useNavigate();
@@ -15,8 +16,8 @@ const GameHeader: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
 
   const tabs = [
-    { label: 'Travel', path: '/game' },
-    { label: 'Outfit', path: '/game/outfit' },
+    { label: 'Travel', path: ROUTES.GAME },
+    { label: 'Outfit', path: ROUTES.GAME_OUTFIT },
   ];
 
   const currentTab = tabs.find(t => t.path === location.pathname)?.label || 'Travel';

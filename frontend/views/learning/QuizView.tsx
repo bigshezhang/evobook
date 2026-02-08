@@ -19,6 +19,7 @@ import { heartbeatManager } from '../../utils/learningHeartbeat';
 import { useLanguage } from '../../utils/LanguageContext';
 import { getSelectedCharacter } from '../../utils/mascotUtils';
 import { CHARACTER_MAPPING } from '../../utils/mascotConfig';
+import { ROUTES } from '../../utils/routes';
 
 interface UserAnswer {
   questionIdx: number;
@@ -271,7 +272,7 @@ const QuizView: React.FC = () => {
         <p className="text-rose-600 font-bold text-lg mb-2">Loading Failed</p>
         <p className="text-slate-500 text-center mb-6">{error}</p>
         <button
-          onClick={() => navigate(buildLearningPath('/knowledge-tree', { cid: courseMapId }))}
+          onClick={() => navigate(buildLearningPath(ROUTES.KNOWLEDGE_TREE, { cid: courseMapId }))}
           className="px-6 py-3 bg-secondary text-white rounded-full font-bold"
         >
           Back to Course
@@ -295,10 +296,10 @@ const QuizView: React.FC = () => {
       <div className="relative flex flex-col h-screen bg-white font-display overflow-y-auto no-scrollbar">
         {/* Header with History Button */}
         <Header
-          onBack={() => navigate(buildLearningPath('/knowledge-tree', { cid: courseMapId }))}
+          onBack={() => navigate(buildLearningPath(ROUTES.KNOWLEDGE_TREE, { cid: courseMapId }))}
           rightAction={
             <button
-              onClick={() => navigate(buildLearningPath('/quiz-history', { cid: courseMapId, nid: nodeId }))}
+              onClick={() => navigate(buildLearningPath(ROUTES.QUIZ_HISTORY, { cid: courseMapId, nid: nodeId }))}
               className="w-10 h-10 flex items-center justify-center rounded-full bg-black/5 active:scale-90 transition-transform"
             >
               <span className="material-symbols-rounded text-slate-900 text-[20px]">history</span>
@@ -358,7 +359,7 @@ const QuizView: React.FC = () => {
         <p className="text-rose-600 font-bold text-lg mb-2">Quiz not loaded</p>
         <p className="text-slate-500 text-center mb-6">Please try again</p>
         <button
-          onClick={() => navigate(buildLearningPath('/knowledge-tree', { cid: courseMapId }))}
+          onClick={() => navigate(buildLearningPath(ROUTES.KNOWLEDGE_TREE, { cid: courseMapId }))}
           className="px-6 py-3 bg-secondary text-white rounded-full font-bold"
         >
           Back to Course
@@ -377,11 +378,11 @@ const QuizView: React.FC = () => {
   return (
     <div className="relative flex flex-col h-screen bg-white font-display overflow-hidden">
       <Header
-        onBack={() => navigate(buildLearningPath('/knowledge-tree', { cid: courseMapId }))}
+        onBack={() => navigate(buildLearningPath(ROUTES.KNOWLEDGE_TREE, { cid: courseMapId }))}
         subtitle={`Answered ${answeredCount}/${quizData.questions.length}`}
         rightAction={
           <button
-            onClick={() => navigate(buildLearningPath('/quiz-history', { cid: courseMapId, nid: nodeId }))}
+            onClick={() => navigate(buildLearningPath(ROUTES.QUIZ_HISTORY, { cid: courseMapId, nid: nodeId }))}
             className="w-8 h-8 flex items-center justify-center rounded-full bg-black/5 active:scale-90 transition-transform"
           >
             <span className="material-symbols-rounded text-slate-900 text-[20px]">history</span>
@@ -499,7 +500,7 @@ const QuizView: React.FC = () => {
               console.error('Failed to submit quiz or update progress:', error);
             }
           }
-          navigate(buildLearningPath('/knowledge-tree', { cid: courseMapId }));
+          navigate(buildLearningPath(ROUTES.KNOWLEDGE_TREE, { cid: courseMapId }));
         }}
         diceRolls={2}
         expEarned={50}

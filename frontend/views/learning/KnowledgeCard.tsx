@@ -16,9 +16,11 @@ import {
   buildLearningPath,
   DAGNode,
   MapMeta,
+  STORAGE_KEYS,
 } from '../../utils/api';
 import { heartbeatManager } from '../../utils/learningHeartbeat';
 import { useLanguage } from '../../utils/LanguageContext';
+import { ROUTES } from '../../utils/routes';
 
 // Page break delimiter used in markdown from API
 const PAGE_BREAK_DELIMITER = '<EVOBK_PAGE_BREAK />';
@@ -542,7 +544,7 @@ const KnowledgeCard: React.FC = () => {
             id: currentNode.id,
             title: currentNode.title,
             description: currentNode.description,
-            type: currentNode.type as 'learn' | 'boss',
+            type: currentNode.type as 'learn',
             estimated_minutes: currentNode.estimated_minutes,
           },
         };
@@ -694,7 +696,7 @@ const KnowledgeCard: React.FC = () => {
         setIsPageTransitioning(false);
       }, 200); // 淡出动画时长
     } else {
-      navigate(buildLearningPath('/knowledge-tree', { cid: courseMapId }));
+      navigate(buildLearningPath(ROUTES.KNOWLEDGE_TREE, { cid: courseMapId }));
     }
   };
 
@@ -754,7 +756,7 @@ const KnowledgeCard: React.FC = () => {
       <header className="pt-12 px-5 pb-3 flex items-center justify-between w-full z-30 border-b border-black/[0.03] dark:border-white/[0.05] bg-white/80 backdrop-blur-md">
         <div className="flex items-center gap-3">
           <button
-            onClick={() => navigate(buildLearningPath('/knowledge-tree', { cid: courseMapId }))}
+            onClick={() => navigate(buildLearningPath(ROUTES.KNOWLEDGE_TREE, { cid: courseMapId }))}
             className="w-8 h-8 flex items-center justify-center rounded-full bg-black/5 dark:bg-white/10 active:scale-90 transition-transform"
           >
             <span className="material-symbols-rounded text-primary dark:text-white text-[20px]">arrow_back</span>
@@ -827,7 +829,7 @@ const KnowledgeCard: React.FC = () => {
             <h3 className="text-lg font-bold text-primary dark:text-white mb-2">Failed to Load Content</h3>
             <p className="text-sm text-primary/60 dark:text-white/60 mb-4 max-w-[280px]">{error}</p>
             <button
-              onClick={() => window.location.reload()}
+              onClick={() => navigate(0)}
               className="px-6 py-2.5 bg-primary dark:bg-white text-white dark:text-black rounded-full font-semibold text-sm active:scale-95 transition-transform"
             >
               Try Again
@@ -942,8 +944,8 @@ const KnowledgeCard: React.FC = () => {
       {/* Completion Modal */}
       <RewardModal
         isOpen={showComplete}
-        onClose={() => navigate(buildLearningPath('/knowledge-tree', { cid: courseMapId }))}
-        onGoToGame={() => navigate('/game')}
+        onClose={() => navigate(buildLearningPath(ROUTES.KNOWLEDGE_TREE, { cid: courseMapId }))}
+        onGoToGame={() => navigate(ROUTES.GAME)}
         diceRolls={rewardData.diceRolls}
         expEarned={rewardData.expEarned}
       />

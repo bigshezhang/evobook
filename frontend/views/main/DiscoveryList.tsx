@@ -5,6 +5,7 @@ import Header from '../../components/Header';
 import BottomNav from '../../components/BottomNav';
 import SuccessFeedbackPill from '../../components/SuccessFeedbackPill';
 import { buildLearningPath, getStoredCourseMapId } from '../../utils/api';
+import { ROUTES } from '../../utils/routes';
 
 const DiscoveryList: React.FC = () => {
   const navigate = useNavigate();
@@ -27,7 +28,7 @@ const DiscoveryList: React.FC = () => {
   ];
 
   const handleBack = () => {
-    navigate('/courses?tab=discovery');
+    navigate(`${ROUTES.COURSES}?tab=discovery`);
   };
 
   const handleAddCourse = () => {
@@ -53,14 +54,14 @@ const DiscoveryList: React.FC = () => {
           {mockCourses.map(item => (
             <div key={item.id} className="flex flex-col gap-2.5">
               <div 
-                onClick={() => navigate(buildLearningPath('/course-detail', { cid: getStoredCourseMapId() }))}
+                onClick={() => navigate(buildLearningPath(ROUTES.COURSE_DETAIL, { cid: getStoredCourseMapId() }))}
                 className="aspect-[4/3] clay-img overflow-hidden relative group cursor-pointer"
               >
                 <img alt={item.title} className="w-full h-full object-cover opacity-95 mix-blend-multiply" src={item.img} loading="lazy"/>
                 <div className="absolute inset-0 bg-gradient-to-tr from-indigo-100/30 to-transparent"></div>
               </div>
               <div className="flex justify-between items-start gap-1">
-                <div className="flex-1 cursor-pointer" onClick={() => navigate(buildLearningPath('/course-detail', { cid: getStoredCourseMapId() }))}>
+                <div className="flex-1 cursor-pointer" onClick={() => navigate(buildLearningPath(ROUTES.COURSE_DETAIL, { cid: getStoredCourseMapId() }))}>
                   <h4 className="font-bold text-[14px] leading-[1.3] text-black line-clamp-2">{item.title}</h4>
                   <div className="flex items-center gap-1 mt-1">
                     <span className="material-symbols-rounded text-[14px] text-amber-400" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>

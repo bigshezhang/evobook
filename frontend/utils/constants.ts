@@ -18,7 +18,6 @@ export type NodeStatus = typeof NODE_STATUS[keyof typeof NODE_STATUS];
 export const NODE_TYPE = {
   LEARN: 'learn',
   QUIZ: 'quiz',
-  BOSS: 'boss',
 } as const;
 
 export type NodeType = typeof NODE_TYPE[keyof typeof NODE_TYPE];
@@ -85,6 +84,7 @@ export const BUSINESS_CONFIG = {
   HEARTBEAT_INTERVAL_MS: 30000, // 30 seconds
 
   // Default course generation
+  // Note: DEFAULT_MODE is deprecated - mode is now selected by user during onboarding
   DEFAULT_MODE: MODE.FAST,
   DEFAULT_COMMITMENT_MINUTES: 120,
 

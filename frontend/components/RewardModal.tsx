@@ -2,6 +2,7 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
+import { ROUTES } from '../utils/routes';
 
 interface RewardModalProps {
   isOpen: boolean;
@@ -26,7 +27,7 @@ const RewardModal: React.FC<RewardModalProps> = ({
     if (onGoToGame) {
       onGoToGame();
     } else {
-      navigate('/game');
+      navigate(ROUTES.GAME);
     }
   };
 

@@ -1,26 +1,15 @@
 
 import React, { useEffect, useState } from 'react';
-import { HashRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { AuthProvider, useAuth } from './utils/AuthContext';
 import { LanguageProvider } from './utils/LanguageContext';
 import { storeInviteCode, processPendingInvite } from './utils/inviteHandler';
+import { getUserCourses } from './utils/api';
 import { STORAGE_KEYS } from './utils/constants';
 import { getSelectedCharacter } from './utils/mascotUtils';
 import { CHARACTER_MAPPING } from './utils/mascotConfig';
+import { ROUTES } from './utils/routes';
 import SuccessFeedbackPill from './components/SuccessFeedbackPill';
-
-// Reset localStorage when ?reset=1 is in URL
-const useResetOnParam = () => {
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('reset') === '1') {
-      localStorage.clear();
-      // Remove the reset param and reload
-      window.history.replaceState({}, '', window.location.pathname + window.location.hash);
-      window.location.reload();
-    }
-  }, []);
-};
 
 // Auth Views
 import LoginView from './views/auth/LoginView';
@@ -63,7 +52,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   }
 
   if (!user) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to={ROUTES.LOGIN} replace />;
   }
 
   return <>{children}</>;
@@ -96,20 +85,36 @@ const QADetailRouteView: React.FC = () => {
 // AppInternals: handles hooks that require Router and Auth context
 const AppInternals: React.FC = () => {
   const { user } = useAuth();
-  
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
+
   // Toast state
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
 
-  // Detect invite code in URL
+  // Handle reset parameter - clears localStorage and navigates to root
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const inviteCode = params.get('invite');
+    const resetParam = searchParams.get('reset');
+    if (resetParam === '1') {
+      localStorage.clear();
+      navigate(ROUTES.ROOT, { replace: true });
+    }
+  }, [searchParams, navigate]);
+
+  // Detect invite code in URL query params (e.g. /login?invite=CODE)
+  useEffect(() => {
+    const inviteCode = searchParams.get('invite');
+
     if (inviteCode) {
       storeInviteCode(inviteCode);
       console.log('Invite code detected and stored:', inviteCode);
+
+      // Clean up invite param from URL after storing
+      searchParams.delete('invite');
+      setSearchParams(searchParams, { replace: true });
     }
-  }, []);
+  }, [searchParams, setSearchParams]);
 
   // Process pending invite after authentication
   useEffect(() => {
@@ -134,42 +139,40 @@ const AppInternals: React.FC = () => {
     <>
       <Routes>
         {/* Public route — login / signup */}
-        <Route path="/login" element={<LoginView />} />
+        <Route path={ROUTES.LOGIN} element={<LoginView />} />
 
         {/* Onboarding Flow */}
-        <Route path="/" element={<ProtectedRoute><RootRedirect /></ProtectedRoute>} />
-        <Route path="/interests" element={<ProtectedRoute><InterestSelection /></ProtectedRoute>} />
-        <Route path="/assessment" element={<ProtectedRoute><AssessmentChatWithKey /></ProtectedRoute>} />
-        <Route path="/companion" element={<ProtectedRoute><CompanionSelection /></ProtectedRoute>} />
-        <Route path="/notifications" element={<ProtectedRoute><NotificationPermission /></ProtectedRoute>} />
-        <Route path="/generating" element={<ProtectedRoute><GeneratingCourse /></ProtectedRoute>} />
+        <Route path={ROUTES.ROOT} element={<ProtectedRoute><RootRedirect /></ProtectedRoute>} />
+        <Route path={ROUTES.INTERESTS} element={<ProtectedRoute><InterestSelection /></ProtectedRoute>} />
+        <Route path={ROUTES.ASSESSMENT} element={<ProtectedRoute><AssessmentChatWithKey /></ProtectedRoute>} />
+        <Route path={ROUTES.COMPANION} element={<ProtectedRoute><CompanionSelection /></ProtectedRoute>} />
+        <Route path={ROUTES.NOTIFICATIONS} element={<ProtectedRoute><NotificationPermission /></ProtectedRoute>} />
+        <Route path={ROUTES.GENERATING} element={<ProtectedRoute><GeneratingCourse /></ProtectedRoute>} />
 
         {/* Main Learning Flow */}
-        <Route path="/course-detail" element={<ProtectedRoute><CourseDetail /></ProtectedRoute>} />
-        <Route path="/knowledge-tree" element={<ProtectedRoute><KnowledgeTree /></ProtectedRoute>} />
-        <Route path="/knowledge-card" element={<ProtectedRoute><KnowledgeCardWithKey /></ProtectedRoute>} />
-        <Route path="/quiz" element={<ProtectedRoute><QuizView /></ProtectedRoute>} />
-        <Route path="/quiz-history" element={<ProtectedRoute><QuizHistoryList /></ProtectedRoute>} />
-        <Route path="/quiz-attempt" element={<ProtectedRoute><QuizAttemptDetail /></ProtectedRoute>} />
-        <Route path="/qa-detail" element={<ProtectedRoute><QADetailRouteView /></ProtectedRoute>} />
+        <Route path={ROUTES.COURSE_DETAIL} element={<ProtectedRoute><CourseDetail /></ProtectedRoute>} />
+        <Route path={ROUTES.KNOWLEDGE_TREE} element={<ProtectedRoute><KnowledgeTree /></ProtectedRoute>} />
+        <Route path={ROUTES.KNOWLEDGE_CARD} element={<ProtectedRoute><KnowledgeCardWithKey /></ProtectedRoute>} />
+        <Route path={ROUTES.QUIZ} element={<ProtectedRoute><QuizView /></ProtectedRoute>} />
+        <Route path={ROUTES.QUIZ_HISTORY} element={<ProtectedRoute><QuizHistoryList /></ProtectedRoute>} />
+        <Route path={ROUTES.QUIZ_ATTEMPT} element={<ProtectedRoute><QuizAttemptDetail /></ProtectedRoute>} />
+        <Route path={ROUTES.QA_DETAIL} element={<ProtectedRoute><QADetailRouteView /></ProtectedRoute>} />
 
         {/* Game Flow */}
-        <Route path="/game" element={<ProtectedRoute><TravelBoard /></ProtectedRoute>} />
-        <Route path="/game/outfit" element={<ProtectedRoute><OutfitView /></ProtectedRoute>} />
+        <Route path={ROUTES.GAME} element={<ProtectedRoute><TravelBoard /></ProtectedRoute>} />
+        <Route path={ROUTES.GAME_OUTFIT} element={<ProtectedRoute><OutfitView /></ProtectedRoute>} />
 
         {/* Main Navigation Tabs */}
-        <Route path="/courses" element={<ProtectedRoute><CoursesDashboard /></ProtectedRoute>} />
-        {/* Keep /dashboard as alias for backward compatibility */}
-        <Route path="/dashboard" element={<Navigate to="/courses" replace />} />
-        <Route path="/discovery/:category" element={<ProtectedRoute><DiscoveryList /></ProtectedRoute>} />
-        <Route path="/profile" element={<ProtectedRoute><ProfileView /></ProtectedRoute>} />
+        <Route path={ROUTES.COURSES} element={<ProtectedRoute><CoursesDashboard /></ProtectedRoute>} />
+        <Route path={`${ROUTES.DISCOVERY}/:category`} element={<ProtectedRoute><DiscoveryList /></ProtectedRoute>} />
+        <Route path={ROUTES.PROFILE} element={<ProtectedRoute><ProfileView /></ProtectedRoute>} />
 
-        <Route path="*" element={<Navigate to="/" />} />
+        <Route path="*" element={<Navigate to={ROUTES.ROOT} />} />
       </Routes>
-      
-      <SuccessFeedbackPill 
-        isOpen={showToast} 
-        onClose={() => setShowToast(false)} 
+
+      <SuccessFeedbackPill
+        isOpen={showToast}
+        onClose={() => setShowToast(false)}
         message={toastMessage}
       />
     </>
@@ -189,14 +192,13 @@ const RootRedirect: React.FC = () => {
         const onboardingDone = localStorage.getItem(STORAGE_KEYS.ONBOARDING_COMPLETED) === 'true';
 
         if (onboardingDone) {
-          // User has completed onboarding before, go to dashboard
+          // User has completed onboarding before, go to courses
           setHasCourses(true);
           setLoading(false);
           return;
         }
 
         // Check backend for courses (handles cross-device login)
-        const { getUserCourses } = await import('./utils/api');
         const data = await getUserCourses();
 
         if (data.courses && data.courses.length > 0) {
@@ -228,15 +230,13 @@ const RootRedirect: React.FC = () => {
   }
 
   if (hasCourses) {
-    return <Navigate to="/courses" replace />;
+    return <Navigate to={ROUTES.COURSES} replace />;
   }
 
   return <WelcomeView />;
 };
 
 const App: React.FC = () => {
-  useResetOnParam();
-  
   // 预加载用户当前选择的角色头像（关键资源）
   useEffect(() => {
     try {
@@ -267,11 +267,11 @@ const App: React.FC = () => {
   return (
     <AuthProvider>
       <LanguageProvider>
-        <HashRouter>
+        <BrowserRouter>
           <div className="max-w-lg mx-auto min-h-screen bg-white shadow-xl relative overflow-x-hidden">
             <AppInternals />
           </div>
-        </HashRouter>
+        </BrowserRouter>
       </LanguageProvider>
     </AuthProvider>
   );

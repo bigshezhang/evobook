@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { onboardingNext, isChatResponse, isFinishResponse, type OnboardingResponse, STORAGE_KEYS } from '../../utils/api';
 import { STORAGE_KEY_SELECTED_TOPIC } from './InterestSelection';
 import { getSelectedCharacter, type MascotCharacter } from '../../utils/mascotUtils';
+import { ROUTES } from '../../utils/routes';
 
 // Storage key for session data
 export const STORAGE_KEY_SESSION_ID = 'evo_assessment_session_id';
@@ -158,8 +159,18 @@ const AssessmentChat: React.FC = () => {
         localStorage.setItem(STORAGE_KEYS.ONBOARDING_DATA, JSON.stringify(response.data));
         // Clear the selected topic as it's no longer needed
         localStorage.removeItem(STORAGE_KEY_SELECTED_TOPIC);
-        // Navigate to companion selection (next step in onboarding flow)
-        navigate('/companion');
+        
+        // Check if user has completed onboarding before
+        // If yes, skip companion setup and go straight to generating
+        const hasCompletedOnboarding = localStorage.getItem(STORAGE_KEYS.ONBOARDING_COMPLETED) === 'true';
+        
+        if (hasCompletedOnboarding) {
+          // Returning user: skip personal setup, go straight to course generation
+          navigate(ROUTES.GENERATING);
+        } else {
+          // First-time user: go directly to companion selection (skip nickname)
+          navigate(ROUTES.COMPANION);
+        }
       }, 1500);
     }
   };

@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { STORAGE_KEYS } from '../../utils/constants';
+import { ROUTES } from '../../utils/routes';
 
 // Re-export for backward compatibility
 export const STORAGE_KEY_SELECTED_TOPIC = STORAGE_KEYS.SELECTED_TOPIC;
@@ -78,7 +79,7 @@ const InterestSelection: React.FC = () => {
     localStorage.setItem(STORAGE_KEY_SELECTED_TOPIC, topic);
 
     // Navigate to AssessmentChat
-    navigate('/assessment');
+    navigate(ROUTES.ASSESSMENT);
   };
 
   return (

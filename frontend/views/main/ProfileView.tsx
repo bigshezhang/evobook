@@ -9,6 +9,7 @@ import { getSelectedCharacter } from '../../utils/mascotUtils';
 import { CHARACTER_MAPPING } from '../../utils/mascotConfig';
 import { QRCodeSVG } from 'qrcode.react';
 import { toPng } from 'html-to-image';
+import { ROUTES } from '../../utils/routes';
 
 const ProfileView: React.FC = () => {
   const navigate = useNavigate();
@@ -20,10 +21,10 @@ const ProfileView: React.FC = () => {
   const [loadingInvite, setLoadingInvite] = useState(false);
   const [recentCourses, setRecentCourses] = useState<CourseListItem[]>([]);
   const [isSmallScreen, setIsSmallScreen] = useState(false);
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info'; visible: boolean }>({ 
-    message: '', 
-    type: 'success', 
-    visible: false 
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info'; visible: boolean }>({
+    message: '',
+    type: 'success',
+    visible: false
   });
   const [profile, setProfile] = useState<Profile | null>(null);
   const [showEditNickname, setShowEditNickname] = useState(false);
@@ -96,7 +97,7 @@ const ProfileView: React.FC = () => {
   // Handle save nickname
   const handleSaveNickname = async () => {
     const trimmedNickname = editingNickname.trim();
-    
+
     if (!trimmedNickname) {
       showToast('Nickname cannot be empty', 'error');
       return;
@@ -124,12 +125,12 @@ const ProfileView: React.FC = () => {
   // Generate poster image - 使用 html-to-image，真正的"显示什么样导出什么样"
   const generatePosterBlob = async (): Promise<Blob> => {
     const posterElement = document.getElementById('invite-poster-content');
-    
+
     if (!posterElement) throw new Error('Poster element not found');
 
     // 使用 filter 选项排除关闭按钮，避免 UI 闪烁
     // pixelRatio: 3 for high quality (3x resolution)
-    const dataUrl = await toPng(posterElement, { 
+    const dataUrl = await toPng(posterElement, {
       pixelRatio: 3,
       filter: (node) => {
         // 排除关闭按钮及其子元素
@@ -187,17 +188,17 @@ const ProfileView: React.FC = () => {
   // Get invite link with configured domain
   const getInviteLinkWithDomain = (): string => {
     if (!inviteData?.invite_url) return '';
-    
+
     const appUrl = import.meta.env.VITE_APP_URL || window.location.origin;
-    
+
     try {
       const url = new URL(inviteData.invite_url);
       const configuredUrl = new URL(appUrl);
-      
+
       // Replace protocol and host with configured domain
       url.protocol = configuredUrl.protocol;
       url.host = configuredUrl.host;
-      
+
       return url.toString();
     } catch (error) {
       console.error('Failed to parse invite URL:', error);
@@ -222,7 +223,7 @@ const ProfileView: React.FC = () => {
       textArea.style.left = '-999999px';
       document.body.appendChild(textArea);
       textArea.select();
-      
+
       try {
         document.execCommand('copy');
         showToast('Invite link copied to clipboard!');
@@ -230,7 +231,7 @@ const ProfileView: React.FC = () => {
         console.error('Failed to copy:', err);
         showToast('Failed to copy link', 'error');
       }
-      
+
       document.body.removeChild(textArea);
     }
   };
@@ -309,10 +310,10 @@ const ProfileView: React.FC = () => {
       {/* Header with explicit back navigation to dashboard */}
       <Header
         title="Profile"
-        onBack={() => navigate('/courses')}
+        onBack={() => navigate(ROUTES.COURSES)}
         rightAction={
           <button
-            onClick={() => navigate('/assessment')}
+            onClick={() => navigate(ROUTES.ASSESSMENT)}
             className="flex items-center gap-2 px-4 h-10 rounded-2xl bg-white border border-slate-100 active:scale-95 transition-all shadow-sm"
           >
             <span className="material-symbols-outlined text-primary text-[20px]" style={{ fontVariationSettings: "'FILL' 1" }}>library_add</span>
@@ -436,7 +437,7 @@ const ProfileView: React.FC = () => {
               onClick={async () => {
                 localStorage.clear();
                 await signOut();
-                navigate('/login', { replace: true });
+                navigate(ROUTES.LOGIN, { replace: true });
               }}
               className="w-full flex items-center justify-between py-4 px-5 hover:bg-rose-50 rounded-2xl transition-colors"
             >
@@ -455,8 +456,8 @@ const ProfileView: React.FC = () => {
         <div className="fixed inset-0 z-[100] bg-white flex flex-col items-center justify-center p-6 animate-in fade-in duration-300">
 
           {/* Poster Content Card - 横向布局优化，响应式尺寸 */}
-          <div 
-            id="invite-poster-content" 
+          <div
+            id="invite-poster-content"
             className={`w-full ${isSmallScreen ? 'max-w-[360px]' : 'max-w-[420px]'} bg-gradient-to-br from-purple-50 via-purple-100/80 to-indigo-50 rounded-[3.5rem] shadow-2xl relative overflow-hidden flex flex-col animate-in zoom-in duration-400`}
           >
 
@@ -501,7 +502,7 @@ const ProfileView: React.FC = () => {
                 {/* QR Code - justify-between 自动推到底部，和头像底边对齐 */}
                 <div className={`${isSmallScreen ? 'w-[70px] h-[70px] p-1.5' : 'w-[86px] h-[86px] p-2'} bg-white rounded-xl border-2 border-slate-200 flex items-center justify-center shadow-lg`}>
                   {inviteData ? (
-                    <QRCodeSVG 
+                    <QRCodeSVG
                       value={getInviteLinkWithDomain()}
                       size={isSmallScreen ? 58 : 72}
                       level="H"
@@ -531,7 +532,7 @@ const ProfileView: React.FC = () => {
             {/* Bottom: Recent Courses - 响应式行高 */}
             <div className={`bg-white rounded-t-[2.5rem] rounded-b-[3.5rem] ${isSmallScreen ? 'p-5 pb-6' : 'p-7 pb-9'}`}>
               <h3 className={`text-center ${isSmallScreen ? 'text-[11px] mb-3' : 'text-[13px] mb-4'} font-black text-slate-400 uppercase tracking-wider`}>Recent Courses</h3>
-              
+
               {recentCourses.length > 0 ? (
                 <div className={isSmallScreen ? 'space-y-2' : 'space-y-3'}>
                   {recentCourses.slice(0, 3).map((course, index) => (
@@ -558,7 +559,7 @@ const ProfileView: React.FC = () => {
           {/* Action Buttons at the bottom */}
           <div className={`w-full ${isSmallScreen ? 'max-w-[360px]' : 'max-w-[420px]'} px-4 mt-6 space-y-3 animate-in slide-in-from-bottom-6 duration-500`}>
             {/* Share Image Button */}
-            <button 
+            <button
               onClick={handleShare}
               className="w-full bg-black py-4 rounded-[2rem] font-black text-white shadow-xl active:scale-[0.97] transition-all flex items-center justify-center gap-3"
             >
@@ -569,7 +570,7 @@ const ProfileView: React.FC = () => {
             {/* Download and Copy Link Buttons */}
             <div className="grid grid-cols-2 gap-3">
               {/* Download Image Button */}
-              <button 
+              <button
                 onClick={handleDownload}
                 className="bg-white py-3.5 rounded-[2rem] font-black text-slate-900 shadow-lg active:scale-[0.97] transition-all flex items-center justify-center gap-2 border border-slate-100"
               >
@@ -578,7 +579,7 @@ const ProfileView: React.FC = () => {
               </button>
 
               {/* Copy Link Button */}
-              <button 
+              <button
                 onClick={handleCopyLink}
                 className="bg-white py-3.5 rounded-[2rem] font-black text-slate-900 shadow-lg active:scale-[0.97] transition-all flex items-center justify-center gap-2 border border-slate-100"
               >
@@ -596,7 +597,7 @@ const ProfileView: React.FC = () => {
         <div className="fixed inset-0 z-[150] bg-black/50 backdrop-blur-sm flex items-center justify-center p-6 animate-in fade-in duration-200">
           <div className="bg-white rounded-[2.5rem] p-8 w-full max-w-sm shadow-2xl animate-in zoom-in duration-300">
             <h3 className="text-2xl font-black text-slate-900 mb-6 text-center">Edit Nickname</h3>
-            
+
             <div className="space-y-4">
               <div className="relative">
                 <input
@@ -644,16 +645,16 @@ const ProfileView: React.FC = () => {
       {toast.visible && (
         <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[200] animate-in slide-in-from-bottom-4 fade-in duration-300">
           <div className="bg-slate-900 text-white px-6 py-3.5 rounded-2xl shadow-2xl flex items-center gap-3 border border-slate-700">
-            <span 
+            <span
               className={`material-symbols-outlined text-xl ${
-                toast.type === 'success' ? 'text-green-400' : 
-                toast.type === 'error' ? 'text-red-400' : 
+                toast.type === 'success' ? 'text-green-400' :
+                toast.type === 'error' ? 'text-red-400' :
                 'text-blue-400'
-              }`} 
+              }`}
               style={{ fontVariationSettings: "'FILL' 1" }}
             >
-              {toast.type === 'success' ? 'check_circle' : 
-               toast.type === 'error' ? 'error' : 
+              {toast.type === 'success' ? 'check_circle' :
+               toast.type === 'error' ? 'error' :
                'info'}
             </span>
             <span className="text-sm font-bold">{toast.message}</span>

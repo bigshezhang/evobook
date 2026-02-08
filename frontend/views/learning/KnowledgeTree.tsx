@@ -8,13 +8,16 @@ import {
   getNodeProgress,
   updateNodeProgress,
   getUserCourses,
+  getGenerationProgress,
   DAGNode,
   buildLearningPath,
   MapMeta,
   NodeProgressItem,
   CourseListItem,
+  NodeGenerationStatus,
 } from '../../utils/api';
 import { NODE_STATUS } from '../../utils/constants';
+import { ROUTES } from '../../utils/routes';
 
 interface NodePosition {
   nodeId: number;
@@ -42,6 +45,10 @@ const KnowledgeTree: React.FC = () => {
   const [nodeProgress, setNodeProgress] = useState<NodeProgressItem[]>([]);
   const [nodePositions, setNodePositions] = useState<NodePosition[]>([]);
   const nodeRefs = useRef<Map<number, HTMLButtonElement>>(new Map());
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Generation progress state
+  const [nodeGenerationStatus, setNodeGenerationStatus] = useState<NodeGenerationStatus[]>([]);
 
   // Course navigation state
   const [allCourses, setAllCourses] = useState<CourseListItem[]>([]);
@@ -82,6 +89,15 @@ const KnowledgeTree: React.FC = () => {
         const progressData = await getNodeProgress(cidFromUrl);
         setNodeProgress(progressData.progress);
 
+        // Load generation progress
+        try {
+          const genProgress = await getGenerationProgress(cidFromUrl);
+          setNodeGenerationStatus(genProgress.nodes_status);
+        } catch (genErr) {
+          console.warn('Failed to load generation progress:', genErr);
+          // Don't fail the whole load if generation progress fails
+        }
+
       } catch (e) {
         console.error('Failed to load course data:', e);
         setError(e instanceof Error ? e.message : 'Failed to load course');
@@ -92,6 +108,62 @@ const KnowledgeTree: React.FC = () => {
 
     loadCourseData();
   }, [cidFromUrl]);
+
+  // Poll generation progress for nodes that are still generating
+  useEffect(() => {
+    if (!cidFromUrl) return;
+
+    const startPolling = () => {
+      // Clear existing interval if any
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
+
+      // Check if any nodes are still generating or pending
+      const hasGeneratingNodes = nodeGenerationStatus.some(
+        (s) => s.status === 'generating' || s.status === 'pending'
+      );
+
+      if (!hasGeneratingNodes) {
+        console.log('[KnowledgeTree] No generating nodes, polling not needed');
+        return;
+      }
+
+      console.log('[KnowledgeTree] Starting polling for generation progress');
+
+      // Poll every 2 seconds
+      pollingIntervalRef.current = setInterval(async () => {
+        try {
+          const progressData = await getGenerationProgress(cidFromUrl);
+
+          // Update node generation status
+          setNodeGenerationStatus(progressData.nodes_status);
+
+          // If all completed, stop polling
+          if (progressData.overall_status === 'completed') {
+            console.log('[KnowledgeTree] All nodes completed, stopping polling');
+            if (pollingIntervalRef.current) {
+              clearInterval(pollingIntervalRef.current);
+              pollingIntervalRef.current = null;
+            }
+          }
+        } catch (err) {
+          console.error('Failed to fetch generation progress:', err);
+        }
+      }, 2000);
+    };
+
+    startPolling();
+
+    return () => {
+      console.log('[KnowledgeTree] Cleaning up polling interval');
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
+    };
+  }, [cidFromUrl, nodeGenerationStatus]);
 
   // Group nodes by layer for DAG rendering
   const nodesByLayer = useMemo(() => {
@@ -161,12 +233,18 @@ const KnowledgeTree: React.FC = () => {
   // Color for banner
   const bannerColor = "bg-secondary";
 
-  const getNodeState = (nodeId: number): 'completed' | 'current' | 'locked' => {
+  const getNodeState = (nodeId: number): 'completed' | 'current' | 'locked' | 'generating' => {
     const progress = nodeProgress.find(p => p.node_id === nodeId);
 
     // Map backend status to frontend state
     if (progress?.status === NODE_STATUS.COMPLETED) return 'completed';
     if (progress?.status === NODE_STATUS.IN_PROGRESS || progress?.status === NODE_STATUS.UNLOCKED) return 'current';
+
+    // Check if node is still being generated
+    const genStatus = nodeGenerationStatus.find(s => s.node_id === nodeId);
+    if (genStatus && (genStatus.status === 'generating' || genStatus.status === 'pending')) {
+      return 'generating';
+    }
 
     // If no progress record, check if locked or available based on prerequisites
     const node = courseData?.nodes.find(n => n.id === nodeId);
@@ -186,9 +264,9 @@ const KnowledgeTree: React.FC = () => {
     if (state === 'locked') return;
 
     if (node.type === 'quiz') {
-      navigate(buildLearningPath('/quiz', { cid, nid: node.id }));
+      navigate(buildLearningPath(ROUTES.QUIZ, { cid, nid: node.id }));
     } else {
-      navigate(buildLearningPath('/knowledge-card', { cid, nid: node.id }));
+      navigate(buildLearningPath(ROUTES.KNOWLEDGE_CARD, { cid, nid: node.id }));
     }
   };
 
@@ -196,14 +274,14 @@ const KnowledgeTree: React.FC = () => {
   const handlePreviousCourse = () => {
     if (currentCourseIndex > 0 && allCourses.length > 0) {
       const prevCourse = allCourses[currentCourseIndex - 1];
-      navigate(buildLearningPath('/knowledge-tree', { cid: prevCourse.course_map_id }));
+      navigate(buildLearningPath(ROUTES.KNOWLEDGE_TREE, { cid: prevCourse.course_map_id }));
     }
   };
 
   const handleNextCourse = () => {
     if (currentCourseIndex < allCourses.length - 1 && allCourses.length > 0) {
       const nextCourse = allCourses[currentCourseIndex + 1];
-      navigate(buildLearningPath('/knowledge-tree', { cid: nextCourse.course_map_id }));
+      navigate(buildLearningPath(ROUTES.KNOWLEDGE_TREE, { cid: nextCourse.course_map_id }));
     }
   };
 
@@ -227,7 +305,7 @@ const KnowledgeTree: React.FC = () => {
         <h3 className="text-xl font-bold text-slate-800 mb-2">Failed to load course</h3>
         <p className="text-slate-500 text-center mb-6">{error || 'Course not found'}</p>
         <button
-          onClick={() => navigate('/courses')}
+          onClick={() => navigate(ROUTES.COURSES)}
           className="px-6 py-3 bg-secondary text-white rounded-full font-bold shadow-lg active:scale-95 transition-all"
         >
           Back to Courses
@@ -239,8 +317,8 @@ const KnowledgeTree: React.FC = () => {
   const getNodeIcon = (node: DAGNode, state: string) => {
     if (state === 'completed') return 'check_circle';
     if (state === 'locked') return 'lock';
+    if (state === 'generating') return 'sync'; // Icon for generating state
     if (node.type === 'quiz') return 'quiz';
-    if (node.type === 'boss') return 'workspace_premium';
     return 'play_circle';
   };
 
@@ -255,6 +333,12 @@ const KnowledgeTree: React.FC = () => {
       boxShadow: '0 6px 0 #000000',
       color: '#FFFFFF',
     };
+    if (state === 'generating') return {
+      backgroundColor: '#E0F2FE',
+      border: '2px solid #0EA5E9',
+      boxShadow: '0 4px 0 #BAE6FD',
+      color: '#0284C7',
+    };
     return {
       backgroundColor: '#EAEAEA',
       border: '1px solid #E5E7EB',
@@ -264,9 +348,10 @@ const KnowledgeTree: React.FC = () => {
   };
 
   const getNodeClasses = (state: string) => {
-    const base = 'transition-all duration-100 relative active:translate-y-1 active:shadow-none';
-    if (state === 'completed') return base;
-    if (state === 'current') return `${base} ring-8 ring-secondary/10`;
+    const base = 'transition-all duration-100 relative';
+    if (state === 'completed') return `${base} active:translate-y-1 active:shadow-none`;
+    if (state === 'current') return `${base} ring-8 ring-secondary/10 active:translate-y-1 active:shadow-none`;
+    if (state === 'generating') return `${base} cursor-not-allowed`;
     return `${base} cursor-not-allowed`;
   };
 
@@ -379,7 +464,7 @@ const KnowledgeTree: React.FC = () => {
 
               {/* Course Info - Centered */}
               <div
-                onClick={() => navigate(buildLearningPath('/course-detail', { cid }))}
+                onClick={() => navigate(buildLearningPath(ROUTES.COURSE_DETAIL, { cid }))}
                 className="flex-1 cursor-pointer"
               >
                 <h2 className="text-[19px] font-extrabold tracking-tight text-center mb-3 leading-tight">{courseName}</h2>
@@ -455,18 +540,38 @@ const KnowledgeTree: React.FC = () => {
                           else nodeRefs.current.delete(node.id);
                         }}
                         onClick={() => handleNodeClick(node)}
+                        disabled={state === 'locked' || state === 'generating'}
                         className={`${nodeClasses} ${widthClass} px-4 py-4 rounded-xl flex flex-col items-center justify-center gap-2`}
                         style={getNodeStyle(state)}
                       >
-                        <span
-                          className="material-symbols-outlined text-[20px] font-bold"
-                          style={{ fontVariationSettings: state === 'current' ? "'FILL' 1" : undefined }}
-                        >
-                          {icon}
-                        </span>
-                        <span className="text-[11px] font-black uppercase tracking-wide text-center leading-tight line-clamp-2">
-                          {node.title}
-                        </span>
+                        {state === 'generating' ? (
+                          <>
+                            <div className="relative">
+                              <span
+                                className="material-symbols-outlined text-[20px] font-bold animate-spin"
+                                style={{ fontVariationSettings: "'FILL' 0" }}
+                              >
+                                {icon}
+                              </span>
+                            </div>
+                            <span className="text-[11px] font-black uppercase tracking-wide text-center leading-tight line-clamp-2">
+                              {node.title}
+                            </span>
+                            <span className="text-[9px] font-semibold opacity-70">Generating...</span>
+                          </>
+                        ) : (
+                          <>
+                            <span
+                              className="material-symbols-outlined text-[20px] font-bold"
+                              style={{ fontVariationSettings: state === 'current' ? "'FILL' 1" : undefined }}
+                            >
+                              {icon}
+                            </span>
+                            <span className="text-[11px] font-black uppercase tracking-wide text-center leading-tight line-clamp-2">
+                              {node.title}
+                            </span>
+                          </>
+                        )}
                       </button>
                     );
                   })}

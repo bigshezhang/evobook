@@ -1,6 +1,7 @@
 
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import { ROUTES } from '../../utils/routes';
 
 const WelcomeView: React.FC = () => {
   const navigate = useNavigate();
@@ -27,7 +28,7 @@ const WelcomeView: React.FC = () => {
           Your journey into the world of knowledge starts here.
         </p>
         <button 
-          onClick={() => navigate('/interests')}
+          onClick={() => navigate(ROUTES.INTERESTS)}
           className="w-full h-18 py-5 rounded-full bg-black text-white font-extrabold text-xl active:scale-95 transition-all shadow-xl flex items-center justify-center gap-2"
         >
           Get Started

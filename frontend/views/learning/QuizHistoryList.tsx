@@ -7,6 +7,7 @@ import {
   QuizAttemptSummary,
   buildLearningPath,
 } from '../../utils/api';
+import { ROUTES } from '../../utils/routes';
 
 const QuizHistoryList: React.FC = () => {
   const navigate = useNavigate();
@@ -118,7 +119,7 @@ const QuizHistoryList: React.FC = () => {
             {attempts.map((attempt, idx) => (
               <div
                 key={attempt.id}
-                onClick={() => navigate(buildLearningPath('/quiz-attempt', {
+                onClick={() => navigate(buildLearningPath(ROUTES.QUIZ_ATTEMPT, {
                   cid: courseMapId,
                   nid: nodeId,
                   aid: attempt.id

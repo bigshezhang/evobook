@@ -7,6 +7,7 @@ import { buildLearningPath, getUserCourses, CourseListItem, getLearningActivitie
 import { aggregateActivitiesToHeatmap, DayActivity } from '../../utils/activityAggregator';
 import { getSelectedCharacter } from '../../utils/mascotUtils';
 import { CHARACTER_MAPPING } from '../../utils/mascotConfig';
+import { ROUTES } from '../../utils/routes';
 
 const CoursesDashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -19,6 +20,7 @@ const CoursesDashboard: React.FC = () => {
   const [coursesError, setCoursesError] = useState<string | null>(null);
   const [heatmapData, setHeatmapData] = useState<DayActivity[]>([]);
   const [isLoadingActivity, setIsLoadingActivity] = useState(true);
+  const [hoveredDay, setHoveredDay] = useState<{ day: DayActivity; x: number; y: number } | null>(null);
 
   // Load user courses from backend
   useEffect(() => {
@@ -106,7 +108,7 @@ const CoursesDashboard: React.FC = () => {
   const CourseCard: React.FC<{ course: any }> = ({ course }) => (
     <div className="flex flex-col gap-3">
       <div
-        onClick={() => navigate(buildLearningPath('/course-detail', { cid: getStoredCourseMapId() }))}
+        onClick={() => navigate(buildLearningPath(ROUTES.COURSE_DETAIL, { cid: getStoredCourseMapId() }))}
         className="aspect-square bg-[#F0EBE3] rounded-[2.5rem] overflow-hidden relative group cursor-pointer shadow-sm border border-black/5"
       >
         <img
@@ -128,7 +130,7 @@ const CoursesDashboard: React.FC = () => {
         )}
       </div>
       <div className="flex justify-between items-start gap-1 pr-1">
-        <div className="flex-1 cursor-pointer" onClick={() => navigate(buildLearningPath('/course-detail', { cid: getStoredCourseMapId() }))}>
+        <div className="flex-1 cursor-pointer" onClick={() => navigate(buildLearningPath(ROUTES.COURSE_DETAIL, { cid: getStoredCourseMapId() }))}>
           <h4 className="font-extrabold text-[15px] leading-[1.2] text-primary line-clamp-2">{course.title}</h4>
           <div className="flex items-center gap-1 mt-1">
             <span className="material-symbols-rounded text-[14px] text-amber-400" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
@@ -156,14 +158,14 @@ const CoursesDashboard: React.FC = () => {
           <h1 className="text-[32px] font-black tracking-tight text-primary">Courses</h1>
           <div className="flex items-center gap-3">
             <button
-              onClick={() => navigate('/assessment')}
+              onClick={() => navigate(ROUTES.ASSESSMENT)}
               className="flex items-center gap-2 px-4 h-11 rounded-2xl bg-white border border-slate-100 shadow-sm active:scale-95 transition-all"
             >
               <span className="material-symbols-rounded text-secondary text-[22px]" style={{ fontVariationSettings: "'FILL' 0" }}>library_add</span>
               <span className="text-[13px] font-bold text-slate-700">Create</span>
             </button>
             <button
-              onClick={() => navigate('/profile')}
+              onClick={() => navigate(ROUTES.PROFILE)}
               className="w-11 h-11 rounded-full bg-[#E0E2D1] border border-slate-100 shadow-sm flex items-center justify-center active:scale-95 transition-transform overflow-hidden"
             >
               <img 
@@ -200,30 +202,81 @@ const CoursesDashboard: React.FC = () => {
               <div className="flex justify-between items-center mb-2">
                 <h3 className="font-black text-[11px] uppercase tracking-[0.2em] text-[#9CA3AF]">Activity Graph</h3>
               </div>
-              <div className="bg-white p-5 rounded-[2.5rem] border border-slate-50 shadow-soft">
+              <div className="bg-white p-5 rounded-[2.5rem] border border-slate-50 shadow-soft relative">
                 {isLoadingActivity ? (
                   <div className="flex justify-center py-8">
                     <div className="w-4 h-4 border-2 border-secondary/20 border-t-secondary rounded-full animate-spin" />
                   </div>
                 ) : (
-                  <div className="grid grid-cols-12 gap-2">
-                    {heatmapData.map((day, i) => {
-                      // Map intensity to colors
-                      const bgColor =
-                        day.intensity === 'deep' ? 'bg-secondary' :
-                        day.intensity === 'medium' ? 'bg-secondary/60' :
-                        day.intensity === 'light' ? 'bg-accent-purple/40' :
-                        'bg-[#F3F4F6]';
+                  <>
+                    <div className="grid grid-cols-12 gap-2">
+                      {heatmapData.map((day, i) => {
+                        // Map intensity to colors
+                        const bgColor =
+                          day.intensity === 'deep' ? 'bg-secondary' :
+                          day.intensity === 'medium' ? 'bg-secondary/60' :
+                          day.intensity === 'light' ? 'bg-accent-purple/40' :
+                          'bg-[#F3F4F6]';
 
-                      return (
-                        <div
-                          key={i}
-                          className={`aspect-square rounded-[4px] ${bgColor} transition-colors cursor-pointer hover:opacity-80`}
-                          title={`${day.date}: ${day.count} ${day.count === 1 ? 'node' : 'nodes'} completed`}
-                        />
-                      );
-                    })}
-                  </div>
+                        return (
+                          <div
+                            key={i}
+                            className={`aspect-square rounded-[4px] ${bgColor} transition-all cursor-pointer hover:scale-110 hover:shadow-md relative`}
+                            onMouseEnter={(e) => {
+                              const rect = e.currentTarget.getBoundingClientRect();
+                              const containerRect = e.currentTarget.closest('.bg-white')?.getBoundingClientRect();
+                              if (containerRect) {
+                                // 计算方块中心点相对于容器的位置
+                                const cellCenterX = rect.left + rect.width / 2 - containerRect.left;
+                                const cellTopY = rect.top - containerRect.top;
+                                setHoveredDay({
+                                  day,
+                                  x: cellCenterX,
+                                  y: cellTopY
+                                });
+                              }
+                            }}
+                            onMouseLeave={() => setHoveredDay(null)}
+                          />
+                        );
+                      })}
+                    </div>
+
+                    {/* Hover Tooltip - Two Lines */}
+                    {hoveredDay && (
+                      <div
+                        className="absolute z-10 pointer-events-none animate-in fade-in duration-150"
+                        style={{
+                          left: `${hoveredDay.x}px`,
+                          top: `${hoveredDay.y - 56}px`,
+                          transform: 'translateX(-50%)'
+                        }}
+                      >
+                        <div className="bg-slate-900/95 backdrop-blur-sm text-white px-3.5 py-2 rounded-xl shadow-lg">
+                          <div className="flex flex-col items-center gap-0.5">
+                            <span className="text-[10px] font-medium opacity-60 whitespace-nowrap">{hoveredDay.day.date}</span>
+                            <span className="text-[13px] font-black whitespace-nowrap">
+                              {hoveredDay.day.count} {hoveredDay.day.count <= 1 ? 'node' : 'nodes'}
+                            </span>
+                          </div>
+                        </div>
+                        {/* Sharp triangle arrow pointing down */}
+                        <div 
+                          className="absolute"
+                          style={{
+                            left: '50%',
+                            transform: 'translateX(-50%)',
+                            bottom: '-5px',
+                            width: 0,
+                            height: 0,
+                            borderLeft: '6px solid transparent',
+                            borderRight: '6px solid transparent',
+                            borderTop: '6px solid rgba(15, 23, 42, 0.95)'
+                          }}
+                        ></div>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             </section>
@@ -265,7 +318,7 @@ const CoursesDashboard: React.FC = () => {
                   <h4 className="font-bold text-slate-700 mb-2">No courses yet</h4>
                   <p className="text-sm text-slate-500 mb-6">Create your first learning path</p>
                   <button
-                    onClick={() => navigate('/assessment')}
+                    onClick={() => navigate(ROUTES.ASSESSMENT)}
                     className="px-6 py-3 bg-secondary text-white rounded-full font-bold shadow-lg active:scale-95 transition-all"
                   >
                     Get Started
@@ -283,7 +336,7 @@ const CoursesDashboard: React.FC = () => {
                     .map((course) => (
                     <div
                       key={course.course_map_id}
-                      onClick={() => navigate(buildLearningPath('/course-detail', { cid: course.course_map_id }))}
+                      onClick={() => navigate(buildLearningPath(ROUTES.COURSE_DETAIL, { cid: course.course_map_id }))}
                       className="relative flex items-center gap-4 p-5 bg-white rounded-[2.5rem] border border-slate-50 shadow-soft group active:scale-[0.98] transition-all cursor-pointer overflow-hidden"
                     >
                       <div className="w-14 h-14 bg-lavender-pale rounded-2xl flex-shrink-0 flex items-center justify-center shadow-inner">
@@ -312,7 +365,7 @@ const CoursesDashboard: React.FC = () => {
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          navigate(buildLearningPath('/knowledge-tree', { cid: course.course_map_id }));
+                          navigate(buildLearningPath(ROUTES.KNOWLEDGE_TREE, { cid: course.course_map_id }));
                         }}
                         className="h-10 px-6 bg-black text-white rounded-full flex-shrink-0 flex items-center justify-center shadow-lg active:scale-95 transition-all"
                       >
@@ -332,7 +385,7 @@ const CoursesDashboard: React.FC = () => {
             <section>
               <div className="flex justify-between items-center mb-5">
                 <h3 className="text-[18px] font-black text-primary tracking-tight">Recommended</h3>
-                <button onClick={() => navigate('/discovery/recommended')} className="text-[12px] font-black text-secondary uppercase tracking-widest">See all</button>
+                <button onClick={() => navigate(`${ROUTES.DISCOVERY}/recommended`)} className="text-[12px] font-black text-secondary uppercase tracking-widest">See all</button>
               </div>
               <div className="grid grid-cols-2 gap-4 gap-y-8">
                 {discoveryData.recommended.map(course => <CourseCard key={course.id} course={course} />)}
@@ -343,7 +396,7 @@ const CoursesDashboard: React.FC = () => {
             <section>
               <div className="flex justify-between items-center mb-5">
                 <h3 className="text-[18px] font-black text-primary tracking-tight">Popular</h3>
-                <button onClick={() => navigate('/discovery/popular')} className="text-[12px] font-black text-secondary uppercase tracking-widest">See all</button>
+                <button onClick={() => navigate(`${ROUTES.DISCOVERY}/popular`)} className="text-[12px] font-black text-secondary uppercase tracking-widest">See all</button>
               </div>
               <div className="grid grid-cols-2 gap-4 gap-y-8">
                 {discoveryData.popular.map(course => <CourseCard key={course.id} course={course} />)}
@@ -354,7 +407,7 @@ const CoursesDashboard: React.FC = () => {
             <section>
               <div className="flex justify-between items-center mb-5">
                 <h3 className="text-[18px] font-black text-primary tracking-tight">Friends</h3>
-                <button onClick={() => navigate('/discovery/friends')} className="text-[12px] font-black text-secondary uppercase tracking-widest">See all</button>
+                <button onClick={() => navigate(`${ROUTES.DISCOVERY}/friends`)} className="text-[12px] font-black text-secondary uppercase tracking-widest">See all</button>
               </div>
               <div className="grid grid-cols-2 gap-4 gap-y-8">
                 {discoveryData.friends.map(course => <CourseCard key={course.id} course={course} />)}

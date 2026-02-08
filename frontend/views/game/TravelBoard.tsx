@@ -6,6 +6,7 @@ import BottomNav from '../../components/BottomNav';
 import Mascot from '../../components/Mascot';
 import SuccessFeedbackPill from '../../components/SuccessFeedbackPill';
 import { buildLearningPath, getActiveCourse, getCurrency, rollDice, claimReward } from '../../utils/api';
+import { ROUTES } from '../../utils/routes';
 
 type TileType = 'gold' | 'xp' | 'roll' | 'normal' | 'star' | 'gift' | 'map';
 
@@ -269,9 +270,9 @@ const TravelBoard: React.FC = () => {
           <button
             onClick={() => {
               if (activeCourseId) {
-                navigate(buildLearningPath('/knowledge-tree', { cid: activeCourseId }));
+                navigate(buildLearningPath(ROUTES.KNOWLEDGE_TREE, { cid: activeCourseId }));
               } else {
-                navigate('/courses');
+                navigate(ROUTES.COURSES);
               }
             }}
             className="flex items-center gap-2 bg-black text-white px-5 py-3 rounded-full shadow-xl active:scale-95 transition-all"

@@ -5,6 +5,7 @@ import Header from '../../components/Header';
 import SuccessFeedbackPill from '../../components/SuccessFeedbackPill';
 import { getCourseDetail, buildLearningPath } from '../../utils/api';
 import { STORAGE_KEYS } from '../../utils/constants';
+import { ROUTES } from '../../utils/routes';
 
 const CourseDetail: React.FC = () => {
   const navigate = useNavigate();
@@ -55,7 +56,7 @@ const CourseDetail: React.FC = () => {
 
   const handleConfirm = () => {
     localStorage.setItem(STORAGE_KEYS.ONBOARDING_COMPLETED, 'true');
-    navigate(buildLearningPath('/knowledge-tree', { cid: cidFromUrl }));
+    navigate(buildLearningPath(ROUTES.KNOWLEDGE_TREE, { cid: cidFromUrl }));
   };
 
   return (

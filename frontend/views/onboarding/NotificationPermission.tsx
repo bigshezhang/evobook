@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getSelectedCharacter, MascotCharacter } from '../../utils/mascotUtils';
 import { CHARACTER_MAPPING } from '../../utils/mascotConfig';
+import { ROUTES } from '../../utils/routes';
 
 const NotificationPermission: React.FC = () => {
   const navigate = useNavigate();
@@ -51,14 +52,14 @@ const NotificationPermission: React.FC = () => {
 
           <div className="space-y-4">
             <button 
-              onClick={() => navigate('/generating')}
+              onClick={() => navigate(ROUTES.GENERATING)}
               className="w-full h-16 bg-secondary text-white rounded-3xl font-bold text-xl shadow-lg hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-3"
             >
               <span className="material-symbols-outlined text-3xl">notifications</span>
               Enable Notifications
             </button>
             <button 
-              onClick={() => navigate('/generating')}
+              onClick={() => navigate(ROUTES.GENERATING)}
               className="w-full h-12 text-gray-400 font-bold text-lg hover:text-secondary transition-colors"
             >
               Start Journey

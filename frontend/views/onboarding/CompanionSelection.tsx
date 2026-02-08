@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { MascotCharacter, setSelectedCharacter } from '../../utils/mascotUtils';
 import Mascot from '../../components/Mascot';
 import { updateProfile } from '../../utils/api';
+import { ROUTES } from '../../utils/routes';
 
 const companions: { id: MascotCharacter; name: string; title: string; desc: string; icon: string; color: string; profileImage: string }[] = [
   { id: 'oliver', name: 'Oliver', title: 'Oliver the Owl', desc: 'WISE & FOCUSED', icon: 'skillet', color: 'bg-card-purple', profileImage: '/compressed_output/processed_image_profile/owl_profile.jpg' },
@@ -26,13 +27,13 @@ const CompanionSelection: React.FC = () => {
       // 2. 同步到本地存储
       setSelectedCharacter(selected.id);
 
-      // 3. 进入下一环节
-      navigate('/notifications');
+      // 3. 直接进入生成课程环节（跳过通知权限）
+      navigate(ROUTES.GENERATING);
     } catch (error) {
       console.error('Failed to save mascot:', error);
       // 即使失败也保存到本地，让用户继续
       setSelectedCharacter(selected.id);
-      navigate('/notifications');
+      navigate(ROUTES.GENERATING);
     } finally {
       setIsLoading(false);
     }
@@ -87,9 +88,9 @@ const CompanionSelection: React.FC = () => {
       <footer className="px-8 pb-10">
         <div className="flex flex-col items-center gap-6">
           <div className="w-full flex items-center gap-4">
-            <span className="text-xs font-bold text-gray-400">3 / 4</span>
+            <span className="text-xs font-bold text-gray-400">2 / 2</span>
             <div className="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden">
-              <div className="h-full bg-black rounded-full" style={{ width: '75%' }}></div>
+              <div className="h-full bg-black rounded-full" style={{ width: '100%' }}></div>
             </div>
           </div>
           <button
