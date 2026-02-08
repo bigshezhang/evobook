@@ -74,6 +74,9 @@ const GeneratingCourse: React.FC = () => {
         // Animate progress to 100%
         setState({ status: 'success', progress: 100 });
 
+        // Mark onboarding as completed
+        localStorage.setItem('evo_onboarding_completed', 'true');
+
         // Navigate to knowledge tree after brief delay
         setTimeout(() => navigate(buildLearningPath('/knowledge-tree', { cid: response.course_map_id })), 800);
       } catch (error) {

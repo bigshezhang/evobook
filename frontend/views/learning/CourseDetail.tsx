@@ -10,9 +10,7 @@ const CourseDetail: React.FC = () => {
   const [searchParams] = useSearchParams();
   const cidFromUrl = searchParams.get('cid');
 
-  const [commitment, setCommitment] = useState<'Deep' | 'Fast' | 'Light'>('Fast');
   const [velocity, setVelocity] = useState<'15m' | '30m' | '45m' | '1h'>('30m');
-  const [formats, setFormats] = useState<string[]>(['Video', 'Lab', 'Read']);
   const [showSuccess, setShowSuccess] = useState(false);
   const [isMainCourse, setIsMainCourse] = useState(false);
 
@@ -32,7 +30,6 @@ const CourseDetail: React.FC = () => {
       try {
         const data = await getCourseDetail(cidFromUrl);
         setCourseName(data.map_meta.course_name as string);
-        setCommitment(data.mode as 'Deep' | 'Fast' | 'Light');
         setTopic(data.topic);
 
         // Extract knowledge tags from node titles
@@ -47,18 +44,6 @@ const CourseDetail: React.FC = () => {
 
     loadCourseData();
   }, [cidFromUrl]);
-
-  const commitmentTimes = {
-    Deep: '20H',
-    Fast: '10H',
-    Light: '2H'
-  };
-
-  const toggleFormat = (format: string) => {
-    setFormats(prev =>
-      prev.includes(format) ? prev.filter(f => f !== format) : [...prev, format]
-    );
-  };
 
   const handleSetMainCourse = () => {
     setIsMainCourse(true);
@@ -119,24 +104,6 @@ const CourseDetail: React.FC = () => {
 
         <section className="mt-5">
           <div className="flex justify-between items-center mb-3">
-            <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Total Commitment</h3>
-            <span className="text-[13px] font-black text-charcoal">{commitmentTimes[commitment]}</span>
-          </div>
-          <div className="bg-[#F3F4F6] p-1.5 rounded-2xl flex">
-            {(['Deep', 'Fast', 'Light'] as const).map(item => (
-              <button
-                key={item}
-                onClick={() => setCommitment(item)}
-                className={`flex-1 py-3 text-[14px] font-black rounded-xl transition-all ${commitment === item ? 'bg-charcoal text-white shadow-lg' : 'text-slate-400'}`}
-              >
-                {item}
-              </button>
-            ))}
-          </div>
-        </section>
-
-        <section className="mt-5">
-          <div className="flex justify-between items-center mb-3">
             <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Daily Velocity</h3>
             <span className="text-[13px] font-black text-charcoal">30M</span>
           </div>
@@ -148,30 +115,6 @@ const CourseDetail: React.FC = () => {
                 className={`flex-1 py-3 text-[14px] font-black rounded-xl transition-all ${velocity === item ? 'bg-charcoal text-white shadow-lg' : 'text-slate-400'}`}
               >
                 {item}
-              </button>
-            ))}
-          </div>
-        </section>
-
-        <section className="mt-5 mb-10">
-          <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-3">Delivery Format</h3>
-          <div className="flex gap-3">
-            {[
-              { id: 'Video', icon: 'play_circle' },
-              { id: 'Lab', icon: 'touch_app' },
-              { id: 'Read', icon: 'description' }
-            ].map(format => (
-              <button
-                key={format.id}
-                onClick={() => toggleFormat(format.id)}
-                className={`flex-1 py-4 rounded-2xl flex items-center justify-center gap-2 border-2 transition-all active:scale-95 ${
-                  formats.includes(format.id)
-                    ? 'bg-[#F3F4F6] border-charcoal/10'
-                    : 'bg-white border-transparent text-slate-300 grayscale'
-                }`}
-              >
-                <span className="material-symbols-outlined text-[20px] font-bold">{format.icon}</span>
-                <span className="text-[13px] font-black tracking-tight">{format.id}</span>
               </button>
             ))}
           </div>

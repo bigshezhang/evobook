@@ -117,10 +117,10 @@ const TravelBoard: React.FC = () => {
           <div className="flex items-center gap-4">
             <div 
               onClick={handleRoll}
-              className={`w-16 h-16 bg-secondary rounded-[24px] flex items-center justify-center shadow-2xl transition-all ${isMoving || isRolling ? 'grayscale opacity-50' : 'active:scale-90 cursor-pointer'}`}
+              className={`w-16 h-16 claymorphic-dice rounded-[20px] flex items-center justify-center transition-all ${isMoving || isRolling ? 'grayscale opacity-50' : 'active:scale-90 cursor-pointer'}`}
             >
               <div className="grid grid-cols-2 gap-2">
-                {[...Array(4)].map((_, i) => <div key={i} className="w-2.5 h-2.5 bg-white rounded-full shadow-inner"></div>)}
+                {[...Array(4)].map((_, i) => <div key={i} className="w-2.5 h-2.5 dice-dot rounded-full"></div>)}
               </div>
             </div>
             <div className="flex flex-col">
@@ -196,16 +196,16 @@ const TravelBoard: React.FC = () => {
         <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-white/60 backdrop-blur-3xl animate-in fade-in duration-500">
            {!rollResult ? (
              <>
-               <div className="w-48 h-48 bg-secondary rounded-[48px] flex items-center justify-center animate-bounce shadow-2xl">
+               <div className="w-48 h-48 claymorphic-dice rounded-[48px] flex items-center justify-center animate-bounce">
                  <div className="grid grid-cols-2 gap-5 animate-spin">
-                   {[...Array(4)].map((_, i) => <div key={i} className="w-6 h-6 bg-white rounded-full shadow-inner"></div>)}
+                   {[...Array(4)].map((_, i) => <div key={i} className="w-6 h-6 dice-dot rounded-full"></div>)}
                  </div>
                </div>
                <h2 className="mt-12 text-4xl font-black text-slate-900 tracking-tighter italic animate-pulse uppercase">Rolling...</h2>
              </>
            ) : (
              <div className="flex flex-col items-center animate-in zoom-in duration-300">
-               <div className="w-56 h-56 bg-secondary rounded-[56px] flex items-center justify-center shadow-[0_40px_80px_rgba(124,58,237,0.5)] relative">
+               <div className="w-56 h-56 claymorphic-dice rounded-[56px] flex items-center justify-center relative">
                  <span className="text-[100px] font-black text-white drop-shadow-2xl">{rollResult}</span>
                  <div className="absolute -top-4 -right-4 w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-xl border-4 border-secondary animate-in zoom-in slide-in-from-bottom-2">
                     <span className="material-symbols-rounded text-secondary text-3xl font-black">check</span>

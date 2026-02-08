@@ -130,11 +130,10 @@ const AssessmentChat: React.FC = () => {
       // Save data and navigate after a brief delay
       setTimeout(() => {
         localStorage.setItem('evo_onboarding_data', JSON.stringify(response.data));
-        localStorage.setItem('evo_onboarding_completed', 'true');
         // Clear the selected topic as it's no longer needed
         localStorage.removeItem(STORAGE_KEY_SELECTED_TOPIC);
-        // Navigate directly to course generation (skip companion and notification steps)
-        navigate('/generating');
+        // Navigate to companion selection (next step in onboarding flow)
+        navigate('/companion');
       }, 1500);
     }
   };
