@@ -13,6 +13,7 @@ interface TileData {
   type: TileType;
   icon: string;
   colorClass: string;
+  bgColor: string;
 }
 
 const TravelBoard: React.FC = () => {
@@ -47,21 +48,42 @@ const TravelBoard: React.FC = () => {
   };
 
   const generateMoreTiles = (count: number) => {
-    const types: TileType[] = ['normal', 'gold', 'map', 'gift', 'star', 'roll', 'xp', 'normal'];
-    const icons = ['circle', 'monetization_on', 'map', 'featured_seasonal_and_gifts', 'star', 'casino', 'bolt', 'circle'];
-    const colors = ['bg-white', 'clay-gold', 'clay-map', 'clay-pink', 'clay-blue', 'bg-secondary', 'clay-blue', 'bg-white'];
+    // 奖励类型和权重配置
+    const tileConfig = [
+      { type: 'normal', weight: 50, icon: '', color: 'tile-gold', bgColor: 'bg-white' },              // 50% 空地砖
+      { type: 'gold', weight: 20, icon: 'monetization_on', color: 'tile-gold', bgColor: 'bg-mute-gold' },   // 20% 金币
+      { type: 'roll', weight: 15, icon: 'casino', color: 'tile-roll', bgColor: 'bg-mute-purple' },          // 15% 骰子
+      { type: 'gift', weight: 15, icon: 'redeem', color: 'tile-gift', bgColor: 'bg-mute-pink' },            // 15% 特殊奖励
+    ];
+
+    // 计算总权重
+    const totalWeight = tileConfig.reduce((sum, config) => sum + config.weight, 0);
 
     const startId = pathRef.current.length;
     const newTiles: TileData[] = [];
+    
     for (let i = 0; i < count; i++) {
-      const idx = (startId + i) % types.length;
+      // 加权随机选择
+      let random = Math.random() * totalWeight;
+      let selectedConfig = tileConfig[0];
+      
+      for (const config of tileConfig) {
+        random -= config.weight;
+        if (random <= 0) {
+          selectedConfig = config;
+          break;
+        }
+      }
+
       newTiles.push({
         id: startId + i,
-        type: types[idx],
-        icon: icons[idx],
-        colorClass: colors[idx]
+        type: selectedConfig.type as TileType,
+        icon: selectedConfig.icon,
+        colorClass: selectedConfig.color,
+        bgColor: selectedConfig.bgColor
       });
     }
+    
     const updatedPath = [...pathRef.current, ...newTiles];
     pathRef.current = updatedPath;
     setPath(updatedPath);
@@ -104,9 +126,35 @@ const TravelBoard: React.FC = () => {
     
     setIsMoving(false);
     
+    // 处理落地后的奖励
     const finalTile = pathRef.current[currentStep + steps];
-    if (finalTile?.type === 'gold') {
-      setEventModal({ type: 'gold', title: 'Coins Found!', desc: 'You gained +250 Gold' });
+    if (finalTile) {
+      switch (finalTile.type) {
+        case 'gold':
+          const goldAmount = Math.floor(Math.random() * 151) + 50; // 50-200金币
+          setEventModal({ 
+            type: 'gold', 
+            title: 'Coins Found!', 
+            desc: `You gained +${goldAmount} Gold` 
+          });
+          break;
+        case 'roll':
+          setEventModal({ 
+            type: 'roll', 
+            title: 'Extra Roll!', 
+            desc: 'You gained +1 Dice Roll' 
+          });
+          break;
+        case 'gift':
+          const gifts = ['Mystery Outfit', 'Special Item', 'Limited Decoration'];
+          const randomGift = gifts[Math.floor(Math.random() * gifts.length)];
+          setEventModal({ 
+            type: 'gift', 
+            title: 'Special Reward!', 
+            desc: `You received: ${randomGift}` 
+          });
+          break;
+      }
     }
   };
 
@@ -176,7 +224,7 @@ const TravelBoard: React.FC = () => {
                 <div 
                   key={tile.id}
                   className={`absolute w-80 h-[120px] rounded-[40px] flex items-center justify-center transition-all duration-300 border-t-2 border-white/50
-                    ${isActive ? 'bg-secondary/10 ring-[6px] ring-secondary shadow-[0_30px_60px_rgba(124,58,237,0.4)]' : 'bg-white shadow-xl'}
+                    ${isActive ? 'bg-secondary/10 ring-[6px] ring-secondary shadow-[0_30px_60px_rgba(124,58,237,0.4)]' : `${tile.bgColor} shadow-xl`}
                   `}
                   style={{ 
                     left: '50%',
@@ -187,9 +235,21 @@ const TravelBoard: React.FC = () => {
                     borderBottomColor: isActive ? '#7C3AED' : '#E2E8F0',
                   }}
                 >
-                  <div className={`w-18 h-18 claymorphic-icon ${tile.colorClass} shadow-xl scale-125`}>
-                    <span className="material-symbols-outlined text-white text-4xl" style={{ fontVariationSettings: "'FILL' 1" }}>{tile.icon}</span>
-                  </div>
+                  {tile.icon ? (
+                    <div className={`tile-icon-sphere ${tile.colorClass}`}>
+                      <div className="glass-overlay"></div>
+                      {tile.type === 'roll' ? (
+                        <div className="grid grid-cols-2 gap-1.5">
+                          <div className="w-2.5 h-2.5 bg-white rounded-full opacity-90 shadow-sm"></div>
+                          <div className="w-2.5 h-2.5 bg-white rounded-full opacity-90 shadow-sm"></div>
+                          <div className="w-2.5 h-2.5 bg-white rounded-full opacity-90 shadow-sm"></div>
+                          <div className="w-2.5 h-2.5 bg-white rounded-full opacity-90 shadow-sm"></div>
+                        </div>
+                      ) : (
+                        <span className="material-symbols-outlined text-white text-[44px]" style={{ fontVariationSettings: "'FILL' 1" }}>{tile.icon}</span>
+                      )}
+                    </div>
+                  ) : null}
                 </div>
               );
             })}
@@ -237,8 +297,16 @@ const TravelBoard: React.FC = () => {
       {eventModal && (
         <div className="fixed inset-0 z-[300] flex items-center justify-center px-8 bg-black/70 backdrop-blur-md animate-in fade-in">
           <div className="w-full max-w-xs bg-white rounded-[48px] p-10 flex flex-col items-center shadow-2xl animate-in zoom-in border border-white/20">
-            <div className="w-24 h-24 bg-amber-100 text-amber-500 rounded-[28px] flex items-center justify-center mb-6 shadow-inner">
-              <span className="material-symbols-outlined text-[64px]" style={{ fontVariationSettings: "'FILL' 1" }}>monetization_on</span>
+            <div className={`w-24 h-24 rounded-[28px] flex items-center justify-center mb-6 shadow-inner ${
+              eventModal.type === 'gold' ? 'bg-amber-100 text-amber-500' :
+              eventModal.type === 'roll' ? 'bg-purple-100 text-purple-500' :
+              'bg-pink-100 text-pink-500'
+            }`}>
+              <span className="material-symbols-outlined text-[64px]" style={{ fontVariationSettings: "'FILL' 1" }}>
+                {eventModal.type === 'gold' ? 'monetization_on' :
+                 eventModal.type === 'roll' ? 'casino' :
+                 'redeem'}
+              </span>
             </div>
             <h3 className="text-2xl font-black text-slate-900 mb-2">{eventModal.title}</h3>
             <p className="text-slate-400 font-bold mb-8 text-center">{eventModal.desc}</p>
@@ -246,7 +314,7 @@ const TravelBoard: React.FC = () => {
               onClick={() => setEventModal(null)}
               className="w-full py-5 bg-black text-white rounded-full font-black uppercase tracking-widest shadow-xl active:scale-95 transition-transform"
             >
-              Collect
+              {eventModal.type === 'gift' ? 'Claim Reward' : 'Collect'}
             </button>
           </div>
         </div>

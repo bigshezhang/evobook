@@ -72,6 +72,72 @@
                 background: white;
                 box-shadow: inset 1px 1px 2px rgba(0,0,0,0.3);
             }
+
+            /* 玻璃质感地砖样式 */
+            .glass-tile {
+                position: relative;
+                overflow: hidden;
+            }
+            
+            .glass-overlay {
+                position: absolute;
+                inset: 0;
+                background: linear-gradient(135deg, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0) 50%, rgba(0,0,0,0.05) 100%);
+                pointer-events: none;
+            }
+
+            .tile-icon-sphere {
+                @apply flex items-center justify-center relative overflow-hidden;
+                width: 72px;
+                height: 72px;
+                border-radius: 24px;
+            }
+
+            /* 金币地砖 - 金色渐变 */
+            .tile-gold {
+                background: radial-gradient(circle at 30% 30%, #FCD34D, #F59E0B);
+                box-shadow: 
+                    inset 0 4px 8px rgba(255, 255, 255, 0.6),
+                    0 12px 20px -8px rgba(245, 158, 11, 0.3);
+            }
+
+            /* 骰子地砖 - 紫色渐变 */
+            .tile-roll {
+                background: radial-gradient(circle at 30% 30%, #A5B4FC, #818CF8);
+                box-shadow: 
+                    inset 0 4px 8px rgba(255, 255, 255, 0.6),
+                    0 12px 20px -8px rgba(129, 140, 248, 0.3);
+            }
+
+            /* 特殊奖励地砖 - 粉色渐变 */
+            .tile-gift {
+                background: radial-gradient(circle at 30% 30%, #FCA5A5, #F87171);
+                box-shadow: 
+                    inset 0 4px 8px rgba(255, 255, 255, 0.6),
+                    0 12px 20px -8px rgba(248, 113, 113, 0.3);
+            }
+
+            /* 经验值地砖 - 天蓝色渐变 */
+            .tile-xp {
+                background: radial-gradient(circle at 30% 30%, #7DD3FC, #38BDF8);
+                box-shadow: 
+                    inset 0 4px 8px rgba(255, 255, 255, 0.6),
+                    0 12px 20px -8px rgba(56, 189, 248, 0.3);
+            }
+
+            /* 地砖背景色 - 柔和色调 */
+            .bg-mute-gold {
+                background-color: #FFF9E6;
+            }
+            .bg-mute-purple {
+                background-color: #F5F3FF;
+            }
+            .bg-mute-pink {
+                background-color: #FFF5F5;
+            }
+            .bg-mute-blue {
+                background-color: #F0F9FF;
+            }
         }
 
         /* 关键修复：确保 Material Symbols 渲染为图标而非文字 */
