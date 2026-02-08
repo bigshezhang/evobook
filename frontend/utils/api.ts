@@ -5,14 +5,19 @@
 import { supabase } from './supabase';
 import { STORAGE_KEYS, NODE_STATUS, NODE_TYPE, LEVEL, MODE } from './constants';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+// 如果 VITE_API_BASE_URL 为空，使用空字符串（相对路径）
+// Vite 开发服务器会代理 /api 和 /healthz 请求到后端
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
 /**
  * Build request headers, injecting the Supabase auth token when available.
  */
 async function getAuthHeaders(): Promise<Record<string, string>> {
+  // Forward browser language to backend for LLM output localization
+  const browserLang = navigator.language || 'en';
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
+    'Accept-Language': browserLang,
   };
 
   try {
@@ -45,6 +50,7 @@ export interface OnboardingNextRequest {
   user_message?: string | null;
   user_choice?: string | null;
   initial_topic?: string | null;  // Pre-selected topic to skip Phase 1
+  discovery_preset_id?: string | null;  // Discovery course preset ID for context injection
 }
 
 export interface ChatResponse {
@@ -66,11 +72,36 @@ export interface FinishData {
 
 export interface FinishResponse {
   type: 'finish';
+  message: string;
   data: FinishData;
   session_id: string;
 }
 
 export type OnboardingResponse = ChatResponse | FinishResponse;
+
+// ==================== Discovery API Types ====================
+
+export interface DiscoveryCourse {
+  id: string;
+  preset_id: string;
+  title: string;
+  description: string | null;
+  image_url: string | null;
+  category: string;
+  rating: number;
+  seed_context: {
+    topic: string;
+    suggested_level: string;
+    key_concepts: string;
+    focus: string;
+    verified_concept?: string;
+  };
+}
+
+export interface DiscoveryListResponse {
+  courses: DiscoveryCourse[];
+  total: number;
+}
 
 // ==================== Course Map API Types ====================
 
@@ -316,6 +347,36 @@ async function handleApiResponse<T>(response: Response): Promise<T> {
 }
 
 // ==================== API Functions ====================
+
+/**
+ * Get discovery courses by category
+ */
+export async function getDiscoveryCourses(category?: string): Promise<DiscoveryListResponse> {
+  const headers = await getAuthHeaders();
+  const url = category
+    ? `${API_BASE_URL}/api/v1/discovery/courses?category=${category}`
+    : `${API_BASE_URL}/api/v1/discovery/courses`;
+
+  const response = await fetch(url, {
+    method: 'GET',
+    headers,
+  });
+
+  return handleApiResponse<DiscoveryListResponse>(response);
+}
+
+/**
+ * Start a discovery course (increments start_count)
+ */
+export async function startDiscoveryCourse(presetId: string): Promise<void> {
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${API_BASE_URL}/api/v1/discovery/courses/${presetId}/start`, {
+    method: 'POST',
+    headers,
+  });
+
+  await handleApiResponse(response);
+}
 
 /**
  * Call the onboarding/next endpoint to progress through onboarding flow
@@ -996,17 +1057,71 @@ export async function claimReward(request: ClaimRewardRequest): Promise<ClaimRew
   return response.json();
 }
 
+export interface ClaimGiftRequest {
+  source_details?: Record<string, any>;
+}
+
+export interface GiftItemInfo {
+  id: string;
+  name: string;
+  item_type: string;
+  image_path: string;
+  rarity: string;
+}
+
+export interface ClaimGiftResponse {
+  success: boolean;
+  reward_type: 'item' | 'gold';
+  gold_amount: number | null;
+  item: GiftItemInfo | null;
+  message: string;
+}
+
+/**
+ * Claim a gift reward from the travel board.
+ * Randomly grants an unowned item, or gold if all items owned.
+ *
+ * @param request - Gift claim request with optional source details
+ * @returns Gift reward details (item info or fallback gold)
+ */
+export async function claimGiftReward(request: ClaimGiftRequest): Promise<ClaimGiftResponse> {
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${API_BASE_URL}/api/v1/game/claim-gift`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(request),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(
+      errorData.detail?.message || `Failed to claim gift: ${response.status}`
+    );
+  }
+
+  return response.json();
+}
+
 export interface EarnExpRequest {
   exp_amount: number;
+  gold_reward?: number;
+  dice_reward?: number;
   source: string;
   source_details: Record<string, any>;
 }
 
+export interface EarnExpRewards {
+  gold: number;
+  dice_rolls: number;
+}
+
 export interface EarnExpResponse {
+  success: boolean;
   exp_earned: number;
-  new_exp: number;
+  current_exp: number;
+  current_level: number;
   level_up: boolean;
-  new_level?: number;
+  rewards: EarnExpRewards;
 }
 
 /**

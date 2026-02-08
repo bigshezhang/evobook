@@ -32,7 +32,7 @@ const Header: React.FC<HeaderProps> = ({
   };
 
   return (
-    <header className={`pt-12 px-5 pb-3 flex items-center justify-between sticky top-0 bg-white/90 backdrop-blur-md z-40 border-b border-black/[0.03] ${className}`}>
+    <header className={`pt-4 px-5 pb-3 flex items-center justify-between sticky top-0 bg-white/90 backdrop-blur-md z-40 border-b border-black/[0.03] ${className}`}>
       <div className="flex items-center gap-3">
         {showBack && (
           <button 

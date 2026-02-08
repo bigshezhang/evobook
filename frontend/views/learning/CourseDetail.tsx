@@ -6,10 +6,14 @@ import SuccessFeedbackPill from '../../components/SuccessFeedbackPill';
 import { getCourseDetail, buildLearningPath } from '../../utils/api';
 import { STORAGE_KEYS } from '../../utils/constants';
 import { ROUTES } from '../../utils/routes';
+import { useThemeColor, PAGE_THEME_COLORS } from '../../utils/themeColor';
 
 const CourseDetail: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  // 设置页面主题色（状态栏颜色）
+  useThemeColor(PAGE_THEME_COLORS.WHITE);
+
   const cidFromUrl = searchParams.get('cid');
 
   const [velocity, setVelocity] = useState<'15m' | '30m' | '45m' | '1h'>('30m');

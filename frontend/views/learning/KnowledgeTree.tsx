@@ -18,6 +18,7 @@ import {
 } from '../../utils/api';
 import { NODE_STATUS } from '../../utils/constants';
 import { ROUTES } from '../../utils/routes';
+import { useThemeColor, PAGE_THEME_COLORS } from '../../utils/themeColor';
 
 interface NodePosition {
   nodeId: number;
@@ -36,6 +37,9 @@ interface CourseData {
 const KnowledgeTree: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  // 设置页面主题色（状态栏颜色）
+  useThemeColor(PAGE_THEME_COLORS.LIGHT_BLUE_GRAY);
+
   const cidFromUrl = searchParams.get('cid');
 
   // Load course data from backend

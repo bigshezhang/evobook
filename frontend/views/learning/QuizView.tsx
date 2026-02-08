@@ -10,6 +10,7 @@ import {
   getNodeProgress,
   updateNodeProgress,
   submitQuizAttempt,
+  earnExp,
   QuizGenerateResponse,
   QuizQuestion,
   buildLearningPath,
@@ -18,8 +19,8 @@ import {
 import { heartbeatManager } from '../../utils/learningHeartbeat';
 import { useLanguage } from '../../utils/LanguageContext';
 import { getSelectedCharacter } from '../../utils/mascotUtils';
-import { CHARACTER_MAPPING } from '../../utils/mascotConfig';
 import { ROUTES } from '../../utils/routes';
+import { useThemeColor, PAGE_THEME_COLORS } from '../../utils/themeColor';
 
 interface UserAnswer {
   questionIdx: number;
@@ -30,6 +31,9 @@ const QuizView: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const language = useLanguage();
+  // 设置页面主题色（状态栏颜色）
+  useThemeColor(PAGE_THEME_COLORS.WHITE);
+
   const cidFromUrl = searchParams.get('cid');
   const nidFromUrl = searchParams.get('nid');
   const [courseMapId, setCourseMapId] = useState<string | null>(cidFromUrl);
@@ -38,6 +42,11 @@ const QuizView: React.FC = () => {
   const [submitted, setSubmitted] = useState(false);
   const [showReward, setShowReward] = useState(false);
   const [quizStats, setQuizStats] = useState({ correct: 0, total: 0, gold: 0 });
+  const [rewardData, setRewardData] = useState<{
+    diceRolls: number;
+    expEarned: number;
+    goldEarned: number;
+  }>({ diceRolls: 2, expEarned: 50, goldEarned: 0 });
 
   // Loading states
   const [initialLoading, setInitialLoading] = useState(true); // Loading course data
@@ -52,12 +61,8 @@ const QuizView: React.FC = () => {
   const [quizData, setQuizData] = useState<QuizGenerateResponse | null>(null);
   const [userAnswers, setUserAnswers] = useState<UserAnswer[]>([]);
 
-  // 获取用户当前选择的角色形象（smile_transparent）
-  const getMascotSrc = (): string => {
-    const character = getSelectedCharacter();
-    const resourceCharacter = CHARACTER_MAPPING[character];
-    return `/compressed_output/smile_transparent/${resourceCharacter}_smile.webm`;
-  };
+  // 获取当前角色（用于 Mascot 组件）
+  const currentCharacter = getSelectedCharacter();
 
   // Start/stop heartbeat when entering/leaving the quiz page
   useEffect(() => {
@@ -192,7 +197,7 @@ const QuizView: React.FC = () => {
   };
 
   const calculateScore = () => {
-    if (!quizData) return;
+    if (!quizData) return { correct: 0, total: 0, gold: 0 };
 
     let correct = 0;
     quizData.questions.forEach((q, idx) => {
@@ -213,7 +218,9 @@ const QuizView: React.FC = () => {
     });
 
     const gold = correct * 100;
-    setQuizStats({ correct, total: quizData.questions.length, gold });
+    const stats = { correct, total: quizData.questions.length, gold };
+    setQuizStats(stats);
+    return stats;
   };
 
   const getOptionClasses = (question: QuizQuestion, questionIdx: number, optionIdx: number) => {
@@ -293,7 +300,7 @@ const QuizView: React.FC = () => {
 
   if (showGreeting) {
     return (
-      <div className="relative flex flex-col h-screen bg-white font-display overflow-y-auto no-scrollbar">
+      <div className="relative flex flex-col h-screen bg-white font-display overflow-hidden">
         {/* Header with History Button */}
         <Header
           onBack={() => navigate(buildLearningPath(ROUTES.KNOWLEDGE_TREE, { cid: courseMapId }))}
@@ -311,11 +318,11 @@ const QuizView: React.FC = () => {
         <div className="absolute top-[-10%] right-[-20%] w-96 h-96 bg-accent-purple/10 rounded-full blur-[100px] pointer-events-none"></div>
         <div className="absolute bottom-[-10%] left-[-20%] w-96 h-96 bg-accent-blue/10 rounded-full blur-[100px] pointer-events-none"></div>
 
-        <div className="flex-1 flex items-center justify-center px-8 py-12 text-center">
-          <div className="animate-in fade-in zoom-in slide-in-from-bottom-8 duration-700 flex flex-col items-center max-w-sm">
-            <div className="mb-8 relative">
-              <div className="absolute inset-0 bg-slate-100 rounded-full blur-2xl scale-125 opacity-50"></div>
-              <Mascot src={getMascotSrc()} width="160" className="drop-shadow-2xl relative z-10" />
+        {/* 可滚动内容区 */}
+        <div className="flex-1 overflow-y-auto no-scrollbar px-8 pb-28 text-center">
+          <div className="animate-in fade-in zoom-in slide-in-from-bottom-8 duration-700 flex flex-col items-center max-w-sm mx-auto pt-8">
+            <div className="-mt-2 mb-4 relative w-[160px] h-[160px] mx-auto">
+              <Mascot character={currentCharacter} scene="onboarding" outfit="default" width="100%" className="drop-shadow-2xl relative z-10" />
             </div>
 
             <p className="text-[10px] font-black uppercase tracking-[0.4em] text-secondary mb-3">Assessment Ready</p>
@@ -326,7 +333,7 @@ const QuizView: React.FC = () => {
               Test your knowledge on the topics you've completed
             </p>
 
-            <div className="w-full space-y-3 mb-12">
+            <div className="w-full space-y-3">
               <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400 text-left pl-2">Topics Included:</h4>
               {completedTopics.map((topic, i) => (
                 <div key={i} className="flex items-center gap-4 bg-slate-50 p-4 rounded-3xl border border-slate-100 shadow-sm animate-in fade-in slide-in-from-left-4" style={{ animationDelay: `${i * 150}ms` }}>
@@ -337,15 +344,18 @@ const QuizView: React.FC = () => {
                 </div>
               ))}
             </div>
-
-            <button
-              onClick={handleStartQuiz}
-              className="w-full py-5 bg-black text-white rounded-[28px] font-black text-base shadow-[0_20px_40px_rgba(0,0,0,0.15)] active:scale-95 transition-all flex items-center justify-center gap-3 group"
-            >
-              Start Assessment
-              <span className="material-symbols-rounded text-xl group-hover:translate-x-1 transition-transform">bolt</span>
-            </button>
           </div>
+        </div>
+
+        {/* 固定浮动按钮 - 不随滚动移动 */}
+        <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-white via-white/95 to-transparent pt-12 z-50 pointer-events-none">
+          <button
+            onClick={handleStartQuiz}
+            className="w-full py-5 bg-black text-white rounded-[28px] font-black text-base shadow-[0_20px_40px_rgba(0,0,0,0.15)] active:scale-95 transition-all flex items-center justify-center gap-3 group pointer-events-auto"
+          >
+            Start Assessment
+            <span className="material-symbols-rounded text-xl group-hover:translate-x-1 transition-transform">bolt</span>
+          </button>
         </div>
       </div>
     );
@@ -448,9 +458,52 @@ const QuizView: React.FC = () => {
       <div className="absolute bottom-6 left-0 right-0 px-6 z-40 pointer-events-none">
         <div className="flex items-center justify-between gap-3 pointer-events-auto max-w-[400px] mx-auto">
           <button
-            onClick={() => {
+            onClick={async () => {
               if (submitted) {
-                calculateScore();
+                const stats = calculateScore();
+                // Call earnExp to actually award gold/dice/EXP
+                if (courseMapId && nodeId) {
+                  try {
+                    const expResponse = await earnExp({
+                      exp_amount: 50,
+                      gold_reward: stats.gold,
+                      dice_reward: 2,
+                      source: 'quiz_completion',
+                      source_details: {
+                        course_map_id: courseMapId,
+                        node_id: nodeId,
+                        activity_type: 'quiz_complete',
+                        score: stats.total > 0 ? Math.round((stats.correct / stats.total) * 100) : 0,
+                      },
+                    });
+
+                    setRewardData({
+                      diceRolls: expResponse.rewards.dice_rolls,
+                      expEarned: expResponse.exp_earned,
+                      goldEarned: expResponse.rewards.gold,
+                    });
+
+                    // Dispatch events for GameHeader
+                    window.dispatchEvent(new CustomEvent('exp-changed', {
+                      detail: {
+                        newExp: expResponse.current_exp,
+                        levelUp: expResponse.level_up,
+                        newLevel: expResponse.current_level,
+                        expToNextLevel: 100 + 50 * (expResponse.current_level - 1),
+                      }
+                    }));
+
+                    if (expResponse.rewards.gold > 0) {
+                      window.dispatchEvent(new CustomEvent('gold-changed', {
+                        detail: { amount: expResponse.rewards.gold }
+                      }));
+                    }
+
+                    console.log('[QuizView] Rewards earned:', expResponse);
+                  } catch (error) {
+                    console.error('[QuizView] Failed to earn rewards:', error);
+                  }
+                }
                 setShowReward(true);
               } else {
                 setSubmitted(true);
@@ -502,8 +555,9 @@ const QuizView: React.FC = () => {
           }
           navigate(buildLearningPath(ROUTES.KNOWLEDGE_TREE, { cid: courseMapId }));
         }}
-        diceRolls={2}
-        expEarned={50}
+        diceRolls={rewardData.diceRolls}
+        expEarned={rewardData.expEarned}
+        goldEarned={rewardData.goldEarned}
       />
     </div>
   );

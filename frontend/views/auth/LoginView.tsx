@@ -7,11 +7,14 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../utils/supabase';
+import { useThemeColor, PAGE_THEME_COLORS } from '../../utils/themeColor';
 
 type AuthMode = 'signin' | 'signup';
 
 const LoginView: React.FC = () => {
   const navigate = useNavigate();
+  // 设置页面主题色（状态栏颜色）
+  useThemeColor(PAGE_THEME_COLORS.WHITE);
 
   const [mode, setMode] = useState<AuthMode>('signup');
   const [email, setEmail] = useState('');

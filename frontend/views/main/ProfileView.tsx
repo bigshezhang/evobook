@@ -10,10 +10,14 @@ import { CHARACTER_MAPPING } from '../../utils/mascotConfig';
 import { QRCodeSVG } from 'qrcode.react';
 import { toPng } from 'html-to-image';
 import { ROUTES } from '../../utils/routes';
+import { useThemeColor, PAGE_THEME_COLORS } from '../../utils/themeColor';
 
 const ProfileView: React.FC = () => {
   const navigate = useNavigate();
   const { signOut, user } = useAuth();
+  // 设置页面主题色（状态栏颜色）
+  useThemeColor(PAGE_THEME_COLORS.WHITE);
+
   const [showInvite, setShowInvite] = useState(false);
   const [stats, setStats] = useState<ProfileStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -397,7 +401,7 @@ const ProfileView: React.FC = () => {
               <span className="material-symbols-outlined text-purple-500 text-xl">leaderboard</span>
             </div>
             <span className="text-xl font-black text-slate-900 leading-none">
-              {loading ? '...' : (stats?.global_rank ? `#${stats.global_rank}` : 'N/A')}
+              {loading ? '...' : (stats?.global_rank != null ? `#${stats.global_rank}` : 'N/A')}
             </span>
             <span className="text-[10px] font-black text-slate-400 mt-1 uppercase tracking-wider">Global Rank</span>
           </div>

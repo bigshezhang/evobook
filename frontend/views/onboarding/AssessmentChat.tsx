@@ -1,9 +1,11 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { onboardingNext, isChatResponse, isFinishResponse, type OnboardingResponse, STORAGE_KEYS } from '../../utils/api';
 import { STORAGE_KEY_SELECTED_TOPIC } from './InterestSelection';
 import { getSelectedCharacter, type MascotCharacter } from '../../utils/mascotUtils';
 import { ROUTES } from '../../utils/routes';
+import { useThemeColor, PAGE_THEME_COLORS } from '../../utils/themeColor';
+import { useLanguage } from '../../utils/LanguageContext';
 
 // Storage key for session data
 export const STORAGE_KEY_SESSION_ID = 'evo_assessment_session_id';
@@ -15,6 +17,13 @@ interface Message {
 
 const AssessmentChat: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  // 设置页面主题色（状态栏颜色）- 浅蓝灰色
+  useThemeColor('#F8F9FD');
+  
+  // Get language from context
+  const language = useLanguage();
+  
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [options, setOptions] = useState<string[]>([]);
@@ -23,6 +32,8 @@ const AssessmentChat: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  // Discovery preset from URL
+  const discoveryPresetId = searchParams.get('preset');
 
   // Selected topic from InterestSelection page
   const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
@@ -44,6 +55,32 @@ const AssessmentChat: React.FC = () => {
   };
 
   const mascotInfo = getMascotInfo(mascotCharacter);
+
+  // Get localized UI text based on language (for non-LLM generated text)
+  const getText = () => {
+    if (language === 'zh') {
+      return {
+        connectionError: '无法连接到服务器，请稍后重试',
+        sendError: '发送失败，请重试',
+        thinking: '思考中...',
+        customizingPath: '定制你的路径',
+        craftingModule: '创建新模块',
+        selectOption: '选择一个选项',
+        enterAnswer: '输入你的答案...',
+      };
+    }
+    return {
+      connectionError: 'Unable to connect to server, please try again later',
+      sendError: 'Failed to send, please try again',
+      thinking: 'Thinking...',
+      customizingPath: 'Customizing your path',
+      craftingModule: 'Crafting new module',
+      selectOption: 'Select an option',
+      enterAnswer: 'Enter your answer...',
+    };
+  };
+
+  const text = getText();
 
   // Function to clear all session-related data
   const clearSessionData = useCallback(() => {
@@ -119,8 +156,10 @@ const AssessmentChat: React.FC = () => {
 
         // Pass initial_topic to skip Phase 1 if topic is pre-selected
         // Backend will start at calibration phase directly
+        // If discovery_preset_id is provided, it will inject seed context
         const response = await onboardingNext({
           initial_topic: topic || undefined,
+          discovery_preset_id: discoveryPresetId || undefined,
         });
 
         // Check if component was unmounted during the request
@@ -130,7 +169,7 @@ const AssessmentChat: React.FC = () => {
       } catch (err) {
         if (!abortController.signal.aborted) {
           console.error('Failed to init session:', err);
-          setError('Unable to connect to server, please try again later');
+          setError(text.connectionError);
         }
       } finally {
         if (!abortController.signal.aborted) {
@@ -148,10 +187,10 @@ const AssessmentChat: React.FC = () => {
 
   const handleFinishResponse = (response: OnboardingResponse) => {
     if (isFinishResponse(response)) {
-      // Add final message before navigation
+      // Add LLM-generated final message before navigation
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: 'Great! I understand your learning goals. Now let me create a customized learning path for you...'
+        content: response.message
       }]);
 
       // Save data and navigate after a brief delay
@@ -159,11 +198,11 @@ const AssessmentChat: React.FC = () => {
         localStorage.setItem(STORAGE_KEYS.ONBOARDING_DATA, JSON.stringify(response.data));
         // Clear the selected topic as it's no longer needed
         localStorage.removeItem(STORAGE_KEY_SELECTED_TOPIC);
-        
+
         // Check if user has completed onboarding before
         // If yes, skip companion setup and go straight to generating
         const hasCompletedOnboarding = localStorage.getItem(STORAGE_KEYS.ONBOARDING_COMPLETED) === 'true';
-        
+
         if (hasCompletedOnboarding) {
           // Returning user: skip personal setup, go straight to course generation
           navigate(ROUTES.GENERATING);
@@ -214,7 +253,7 @@ const AssessmentChat: React.FC = () => {
       }
     } catch (err) {
       console.error('API error:', err);
-      setError('Failed to send, please try again');
+      setError(text.sendError);
       // Restore options if there were any
     } finally {
       setLoading(false);
@@ -250,7 +289,7 @@ const AssessmentChat: React.FC = () => {
             <div className="flex items-center gap-1">
               <span className={`w-1.5 h-1.5 rounded-full ${loading ? 'bg-yellow-400' : 'bg-green-400'} animate-pulse`}></span>
               <span className="text-[10px] font-bold text-black/40 uppercase tracking-tight">
-                {loading ? 'Thinking...' : (isOnboarding ? 'Customizing your path' : 'Crafting new module')}
+                {loading ? text.thinking : (isOnboarding ? text.customizingPath : text.craftingModule)}
               </span>
             </div>
           </div>
@@ -293,7 +332,7 @@ const AssessmentChat: React.FC = () => {
         ))}
 
         {/* Loading indicator */}
-        {loading && messages.length > 0 && (
+        {loading && (
           <div className="flex flex-col gap-2 max-w-[85%] self-start">
             <div className="relative bg-white p-4 rounded-bubble rounded-tl-none shadow-soft border border-white/50">
               <div className="flex gap-1">
@@ -308,7 +347,7 @@ const AssessmentChat: React.FC = () => {
         {/* Options */}
         {options.length > 0 && !loading && (
           <div className="relative bg-white p-5 rounded-bubble shadow-soft flex flex-col gap-3 border border-white/50 mt-2">
-            <span className="text-[10px] font-black text-primary uppercase tracking-widest">Select an option</span>
+            <span className="text-[10px] font-black text-primary uppercase tracking-widest">{text.selectOption}</span>
             <div className="flex flex-wrap gap-2">
               {options.map((option, index) => (
                 <button
@@ -336,7 +375,7 @@ const AssessmentChat: React.FC = () => {
         <div className="relative flex items-center">
           <input
             className="w-full bg-white h-[60px] pl-6 pr-16 rounded-input border-none shadow-soft text-[15px] placeholder:text-black/20 font-medium disabled:opacity-50"
-            placeholder="Enter your answer..."
+            placeholder={text.enterAnswer}
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}

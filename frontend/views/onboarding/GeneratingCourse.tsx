@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { generateCourseMap, STORAGE_KEYS, BUSINESS_CONFIG, FinishData, Mode, buildLearningPath } from '../../utils/api';
 import { ROUTES } from '../../utils/routes';
+import { useThemeColor, PAGE_THEME_COLORS } from '../../utils/themeColor';
 
 interface GenerationState {
   status: 'loading' | 'success' | 'error';
@@ -11,6 +12,9 @@ interface GenerationState {
 
 const GeneratingCourse: React.FC = () => {
   const navigate = useNavigate();
+  // 设置页面主题色（状态栏颜色）
+  useThemeColor(PAGE_THEME_COLORS.LIGHT_BLUE_GRAY);
+
   const [state, setState] = useState<GenerationState>({
     status: 'loading',
     progress: 0,

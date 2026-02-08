@@ -2,37 +2,41 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getSelectedCharacter, MascotCharacter } from '../../utils/mascotUtils';
-import { CHARACTER_MAPPING } from '../../utils/mascotConfig';
+import { getMascotVideoSources } from '../../utils/mascotConfig';
 import { ROUTES } from '../../utils/routes';
+import { useThemeColor, PAGE_THEME_COLORS } from '../../utils/themeColor';
 
 const NotificationPermission: React.FC = () => {
   const navigate = useNavigate();
+  // 设置页面主题色（状态栏颜色）- 浅紫色渐变背景
+  useThemeColor(PAGE_THEME_COLORS.LIGHT_PURPLE);
+
   const [character, setCharacter] = useState<MascotCharacter>(getSelectedCharacter());
 
   useEffect(() => {
     setCharacter(getSelectedCharacter());
   }, []);
 
-  // 构建视频路径 - 使用 smile_transparent 目录，不带服装
-  const getSmileVideoPath = (): string => {
-    const resourceCharacter = CHARACTER_MAPPING[character];
-    return `/compressed_output/smile_transparent/${resourceCharacter}_smile.webm`;
-  };
+  // 获取微笑视频的多格式源（HEVC for Safari, WebM for Chrome）
+  const videoSources = getMascotVideoSources(character, 'onboarding', 'default');
 
   return (
     <div className="flex flex-col h-screen bg-gradient-to-br from-[#EFE9FF] to-[#F8F7FC] font-display items-center justify-center p-6">
       <div className="w-full max-w-md bg-white rounded-[3rem] shadow-2xl overflow-hidden flex flex-col h-full">
         <div className="flex-1 relative flex flex-col items-center justify-center pt-10">
           <div className="relative w-80 h-80 transition-all">
-            <video 
+            <video
               autoPlay
               loop
               muted
               playsInline
               preload="metadata"
               className="w-full h-full object-cover rounded-[3rem] shadow-2xl"
-              src={getSmileVideoPath()}
-            />
+            >
+              {videoSources.map((s) => (
+                <source key={s.src} src={s.src} type={s.type} />
+              ))}
+            </video>
             <div className="absolute -right-4 top-10 bg-gradient-to-br from-secondary to-purple-600 text-white p-4 rounded-2xl shadow-lg border-4 border-white">
               <span className="material-symbols-outlined text-4xl">notifications_active</span>
             </div>
@@ -51,14 +55,14 @@ const NotificationPermission: React.FC = () => {
           </div>
 
           <div className="space-y-4">
-            <button 
+            <button
               onClick={() => navigate(ROUTES.GENERATING)}
               className="w-full h-16 bg-secondary text-white rounded-3xl font-bold text-xl shadow-lg hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-3"
             >
               <span className="material-symbols-outlined text-3xl">notifications</span>
               Enable Notifications
             </button>
-            <button 
+            <button
               onClick={() => navigate(ROUTES.GENERATING)}
               className="w-full h-12 text-gray-400 font-bold text-lg hover:text-secondary transition-colors"
             >

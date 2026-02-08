@@ -2,9 +2,12 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ROUTES } from '../../utils/routes';
+import { useThemeColor, PAGE_THEME_COLORS } from '../../utils/themeColor';
 
 const WelcomeView: React.FC = () => {
   const navigate = useNavigate();
+  // 设置页面主题色（状态栏颜色）
+  useThemeColor(PAGE_THEME_COLORS.WHITE);
 
   return (
     <div className="flex flex-col h-screen bg-white relative overflow-hidden">
@@ -27,7 +30,7 @@ const WelcomeView: React.FC = () => {
         <p className="text-xl text-gray-400 font-medium leading-relaxed mb-12">
           Your journey into the world of knowledge starts here.
         </p>
-        <button 
+        <button
           onClick={() => navigate(ROUTES.INTERESTS)}
           className="w-full h-18 py-5 rounded-full bg-black text-white font-extrabold text-xl active:scale-95 transition-all shadow-xl flex items-center justify-center gap-2"
         >

@@ -1,7 +1,5 @@
 
 import React, { useState, useEffect } from 'react';
-import GameHeader from '../../components/GameHeader';
-import BottomNav from '../../components/BottomNav';
 import Mascot from '../../components/Mascot';
 import SuccessFeedbackPill from '../../components/SuccessFeedbackPill';
 import { MascotOutfit, setSelectedOutfit, getSelectedOutfit } from '../../utils/mascotUtils';
@@ -28,6 +26,7 @@ const OutfitView: React.FC = () => {
   // Toast state
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
+  const [toastType, setToastType] = useState<'success' | 'error'>('success');
 
   // 获取当前穿着的服装（响应式）
   const [currentOutfit, setCurrentOutfit] = useState<MascotOutfit>(getSelectedOutfit());
@@ -116,13 +115,10 @@ const OutfitView: React.FC = () => {
     }
   };
 
-  const handlePurchase = async (itemId: string) => {
+  const handlePurchase = async (itemId: string, outfit?: MascotOutfit) => {
     setIsPurchasing(true);
     try {
       await purchaseItem({ item_id: itemId });
-
-      // 刷新商品列表
-      await loadItems();
 
       // 触发金币减少动画
       const item = items.find(i => i.id === itemId);
@@ -132,10 +128,26 @@ const OutfitView: React.FC = () => {
         }));
       }
 
+      // 购买成功后自动装备（如果是服装）
+      if (outfit) {
+        try {
+          await equipItem({ item_id: itemId, equip: true });
+          setSelectedOutfit(outfit);
+          setCurrentOutfit(outfit);
+        } catch (equipError) {
+          console.error('Auto-equip after purchase failed:', equipError);
+        }
+      }
+
+      // 刷新商品列表
+      await loadItems();
+
       setToastMessage('Purchase successful!');
+      setToastType('success');
       setShowToast(true);
     } catch (error: any) {
       console.error('Failed to purchase item:', error);
+      setToastType('error');
       if (error.code === 'INSUFFICIENT_GOLD') {
         setToastMessage('Insufficient gold!');
         setShowToast(true);
@@ -163,14 +175,14 @@ const OutfitView: React.FC = () => {
       await loadItems();
     } catch (error) {
       console.error('Failed to equip item:', error);
+      setToastType('error');
       setToastMessage('Failed to equip, please try again');
       setShowToast(true);
     }
   };
 
   return (
-    <div className="flex flex-col h-screen bg-[#F9F9F9] overflow-hidden select-none font-sans">
-      <GameHeader />
+    <div className="flex flex-col flex-1 bg-[#F9F9F9] overflow-hidden select-none font-sans">
 
       <main className="h-[35%] relative flex flex-col items-center justify-center bg-gradient-to-b from-indigo-50/30 via-purple-50/20 to-white">
         <div className="absolute w-[240px] h-[240px] bg-indigo-100/30 rounded-full blur-[60px] -z-10"></div>
@@ -296,8 +308,6 @@ const OutfitView: React.FC = () => {
         </div>
       </div>
 
-      <BottomNav activeTab="game" />
-
       {/* 购买确认弹窗 */}
       {selectedItem && (
         <div className="absolute inset-0 z-[200] flex items-center justify-center px-8 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
@@ -345,8 +355,8 @@ const OutfitView: React.FC = () => {
                     }
                     setSelectedItem(null);
                   } else {
-                    // 未拥有：购买
-                    await handlePurchase(selectedItem.id);
+                    // 未拥有：购买（服装会自动装备）
+                    await handlePurchase(selectedItem.id, selectedItem.outfit);
                     setSelectedItem(null);
                   }
                 }}
@@ -370,6 +380,7 @@ const OutfitView: React.FC = () => {
         isOpen={showToast}
         onClose={() => setShowToast(false)}
         message={toastMessage}
+        type={toastType}
       />
     </div>
   );

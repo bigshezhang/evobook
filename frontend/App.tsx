@@ -6,8 +6,6 @@ import { LanguageProvider } from './utils/LanguageContext';
 import { storeInviteCode, processPendingInvite } from './utils/inviteHandler';
 import { getUserCourses } from './utils/api';
 import { STORAGE_KEYS } from './utils/constants';
-import { getSelectedCharacter } from './utils/mascotUtils';
-import { CHARACTER_MAPPING } from './utils/mascotConfig';
 import { ROUTES } from './utils/routes';
 import SuccessFeedbackPill from './components/SuccessFeedbackPill';
 
@@ -33,6 +31,7 @@ import QuizAttemptDetail from './views/learning/QuizAttemptDetail';
 import QADetailModal from './views/learning/QADetailModal';
 
 // Game Views
+import GameLayout from './views/game/GameLayout';
 import TravelBoard from './views/game/TravelBoard';
 import OutfitView from './views/game/OutfitView';
 
@@ -158,9 +157,11 @@ const AppInternals: React.FC = () => {
         <Route path={ROUTES.QUIZ_ATTEMPT} element={<ProtectedRoute><QuizAttemptDetail /></ProtectedRoute>} />
         <Route path={ROUTES.QA_DETAIL} element={<ProtectedRoute><QADetailRouteView /></ProtectedRoute>} />
 
-        {/* Game Flow */}
-        <Route path={ROUTES.GAME} element={<ProtectedRoute><TravelBoard /></ProtectedRoute>} />
-        <Route path={ROUTES.GAME_OUTFIT} element={<ProtectedRoute><OutfitView /></ProtectedRoute>} />
+        {/* Game Flow - 使用嵌套路由共享 GameLayout，避免切换时 GameHeader 重新挂载 */}
+        <Route path="/game" element={<ProtectedRoute><GameLayout /></ProtectedRoute>}>
+          <Route index element={<TravelBoard />} />
+          <Route path="outfit" element={<OutfitView />} />
+        </Route>
 
         {/* Main Navigation Tabs */}
         <Route path={ROUTES.COURSES} element={<ProtectedRoute><CoursesDashboard /></ProtectedRoute>} />
@@ -237,31 +238,49 @@ const RootRedirect: React.FC = () => {
 };
 
 const App: React.FC = () => {
-  // 预加载用户当前选择的角色头像（关键资源）
   useEffect(() => {
-    try {
-      const character = getSelectedCharacter();
-      const resourceCharacter = CHARACTER_MAPPING[character];
-      const avatarPath = `/compressed_output/processed_image_profile/${resourceCharacter}_profile.jpg`;
-      
-      // 创建 link 标签预加载头像
-      const link = document.createElement('link');
-      link.rel = 'preload';
-      link.as = 'image';
-      link.href = avatarPath;
-      link.setAttribute('fetchpriority', 'high');
-      document.head.appendChild(link);
-      
-      return () => {
-        // 清理：移除预加载链接
-        const existingLink = document.querySelector(`link[href="${avatarPath}"]`);
-        if (existingLink) {
-          document.head.removeChild(existingLink);
+    // iOS Safari 全屏优化
+    const setupIOSFullscreen = () => {
+      // 1. 防止下拉刷新
+      document.body.addEventListener('touchmove', (e) => {
+        if (e.touches.length > 1) {
+          e.preventDefault();
+        }
+      }, { passive: false });
+
+      // 2. 滚动到顶部时隐藏地址栏
+      const hideAddressBar = () => {
+        if (window.scrollY === 0) {
+          window.scrollTo(0, 1);
         }
       };
-    } catch (error) {
-      console.debug('Failed to preload avatar:', error);
-    }
+
+      // 3. 页面加载完成后隐藏地址栏
+      window.addEventListener('load', hideAddressBar);
+      document.addEventListener('DOMContentLoaded', hideAddressBar);
+
+      // 4. iOS 设备检测并设置全屏高度
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+      if (isIOS) {
+        // 设置视口高度为实际可视高度
+        const setViewportHeight = () => {
+          const vh = window.innerHeight * 0.01;
+          document.documentElement.style.setProperty('--vh', `${vh}px`);
+        };
+
+        setViewportHeight();
+        window.addEventListener('resize', setViewportHeight);
+        window.addEventListener('orientationchange', setViewportHeight);
+
+        return () => {
+          window.removeEventListener('resize', setViewportHeight);
+          window.removeEventListener('orientationchange', setViewportHeight);
+        };
+      }
+    };
+
+    const cleanup = setupIOSFullscreen();
+    return cleanup;
   }, []);
 
   return (

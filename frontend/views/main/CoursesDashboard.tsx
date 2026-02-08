@@ -2,25 +2,35 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import BottomNav from '../../components/BottomNav';
-import SuccessFeedbackPill from '../../components/SuccessFeedbackPill';
-import { buildLearningPath, getUserCourses, CourseListItem, getLearningActivities, getStoredCourseMapId } from '../../utils/api';
+import { buildLearningPath, getUserCourses, CourseListItem, getLearningActivities, getStoredCourseMapId, getDiscoveryCourses, startDiscoveryCourse, type DiscoveryCourse } from '../../utils/api';
 import { aggregateActivitiesToHeatmap, DayActivity } from '../../utils/activityAggregator';
 import { getSelectedCharacter } from '../../utils/mascotUtils';
 import { CHARACTER_MAPPING } from '../../utils/mascotConfig';
 import { ROUTES } from '../../utils/routes';
+import { useThemeColor, PAGE_THEME_COLORS } from '../../utils/themeColor';
 
 const CoursesDashboard: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  // 设置页面主题色（状态栏颜色）
+  useThemeColor(PAGE_THEME_COLORS.WHITE);
+
   const activeTab = searchParams.get('tab') || 'mine';
   const [statusFilter, setStatusFilter] = useState<'all' | 'progress' | 'tolearn'>('all');
-  const [showAddSuccess, setShowAddSuccess] = useState(false);
   const [userCourses, setUserCourses] = useState<CourseListItem[]>([]);
   const [isLoadingCourses, setIsLoadingCourses] = useState(true);
   const [coursesError, setCoursesError] = useState<string | null>(null);
   const [heatmapData, setHeatmapData] = useState<DayActivity[]>([]);
   const [isLoadingActivity, setIsLoadingActivity] = useState(true);
   const [hoveredDay, setHoveredDay] = useState<{ day: DayActivity; x: number; y: number } | null>(null);
+  const [clickedDay, setClickedDay] = useState<{ day: DayActivity; x: number; y: number } | null>(null);
+
+  // Discovery courses state
+  const [discoveryCoursesData, setDiscoveryCoursesData] = useState<{
+    recommended: DiscoveryCourse[];
+    popular: DiscoveryCourse[];
+  }>({ recommended: [], popular: [] });
+  const [isLoadingDiscovery, setIsLoadingDiscovery] = useState(false);
 
   // Load user courses from backend
   useEffect(() => {
@@ -41,6 +51,32 @@ const CoursesDashboard: React.FC = () => {
     if (activeTab === 'mine') {
       loadUserCourses();
     }
+  }, [activeTab]);
+
+  // Load discovery courses
+  useEffect(() => {
+    const loadDiscovery = async () => {
+      if (activeTab !== 'discovery') return;
+
+      try {
+        setIsLoadingDiscovery(true);
+        const [recommended, popular] = await Promise.all([
+          getDiscoveryCourses('recommended'),
+          getDiscoveryCourses('popular'),
+        ]);
+
+        setDiscoveryCoursesData({
+          recommended: recommended.courses.slice(0, 4),
+          popular: popular.courses.slice(0, 4),
+        });
+      } catch (error) {
+        console.error('Failed to load discovery courses:', error);
+      } finally {
+        setIsLoadingDiscovery(false);
+      }
+    };
+
+    loadDiscovery();
   }, [activeTab]);
 
   // Load learning activity data for heatmap
@@ -85,40 +121,52 @@ const CoursesDashboard: React.FC = () => {
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [activeTab]);
 
+  // Close tooltip when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      // 如果点击的不是热力图容器内的元素，关闭提示框
+      if (!target.closest('[data-heatmap-container]')) {
+        setClickedDay(null);
+      }
+    };
+
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, []);
+
   // Discovery tab specific data based on the screenshot (kept for Discovery tab)
   const discoveryData = {
     recommended: [
-      { id: 1, title: 'Quantum Physics for Beginners', rating: 4.9, img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBVh0Klh6NP9xJlGoCDBYhLviF2v7kGDywuB2iqsR5JNGI77a5jPKpTPYbkMMje-F3pG_KNuL5u_N9-BOuwNUhahvEaRP8Vqr2uJmDeHVnbiJ9JkBjIvRAzDwvr_5uEJF6I7Tr8gW-yVtUGneFoqwThw77OSJboIaADXg4g3G5kWw27D620BJXojoH6XjH_JHIgnR5fHFAfxsYgmA-dRdvovRH2WqenhXO-X_RM7b0HpUvuNEqz0ReqexuKlaDGKkjHpjS1he3E_4VN' },
-      { id: 2, title: 'Modern UI Principles', rating: 4.7, img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDfyFpDVnX6bPRc7_brb8I3gZvDk5WlJpC2yBr0BdFC7YfNhCKeBuCR7vGACtp_fM-lvmVaQ3MvxTOVcfbKl69niLhNsvv9MUEPdyLYCtkeZK4YqqClWbMizn5pFcy6r1mwoBd389LYHrzCYZXsggF4ZrYkDh49bCW12VwKzL8aQC50EaL2C68uIybYjsd8tO2B6ItBD52q3tDXczyvK6fMHAR9dJ4iZIHf_2C1QjLJBf5G7Z8So-J6vMvjGXyjS4FDfUoEKUE3KHo8' }
+      { id: 1, presetId: 'quantum-physics-intro', title: 'Quantum Physics for Beginners', rating: 4.9, img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBVh0Klh6NP9xJlGoCDBYhLviF2v7kGDywuB2iqsR5JNGI77a5jPKpTPYbkMMje-F3pG_KNuL5u_N9-BOuwNUhahvEaRP8Vqr2uJmDeHVnbiJ9JkBjIvRAzDwvr_5uEJF6I7Tr8gW-yVtUGneFoqwThw77OSJboIaADXg4g3G5kWw27D620BJXojoH6XjH_JHIgnR5fHFAfxsYgmA-dRdvovRH2WqenhXO-X_RM7b0HpUvuNEqz0ReqexuKlaDGKkjHpjS1he3E_4VN' },
+      { id: 2, presetId: 'modern-ui-principles', title: 'Modern UI Principles', rating: 4.7, img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDfyFpDVnX6bPRc7_brb8I3gZvDk5WlJpC2yBr0BdFC7YfNhCKeBuCR7vGACtp_fM-lvmVaQ3MvxTOVcfbKl69niLhNsvv9MUEPdyLYCtkeZK4YqqClWbMizn5pFcy6r1mwoBd389LYHrzCYZXsggF4ZrYkDh49bCW12VwKzL8aQC50EaL2C68uIybYjsd8tO2B6ItBD52q3tDXczyvK6fMHAR9dJ4iZIHf_2C1QjLJBf5G7Z8So-J6vMvjGXyjS4FDfUoEKUE3KHo8' }
     ],
     popular: [
-      { id: 3, title: 'Generative Art AI', rating: 4.8, img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuD7eD8fqZiz9LF_Ll3fcoZ4q2Hqvmzqpi7PwKaLjlRQTDUEF3Sp4cttbewU6EnbiOaoOHX5c5Is0fTMbIyPcw79WY0EWZBbQ97QbQtv-frVlBaNqRWXNWzwApZ8pp46xTyIX5Qi80odWX6IvSXgOk6uDzszDZejO-QTMh-HnICw62HutK9NE_yC3mrBDW7o8hkbpdgE4cWAAkhWhGdFeXCQuY6Alt8pVMkpLu77g78HtsxNLh3ssbnBkEk1c2AuKGa4cWksbCAMhpku' },
-      { id: 4, title: 'Data Science Flow', rating: 4.6, img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDNckK3K3HSkhpzQSVZHPYymsoJ0u8gm1yPi10mo0wStcEj4-7dZG1bILE4rC26eIQeidX23gTSAomuuIdBTQcsQPUo-6NhA5BtSppLaGvtnSGRXN9q2ToMiVLItW_gstbmp8PSd3PNnlXgnd7ICmbVR7Qyy72hClRGspmcZ2N1FjwF4z79e8jpLpJZ05HeST0AA4nbtnmj5D-TyZZmPRLWM-OFKH-V4qA6HZFU1N6-7XvSqG1gaecWd6tQ---Siy8btKsTKNNGXl4A' }
+      { id: 3, presetId: 'generative-art-ai', title: 'Generative Art AI', rating: 4.8, img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuD7eD8fqZiz9LF_Ll3fcoZ4q2Hqvmzqpi7PwKaLjlRQTDUEF3Sp4cttbewU6EnbiOaoOHX5c5Is0fTMbIyPcw79WY0EWZBbQ97QbQtv-frVlBaNqRWXNWzwApZ8pp46xTyIX5Qi80odWX6IvSXgOk6uDzszDZejO-QTMh-HnICw62HutK9NE_yC3mrBDW7o8hkbpdgE4cWAAkhWhGdFeXCQuY6Alt8pVMkpLu77g78HtsxNLh3ssbnBkEk1c2AuKGa4cWksbCAMhpku' },
+      { id: 4, presetId: 'data-science-flow', title: 'Data Science Flow', rating: 4.6, img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDNckK3K3HSkhpzQSVZHPYymsoJ0u8gm1yPi10mo0wStcEj4-7dZG1bILE4rC26eIQeidX23gTSAomuuIdBTQcsQPUo-6NhA5BtSppLaGvtnSGRXN9q2ToMiVLItW_gstbmp8PSd3PNnlXgnd7ICmbVR7Qyy72hClRGspmcZ2N1FjwF4z79e8jpLpJZ05HeST0AA4nbtnmj5D-TyZZmPRLWM-OFKH-V4qA6HZFU1N6-7XvSqG1gaecWd6tQ---Siy8btKsTKNNGXl4A' }
     ],
     friends: [
-      { id: 5, title: 'Neural Architecture', rating: 4.9, img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBVh0Klh6NP9xJlGoCDBYhLviF2v7kGDywuB2iqsR5JNGI77a5jPKpTPYbkMMje-F3pG_KNuL5u_N9-BOuwNUhahvEaRP8Vqr2uJmDeHVnbiJ9JkBjIvRAzDwvr_5uEJF6I7Tr8gW-yVtUGneFoqwThw77OSJboIaADXg4g3G5kWw27D620BJXojoH6XjH_JHIgnR5fHFAfxsYgmA-dRdvovRH2WqenhXO-X_RM7b0HpUvuNEqz0ReqexuKlaDGKkjHpjS1he3E_4VN', hasFriends: true }
+      { id: 5, presetId: 'neural-architecture', title: 'Neural Architecture', rating: 4.9, img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBVh0Klh6NP9xJlGoCDBYhLviF2v7kGDywuB2iqsR5JNGI77a5jPKpTPYbkMMje-F3pG_KNuL5u_N9-BOuwNUhahvEaRP8Vqr2uJmDeHVnbiJ9JkBjIvRAzDwvr_5uEJF6I7Tr8gW-yVtUGneFoqwThw77OSJboIaADXg4g3G5kWw27D620BJXojoH6XjH_JHIgnR5fHFAfxsYgmA-dRdvovRH2WqenhXO-X_RM7b0HpUvuNEqz0ReqexuKlaDGKkjHpjS1he3E_4VN', hasFriends: true }
     ]
   };
 
-  const handleAddCourse = () => {
-    setShowAddSuccess(true);
+  const handleAddCourse = (presetId: string) => {
+    // 跳转到 onboarding（assessment）并传递 preset_id
+    navigate(`${ROUTES.ASSESSMENT}?preset=${presetId}`);
   };
 
   // Fixed CourseCard type definition to allow 'key' prop in maps
   const CourseCard: React.FC<{ course: any }> = ({ course }) => (
     <div className="flex flex-col gap-3">
-      <div
-        onClick={() => navigate(buildLearningPath(ROUTES.COURSE_DETAIL, { cid: getStoredCourseMapId() }))}
-        className="aspect-square bg-[#F0EBE3] rounded-[2.5rem] overflow-hidden relative group cursor-pointer shadow-sm border border-black/5"
-      >
+      <div className="aspect-square bg-[#F0EBE3] rounded-[2.5rem] overflow-hidden relative group shadow-sm border border-black/5">
         <img
           alt={course.title}
-          className="w-full h-full object-cover mix-blend-multiply opacity-90 group-hover:scale-105 transition-transform duration-500"
-          src={course.img}
+          className="w-full h-full object-cover mix-blend-multiply opacity-90"
+          src={course.image_url || ''}
           loading="lazy"
         />
         {/* Friends Avatars Overlay if applicable */}
-        {course.hasFriends && (
+        {course.category === 'friends' && (
           <div className="absolute bottom-4 left-4 flex -space-x-2">
             <div className="w-6 h-6 rounded-full border-2 border-white bg-reward-yellow flex items-center justify-center">
                <span className="material-symbols-rounded text-white text-[12px]" style={{ fontVariationSettings: "'FILL' 1" }}>lightbulb</span>
@@ -130,7 +178,7 @@ const CoursesDashboard: React.FC = () => {
         )}
       </div>
       <div className="flex justify-between items-start gap-1 pr-1">
-        <div className="flex-1 cursor-pointer" onClick={() => navigate(buildLearningPath(ROUTES.COURSE_DETAIL, { cid: getStoredCourseMapId() }))}>
+        <div className="flex-1">
           <h4 className="font-extrabold text-[15px] leading-[1.2] text-primary line-clamp-2">{course.title}</h4>
           <div className="flex items-center gap-1 mt-1">
             <span className="material-symbols-rounded text-[14px] text-amber-400" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
@@ -138,10 +186,7 @@ const CoursesDashboard: React.FC = () => {
           </div>
         </div>
         <button
-          onClick={(e) => {
-            e.stopPropagation();
-            handleAddCourse();
-          }}
+          onClick={() => handleAddCourse(course.preset_id)}
           className="w-8 h-8 min-w-[32px] bg-black rounded-full flex items-center justify-center shadow-md active:scale-90 transition-transform cursor-pointer"
         >
           <span className="material-symbols-rounded text-white text-[18px]">add</span>
@@ -168,7 +213,7 @@ const CoursesDashboard: React.FC = () => {
               onClick={() => navigate(ROUTES.PROFILE)}
               className="w-11 h-11 rounded-full bg-[#E0E2D1] border border-slate-100 shadow-sm flex items-center justify-center active:scale-95 transition-transform overflow-hidden"
             >
-              <img 
+              <img
                 src={`/compressed_output/processed_image_profile/${CHARACTER_MAPPING[getSelectedCharacter()]}_profile.jpg`}
                 alt="Profile"
                 className="w-full h-full object-cover"
@@ -202,7 +247,16 @@ const CoursesDashboard: React.FC = () => {
               <div className="flex justify-between items-center mb-2">
                 <h3 className="font-black text-[11px] uppercase tracking-[0.2em] text-[#9CA3AF]">Activity Graph</h3>
               </div>
-              <div className="bg-white p-5 rounded-[2.5rem] border border-slate-50 shadow-soft relative">
+              <div
+                className="bg-white p-5 rounded-[2.5rem] border border-slate-50 shadow-soft relative"
+                data-heatmap-container
+                onClick={(e) => {
+                  // 点击空白处关闭提示框
+                  if (e.target === e.currentTarget) {
+                    setClickedDay(null);
+                  }
+                }}
+              >
                 {isLoadingActivity ? (
                   <div className="flex justify-center py-8">
                     <div className="w-4 h-4 border-2 border-secondary/20 border-t-secondary rounded-full animate-spin" />
@@ -237,45 +291,72 @@ const CoursesDashboard: React.FC = () => {
                               }
                             }}
                             onMouseLeave={() => setHoveredDay(null)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              // 如果点击的是同一个已激活的格子，关闭提示框
+                              if (clickedDay?.day.date === day.date) {
+                                setClickedDay(null);
+                                return;
+                              }
+
+                              const rect = e.currentTarget.getBoundingClientRect();
+                              const containerRect = e.currentTarget.closest('.bg-white')?.getBoundingClientRect();
+                              if (containerRect) {
+                                const cellCenterX = rect.left + rect.width / 2 - containerRect.left;
+                                const cellTopY = rect.top - containerRect.top;
+                                setClickedDay({
+                                  day,
+                                  x: cellCenterX,
+                                  y: cellTopY
+                                });
+                                // 清除 hover 状态，避免移动端双重显示
+                                setHoveredDay(null);
+                              }
+                            }}
                           />
                         );
                       })}
                     </div>
 
-                    {/* Hover Tooltip - Two Lines */}
-                    {hoveredDay && (
-                      <div
-                        className="absolute z-10 pointer-events-none animate-in fade-in duration-150"
-                        style={{
-                          left: `${hoveredDay.x}px`,
-                          top: `${hoveredDay.y - 56}px`,
-                          transform: 'translateX(-50%)'
-                        }}
-                      >
-                        <div className="bg-slate-900/95 backdrop-blur-sm text-white px-3.5 py-2 rounded-xl shadow-lg">
-                          <div className="flex flex-col items-center gap-0.5">
-                            <span className="text-[10px] font-medium opacity-60 whitespace-nowrap">{hoveredDay.day.date}</span>
-                            <span className="text-[13px] font-black whitespace-nowrap">
-                              {hoveredDay.day.count} {hoveredDay.day.count <= 1 ? 'node' : 'nodes'}
-                            </span>
-                          </div>
-                        </div>
-                        {/* Sharp triangle arrow pointing down */}
-                        <div 
-                          className="absolute"
+                    {/* Hover/Click Tooltip - Two Lines */}
+                    {(() => {
+                      const activeDay = clickedDay || hoveredDay;
+                      if (!activeDay) return null;
+
+                      return (
+                        <div
+                          className="absolute z-10 pointer-events-none animate-in fade-in duration-150"
                           style={{
-                            left: '50%',
-                            transform: 'translateX(-50%)',
-                            bottom: '-5px',
-                            width: 0,
-                            height: 0,
-                            borderLeft: '6px solid transparent',
-                            borderRight: '6px solid transparent',
-                            borderTop: '6px solid rgba(15, 23, 42, 0.95)'
+                            left: `${activeDay.x}px`,
+                            top: `${activeDay.y - 56}px`,
+                            transform: 'translateX(-50%)'
                           }}
-                        ></div>
-                      </div>
-                    )}
+                        >
+                          <div className="bg-slate-900/95 backdrop-blur-sm text-white px-3.5 py-2 rounded-xl shadow-lg">
+                            <div className="flex flex-col items-center gap-0.5">
+                              <span className="text-[10px] font-medium opacity-60 whitespace-nowrap">{activeDay.day.date}</span>
+                              <span className="text-[13px] font-black whitespace-nowrap">
+                                {activeDay.day.count} {activeDay.day.count <= 1 ? 'node' : 'nodes'}
+                              </span>
+                            </div>
+                          </div>
+                          {/* Sharp triangle arrow pointing down */}
+                          <div
+                            className="absolute"
+                            style={{
+                              left: '50%',
+                              transform: 'translateX(-50%)',
+                              bottom: '-5px',
+                              width: 0,
+                              height: 0,
+                              borderLeft: '6px solid transparent',
+                              borderRight: '6px solid transparent',
+                              borderTop: '6px solid rgba(15, 23, 42, 0.95)'
+                            }}
+                          ></div>
+                        </div>
+                      );
+                    })()}
                   </>
                 )}
               </div>
@@ -387,9 +468,13 @@ const CoursesDashboard: React.FC = () => {
                 <h3 className="text-[18px] font-black text-primary tracking-tight">Recommended</h3>
                 <button onClick={() => navigate(`${ROUTES.DISCOVERY}/recommended`)} className="text-[12px] font-black text-secondary uppercase tracking-widest">See all</button>
               </div>
-              <div className="grid grid-cols-2 gap-4 gap-y-8">
-                {discoveryData.recommended.map(course => <CourseCard key={course.id} course={course} />)}
-              </div>
+              {isLoadingDiscovery ? (
+                <div className="text-center py-8 text-slate-400">Loading...</div>
+              ) : (
+                <div className="grid grid-cols-2 gap-4 gap-y-8">
+                  {discoveryCoursesData.recommended.map(course => <CourseCard key={course.id} course={course} />)}
+                </div>
+              )}
             </section>
 
             {/* Popular */}
@@ -398,27 +483,19 @@ const CoursesDashboard: React.FC = () => {
                 <h3 className="text-[18px] font-black text-primary tracking-tight">Popular</h3>
                 <button onClick={() => navigate(`${ROUTES.DISCOVERY}/popular`)} className="text-[12px] font-black text-secondary uppercase tracking-widest">See all</button>
               </div>
-              <div className="grid grid-cols-2 gap-4 gap-y-8">
-                {discoveryData.popular.map(course => <CourseCard key={course.id} course={course} />)}
-              </div>
-            </section>
-
-            {/* Friends */}
-            <section>
-              <div className="flex justify-between items-center mb-5">
-                <h3 className="text-[18px] font-black text-primary tracking-tight">Friends</h3>
-                <button onClick={() => navigate(`${ROUTES.DISCOVERY}/friends`)} className="text-[12px] font-black text-secondary uppercase tracking-widest">See all</button>
-              </div>
-              <div className="grid grid-cols-2 gap-4 gap-y-8">
-                {discoveryData.friends.map(course => <CourseCard key={course.id} course={course} />)}
-              </div>
+              {isLoadingDiscovery ? (
+                <div className="text-center py-8 text-slate-400">Loading...</div>
+              ) : (
+                <div className="grid grid-cols-2 gap-4 gap-y-8">
+                  {discoveryCoursesData.popular.map(course => <CourseCard key={course.id} course={course} />)}
+                </div>
+              )}
             </section>
 
           </div>
         )}
       </main>
 
-      <SuccessFeedbackPill isOpen={showAddSuccess} onClose={() => setShowAddSuccess(false)} />
       <BottomNav activeTab="courses" />
     </div>
   );

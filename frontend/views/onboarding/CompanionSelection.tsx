@@ -5,6 +5,7 @@ import { MascotCharacter, setSelectedCharacter } from '../../utils/mascotUtils';
 import Mascot from '../../components/Mascot';
 import { updateProfile } from '../../utils/api';
 import { ROUTES } from '../../utils/routes';
+import { useThemeColor, PAGE_THEME_COLORS } from '../../utils/themeColor';
 
 const companions: { id: MascotCharacter; name: string; title: string; desc: string; icon: string; color: string; profileImage: string }[] = [
   { id: 'oliver', name: 'Oliver', title: 'Oliver the Owl', desc: 'WISE & FOCUSED', icon: 'skillet', color: 'bg-card-purple', profileImage: '/compressed_output/processed_image_profile/owl_profile.jpg' },
@@ -14,8 +15,10 @@ const companions: { id: MascotCharacter; name: string; title: string; desc: stri
 
 const CompanionSelection: React.FC = () => {
   const navigate = useNavigate();
-  const [selected, setSelected] = useState(companions[0]);
+  // 设置页面主题色（状态栏颜色）
+  useThemeColor(PAGE_THEME_COLORS.LIGHT_GRAY);
 
+  const [selected, setSelected] = useState(companions[0]);
   const [isLoading, setIsLoading] = useState(false);
 
   const handleContinue = async () => {

@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { STORAGE_KEYS } from '../../utils/constants';
 import { ROUTES } from '../../utils/routes';
+import { useThemeColor, PAGE_THEME_COLORS } from '../../utils/themeColor';
 
 // Re-export for backward compatibility
 export const STORAGE_KEY_SELECTED_TOPIC = STORAGE_KEYS.SELECTED_TOPIC;
@@ -22,35 +23,49 @@ const interests = [
 
 const InterestSelection: React.FC = () => {
   const navigate = useNavigate();
+  // 设置页面主题色（状态栏颜色）
+  useThemeColor(PAGE_THEME_COLORS.LIGHT_GRAY);
+
   // Single selection mode: only one interest can be selected at a time
   const [selected, setSelected] = useState<string | null>(null);
   const [topicInput, setTopicInput] = useState('');
 
   // Mutual exclusion logic:
   // - If topic input has text, interest buttons are disabled
-  // - If an interest is selected, input is disabled and cleared
+  // - If an interest is selected, input shows the selection (can be clicked to clear)
   const hasTopicInput = topicInput.trim().length > 0;
   const hasSelectedInterest = selected !== null;
 
   const handleInterestClick = (id: string) => {
-    // If input has text, buttons are disabled - shouldn't reach here
+    // If input has text, buttons are disabled
     if (hasTopicInput) return;
 
     // Toggle selection: click selected interest to deselect
     if (selected === id) {
       setSelected(null);
     } else {
-      // Select new interest, clear any input
+      // Select new interest
       setSelected(id);
-      setTopicInput('');
     }
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    // If an interest is selected, input is disabled - shouldn't reach here
-    if (hasSelectedInterest) return;
-
+    // Clear selected interest when user starts typing
+    if (hasSelectedInterest) {
+      setSelected(null);
+    }
     setTopicInput(e.target.value);
+  };
+
+  const handleInputFocus = () => {
+    // Clear selected interest when user clicks/focuses on input
+    if (hasSelectedInterest) {
+      setSelected(null);
+    }
+  };
+
+  const handleClearInput = () => {
+    setTopicInput('');
   };
 
   // Determine the topic to save
@@ -89,21 +104,30 @@ const InterestSelection: React.FC = () => {
           Which world <br /> do you want to <br /> explore?
         </h1>
         <div className="relative">
-          <span className={`material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 ${hasSelectedInterest ? 'text-gray-300' : 'text-gray-400'}`}>edit</span>
+          <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">edit</span>
           <input
             type="text"
             value={topicInput}
             onChange={handleInputChange}
-            disabled={hasSelectedInterest}
-            placeholder={hasSelectedInterest ? `Selected: ${interests.find(i => i.id === selected)?.label}` : "Enter your learning topic (e.g., Python, Machine Learning)..."}
-            className={`w-full pl-12 pr-4 py-4 bg-white border-none rounded-2xl shadow-sm text-lg focus:ring-2 focus:ring-black/20 transition-all ${
-              hasSelectedInterest ? 'opacity-50 cursor-not-allowed' : ''
+            onFocus={handleInputFocus}
+            placeholder={hasSelectedInterest ? `Selected: ${interests.find(i => i.id === selected)?.label} (Click to change)` : "Enter your learning topic (e.g., Python, Machine Learning)..."}
+            className={`w-full pl-12 py-4 bg-white border-2 border-secondary/40 rounded-2xl shadow-sm text-lg focus:ring-2 focus:ring-secondary focus:border-secondary transition-all ${
+              hasTopicInput ? 'pr-14' : 'pr-4'
             }`}
           />
+          {hasTopicInput && (
+            <button
+              onClick={handleClearInput}
+              className="absolute right-4 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center rounded-full bg-gray-200 hover:bg-gray-300 active:scale-95 transition-all"
+              type="button"
+            >
+              <span className="material-symbols-outlined text-gray-600 text-xl">close</span>
+            </button>
+          )}
         </div>
       </header>
 
-      <main className="flex-1 overflow-y-auto px-8 no-scrollbar pb-32">
+      <main className="flex-1 overflow-y-auto px-8 pt-4 no-scrollbar pb-32">
         <div className="grid grid-cols-3 gap-3">
           {interests.map(item => {
             const isSelected = selected === item.id;

@@ -1,11 +1,10 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import GameHeader from '../../components/GameHeader';
-import BottomNav from '../../components/BottomNav';
 import Mascot from '../../components/Mascot';
 import SuccessFeedbackPill from '../../components/SuccessFeedbackPill';
-import { buildLearningPath, getActiveCourse, getCurrency, rollDice, claimReward } from '../../utils/api';
+import { buildLearningPath, getActiveCourse, getCurrency, rollDice, claimReward, claimGiftReward } from '../../utils/api';
+import type { ClaimGiftResponse } from '../../utils/api';
 import { ROUTES } from '../../utils/routes';
 
 type TileType = 'gold' | 'xp' | 'roll' | 'normal' | 'star' | 'gift' | 'map';
@@ -25,18 +24,25 @@ const TravelBoard: React.FC = () => {
   const [isMoving, setIsMoving] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
   const [isJumping, setIsJumping] = useState(false);
-  const [eventModal, setEventModal] = useState<{ type: string; title: string; desc: string; reward?: number } | null>(null);
+  const [eventModal, setEventModal] = useState<{
+    type: string;
+    title: string;
+    desc: string;
+    reward?: number;
+    giftItem?: { name: string; item_type: string; image_path: string; rarity: string } | null;
+  } | null>(null);
   const [activeCourseId, setActiveCourseId] = useState<string | null>(null);
 
   // Toast state
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
+  const [toastType, setToastType] = useState<'success' | 'error'>('success');
 
   const [path, setPath] = useState<TileData[]>([]);
   const pathRef = useRef<TileData[]>([]);
 
   // 骰子动画状态
-  const [rollsLeft, setRollsLeft] = useState(15);
+  const [rollsLeft, setRollsLeft] = useState(0);
   const [showRollChange, setShowRollChange] = useState<number | null>(null);
   const [rollAnimating, setRollAnimating] = useState(false);
 
@@ -115,16 +121,17 @@ const TravelBoard: React.FC = () => {
 
     console.log('🎲 Rolling dice, rolls left before:', rollsLeft);
 
-    // 先扣减骰子次数并触发动画（让用户先看到 -1 动画）
+    // 乐观更新：立即扣减骰子数量，让用户马上看到数字变化
+    setRollsLeft(prev => prev - 1);
     setShowRollChange(-1);
     setRollAnimating(true);
 
     console.log('🎲 Animation triggered: shake + float');
 
-    setTimeout(() => setShowRollChange(null), 800);
+    setTimeout(() => setShowRollChange(null), 900);
     setTimeout(() => setRollAnimating(false), 500);
 
-    // 延迟 600ms 后再显示掷骰遮罩，让 -1 动画先播放完
+    // 延迟 900ms 后再显示掷骰遮罩，让 -1 动画完整播放
     setTimeout(async () => {
       setIsRolling(true);
       setRollResult(null);
@@ -136,7 +143,7 @@ const TravelBoard: React.FC = () => {
           current_position: currentStep,
         });
 
-        // 更新骰子数量
+        // 用后端真实值同步骰子数量（修正乐观更新的偏差）
         setRollsLeft(response.dice_rolls_remaining);
 
         // 显示掷骰结果
@@ -152,7 +159,11 @@ const TravelBoard: React.FC = () => {
         console.error('Failed to roll dice:', error);
         setIsRolling(false);
 
+        // 回滚乐观更新
+        setRollsLeft(prev => prev + 1);
+
         // 显示错误提示
+        setToastType('error');
         if (error.code === 'INSUFFICIENT_DICE') {
           setToastMessage('Insufficient dice!');
           setShowToast(true);
@@ -161,7 +172,7 @@ const TravelBoard: React.FC = () => {
           setShowToast(true);
         }
       }
-    }, 600);
+    }, 900);
   };
 
   const startTravel = async (steps: number) => {
@@ -213,13 +224,45 @@ const TravelBoard: React.FC = () => {
           });
           break;
         case 'gift':
-          const gifts = ['Mystery Outfit', 'Special Item', 'Limited Decoration'];
-          const randomGift = gifts[Math.floor(Math.random() * gifts.length)];
-          setEventModal({
-            type: 'gift',
-            title: 'Special Reward!',
-            desc: `You received: ${randomGift}`
-          });
+          if (activeCourseId) {
+            try {
+              const giftResult: ClaimGiftResponse = await claimGiftReward({
+                source_details: {
+                  course_map_id: activeCourseId,
+                  tile_position: currentStep + steps,
+                  tile_type: 'gift',
+                },
+              });
+
+              if (giftResult.reward_type === 'item' && giftResult.item) {
+                setEventModal({
+                  type: 'gift',
+                  title: 'New Item!',
+                  desc: `You received: ${giftResult.item.name}`,
+                  giftItem: giftResult.item,
+                });
+              } else {
+                // Fallback: all items owned, got gold instead
+                setEventModal({
+                  type: 'gold',
+                  title: 'Bonus Gold!',
+                  desc: `You own everything! +${giftResult.gold_amount} Gold`,
+                  reward: giftResult.gold_amount ?? 0,
+                });
+                // Update gold display
+                setTimeout(() => {
+                  window.dispatchEvent(new CustomEvent('gold-changed', { detail: { amount: giftResult.gold_amount } }));
+                }, 200);
+              }
+            } catch (error) {
+              console.error('Failed to claim gift reward:', error);
+              setEventModal({
+                type: 'gift',
+                title: 'Special Reward!',
+                desc: 'Something went wrong, please try again later.',
+              });
+            }
+          }
           break;
       }
     }
@@ -233,8 +276,7 @@ const TravelBoard: React.FC = () => {
   }, [path, currentStep]);
 
   return (
-    <div className="relative h-screen flex flex-col bg-[#EBEDF5] overflow-hidden select-none font-sans">
-      <GameHeader />
+    <div className="relative flex-1 flex flex-col bg-[#EBEDF5] overflow-hidden select-none font-sans">
 
       <main className="flex-1 relative perspective-container overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-b from-secondary/5 via-transparent to-white/95 pointer-events-none z-10"></div>
@@ -257,10 +299,10 @@ const TravelBoard: React.FC = () => {
 
               {/* 飘出的变化数字 */}
               {showRollChange !== null && (
-                <span className={`absolute -top-2 -right-6 font-black text-lg pointer-events-none ${
+                <span className={`absolute -top-1 left-1/2 -translate-x-1/2 font-black text-xl pointer-events-none z-[110] ${
                   showRollChange > 0
-                    ? 'text-green-500 animate-float-up'
-                    : 'text-red-400 animate-fade-out-left'
+                    ? 'text-emerald-500 animate-float-up'
+                    : 'text-red-500 animate-float-up'
                 }`}>
                   {showRollChange > 0 ? `+${showRollChange}` : showRollChange}
                 </span>
@@ -377,17 +419,47 @@ const TravelBoard: React.FC = () => {
       {eventModal && (
         <div className="fixed inset-0 z-[300] flex items-center justify-center px-8 bg-black/70 backdrop-blur-md animate-in fade-in">
           <div className="w-full max-w-xs bg-white rounded-[48px] p-10 flex flex-col items-center shadow-2xl animate-in zoom-in border border-white/20">
-            <div className={`w-24 h-24 rounded-[28px] flex items-center justify-center mb-6 shadow-inner ${
-              eventModal.type === 'gold' ? 'bg-amber-100 text-amber-500' :
-              eventModal.type === 'roll' ? 'bg-purple-100 text-purple-500' :
-              'bg-pink-100 text-pink-500'
-            }`}>
-              <span className="material-symbols-outlined text-[64px]" style={{ fontVariationSettings: "'FILL' 1" }}>
-                {eventModal.type === 'gold' ? 'monetization_on' :
-                 eventModal.type === 'roll' ? 'casino' :
-                 'redeem'}
-              </span>
-            </div>
+            {/* Gift 类型展示物品图片，其他类型展示 icon */}
+            {eventModal.type === 'gift' && eventModal.giftItem ? (
+              <div className="w-28 h-28 rounded-[28px] flex items-center justify-center mb-6 bg-pink-50 shadow-inner overflow-hidden">
+                {eventModal.giftItem.item_type === 'clothes' ? (
+                  eventModal.giftItem.name === 'default' ? (
+                    <span className="material-symbols-outlined text-[64px] text-pink-400" style={{ fontVariationSettings: "'FILL' 1" }}>checkroom</span>
+                  ) : (
+                    <img
+                      src={`/compressed_output/cloth_processed/${eventModal.giftItem.name}.webp`}
+                      alt={eventModal.giftItem.name}
+                      className="w-full h-full object-contain p-2"
+                    />
+                  )
+                ) : (
+                  <img
+                    src={`/compressed_output/furniture_processed/${eventModal.giftItem.image_path}`}
+                    alt={eventModal.giftItem.name}
+                    className="w-full h-full object-contain p-2"
+                  />
+                )}
+              </div>
+            ) : (
+              <div className={`w-24 h-24 rounded-[28px] flex items-center justify-center mb-6 shadow-inner ${
+                eventModal.type === 'gold' ? 'bg-amber-100 text-amber-500' :
+                eventModal.type === 'roll' ? 'bg-purple-100 text-purple-500' :
+                'bg-pink-100 text-pink-500'
+              }`}>
+                <span className="material-symbols-outlined text-[64px]" style={{ fontVariationSettings: "'FILL' 1" }}>
+                  {eventModal.type === 'gold' ? 'monetization_on' :
+                   eventModal.type === 'roll' ? 'casino' :
+                   'redeem'}
+                </span>
+              </div>
+            )}
+            {eventModal.giftItem?.rarity && eventModal.giftItem.rarity !== 'common' && (
+              <span className={`text-[10px] font-black uppercase tracking-widest mb-1 ${
+                eventModal.giftItem.rarity === 'legendary' ? 'text-amber-500' :
+                eventModal.giftItem.rarity === 'epic' ? 'text-purple-500' :
+                'text-blue-500'
+              }`}>{eventModal.giftItem.rarity}</span>
+            )}
             <h3 className="text-2xl font-black text-slate-900 mb-2">{eventModal.title}</h3>
             <p className="text-slate-400 font-bold mb-8 text-center">{eventModal.desc}</p>
             <button
@@ -395,7 +467,7 @@ const TravelBoard: React.FC = () => {
                 const modal = eventModal;
                 setEventModal(null);
 
-                // 弹窗关闭后，调用后端 API 领取奖励
+                // 弹窗关闭后，调用后端 API 领取奖励（gift 类型已在落地时入库，无需再调用）
                 if (modal && activeCourseId) {
                   try {
                     if (modal.type === 'gold' && modal.reward) {
@@ -440,6 +512,7 @@ const TravelBoard: React.FC = () => {
                         setTimeout(() => setRollAnimating(false), 500);
                       }, 200);
                     }
+                    // gift 类型：已在 startTravel 中完成 API 调用和入库，此处无需处理
                   } catch (error) {
                     console.error('Failed to claim reward:', error);
                     // 即使 API 失败也显示动画（乐观更新）
@@ -469,9 +542,8 @@ const TravelBoard: React.FC = () => {
         isOpen={showToast}
         onClose={() => setShowToast(false)}
         message={toastMessage}
+        type={toastType}
       />
-
-      <BottomNav activeTab="game" />
     </div>
   );
 };

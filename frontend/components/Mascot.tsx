@@ -1,18 +1,20 @@
 
-import React, { useState, useEffect } from 'react';
-import { 
+import React, { useState, useEffect, useRef } from 'react';
+import {
   getMascotResourcePath,
+  getMascotVideoSources,
   getResourceType,
-  MascotCharacter, 
+  MascotCharacter,
   MascotOutfit,
   SceneType,
   getSelectedCharacter,
   getSelectedOutfit
 } from '../utils/mascotUtils';
+import type { VideoSource } from '../utils/mascotConfig';
 
 interface MascotProps {
   character?: MascotCharacter;
-  scene?: SceneType;           // 场景类型（新）
+  scene?: SceneType;           // 场景类型
   outfit?: MascotOutfit;
   width?: string | number;
   className?: string;
@@ -21,12 +23,12 @@ interface MascotProps {
   autoPlay?: boolean;          // 视频自动播放控制
 }
 
-const Mascot: React.FC<MascotProps> = ({ 
-  character, 
+const Mascot: React.FC<MascotProps> = ({
+  character,
   scene = 'default',
-  outfit, 
-  width = "100%", 
-  className = "", 
+  outfit,
+  width = "100%",
+  className = "",
   style = {},
   src,
   autoPlay = true
@@ -34,8 +36,9 @@ const Mascot: React.FC<MascotProps> = ({
   // 获取当前角色和服装，优先使用 props，否则从 localStorage 读取
   const activeCharacter = character || getSelectedCharacter();
   const activeOutfit = outfit || getSelectedOutfit();
-  
+
   const [currentSrc, setCurrentSrc] = useState<string>(src || '');
+  const [videoSources, setVideoSources] = useState<VideoSource[]>([]);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [hasError, setHasError] = useState(false);
 
@@ -43,14 +46,12 @@ const Mascot: React.FC<MascotProps> = ({
   useEffect(() => {
     const handleCharacterChange = () => {
       if (!character) {
-        // 如果组件没有指定 character，则响应全局变化
         updateResource();
       }
     };
 
     const handleOutfitChange = () => {
       if (!outfit) {
-        // 如果组件没有指定 outfit，则响应全局变化
         updateResource();
       }
     };
@@ -68,18 +69,24 @@ const Mascot: React.FC<MascotProps> = ({
     if (src) return; // 如果有自定义 src，不自动更新
 
     try {
-      const newPath = getMascotResourcePath(
-        activeCharacter,
-        scene,
-        activeOutfit
-      );
-      
+      const resourceType = getResourceType(scene);
+
       setIsTransitioning(true);
       setHasError(false);
 
-      // 启用动态加载
       const timer = setTimeout(() => {
-        setCurrentSrc(newPath);
+        if (resourceType === 'video') {
+          // 视频场景：生成多格式 source 列表
+          const sources = getMascotVideoSources(activeCharacter, scene, activeOutfit);
+          setVideoSources(sources);
+          // currentSrc 用作 key 触发重新渲染
+          setCurrentSrc(sources[sources.length - 1]?.src || '');
+        } else {
+          // 图片场景：单路径
+          const newPath = getMascotResourcePath(activeCharacter, scene, activeOutfit);
+          setVideoSources([]);
+          setCurrentSrc(newPath);
+        }
         setIsTransitioning(false);
       }, 200);
 
@@ -87,7 +94,7 @@ const Mascot: React.FC<MascotProps> = ({
     } catch (error) {
       console.error('Failed to load mascot resource:', error);
       setHasError(true);
-      setCurrentSrc(''); // 不显示 fallback 图片
+      setCurrentSrc('');
     }
   };
 
@@ -95,17 +102,19 @@ const Mascot: React.FC<MascotProps> = ({
     updateResource();
   }, [activeCharacter, activeOutfit, scene, src]);
 
-  // 错误处理
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  // 资源加载失败处理
   const handleError = () => {
     console.warn(`Failed to load mascot resource: ${currentSrc}`);
     if (!hasError) {
       setHasError(true);
-      setCurrentSrc(''); // 不显示 fallback 图片
+      setCurrentSrc('');
     }
   };
 
   // 判断资源类型
-  const resourceType = src 
+  const resourceType = src
     ? (currentSrc.match(/\.(mp4|webm|mov|ogg)$/i) ? 'video' : 'image')
     : getResourceType(scene);
 
@@ -115,22 +124,30 @@ const Mascot: React.FC<MascotProps> = ({
   }
 
   return (
-    <div 
+    <div
       className={`relative inline-block transition-opacity duration-300 ${isTransitioning ? 'opacity-70' : 'opacity-100'} ${className}`}
       style={{ width, ...style }}
     >
       {resourceType === 'video' ? (
         <video
+          ref={videoRef}
           key={currentSrc}
-          src={currentSrc}
           className="w-full h-full pointer-events-none object-contain"
           autoPlay={autoPlay}
           loop
           muted
           playsInline
-          preload="metadata"
-          onError={handleError}
-        />
+          preload="auto"
+        >
+          {/* 自定义 src 直接用单 source；否则用浏览器最佳格式 */}
+          {src ? (
+            <source src={currentSrc} onError={handleError} />
+          ) : (
+            videoSources.map((s) => (
+              <source key={s.src} src={s.src} type={s.type} onError={handleError} />
+            ))
+          )}
+        </video>
       ) : (
         <img
           key={currentSrc}

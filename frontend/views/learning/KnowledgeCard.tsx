@@ -21,6 +21,7 @@ import {
 import { heartbeatManager } from '../../utils/learningHeartbeat';
 import { useLanguage } from '../../utils/LanguageContext';
 import { ROUTES } from '../../utils/routes';
+import { useThemeColor, PAGE_THEME_COLORS } from '../../utils/themeColor';
 
 // Page break delimiter used in markdown from API
 const PAGE_BREAK_DELIMITER = '<EVOBK_PAGE_BREAK />';
@@ -342,6 +343,9 @@ const ParsedContentRenderer: React.FC<{ content: string }> = ({ content }) => {
 const KnowledgeCard: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  // 设置页面主题色（状态栏颜色）
+  useThemeColor(PAGE_THEME_COLORS.WHITE);
+  
   const cidFromUrl = searchParams.get('cid');
   const nidFromUrl = searchParams.get('nid');
 
@@ -354,8 +358,9 @@ const KnowledgeCard: React.FC = () => {
   const [rewardData, setRewardData] = useState<{
     diceRolls: number;
     expEarned: number;
+    goldEarned: number;
     levelUp?: boolean;
-  }>({ diceRolls: 2, expEarned: 50 });
+  }>({ diceRolls: 2, expEarned: 50, goldEarned: 10 });
 
   // Course map ID for server-side caching
   const [courseMapId, setCourseMapId] = useState<string | undefined>(cidFromUrl || undefined);
@@ -623,9 +628,11 @@ const KnowledgeCard: React.FC = () => {
       await updateNodeProgress(courseMapId, currentNodeId, 'completed');
       console.log('Node progress updated successfully');
 
-      // Fetch rewards from backend
+      // Fetch rewards from backend (base: 50 EXP + 10 gold + 2 dice per learn node)
       const expResponse = await earnExp({
         exp_amount: 50,
+        gold_reward: 10,
+        dice_reward: 2,
         source: 'learning_reward',
         source_details: {
           course_map_id: courseMapId,
@@ -634,21 +641,29 @@ const KnowledgeCard: React.FC = () => {
         },
       });
 
-      // Update reward data
+      // Update reward data with actual backend response
       setRewardData({
-        diceRolls: 2, // TODO: 后端可以配置骰子奖励
+        diceRolls: expResponse.rewards.dice_rolls,
         expEarned: expResponse.exp_earned,
+        goldEarned: expResponse.rewards.gold,
         levelUp: expResponse.level_up,
       });
 
-      // Dispatch exp change event for GameHeader
+      // Dispatch events for GameHeader to update display
       window.dispatchEvent(new CustomEvent('exp-changed', {
         detail: {
-          newExp: expResponse.new_exp,
+          newExp: expResponse.current_exp,
           levelUp: expResponse.level_up,
-          newLevel: expResponse.new_level,
+          newLevel: expResponse.current_level,
+          expToNextLevel: 100 + 50 * (expResponse.current_level - 1),
         }
       }));
+
+      if (expResponse.rewards.gold > 0) {
+        window.dispatchEvent(new CustomEvent('gold-changed', {
+          detail: { amount: expResponse.rewards.gold }
+        }));
+      }
 
       console.log('Rewards earned:', expResponse);
     } catch (error) {
@@ -788,8 +803,8 @@ const KnowledgeCard: React.FC = () => {
             </div>
           </div>
         </div>
-        <div className="bg-accent-blue/10 px-2.5 py-1 rounded-full border border-accent-blue/20">
-          <span className="text-[10px] font-extrabold text-accent-blue uppercase tracking-tight">{completedNodes} / {totalNodes}</span>
+        <div className="bg-accent-blue/10 px-2.5 py-1.5 rounded-full border border-accent-blue/20 flex items-center">
+          <span className="text-[10px] font-extrabold text-accent-blue uppercase tracking-tight leading-none">{completedNodes} / {totalNodes}</span>
         </div>
       </header>
 
@@ -948,6 +963,7 @@ const KnowledgeCard: React.FC = () => {
         onGoToGame={() => navigate(ROUTES.GAME)}
         diceRolls={rewardData.diceRolls}
         expEarned={rewardData.expEarned}
+        goldEarned={rewardData.goldEarned}
       />
     </div>
   );

@@ -61,6 +61,10 @@ const SkeletonLoader: React.FC = () => (
         0% { transform: translateX(-100%); }
         100% { transform: translateX(100%); }
       }
+      @keyframes spin-only {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
     `}} />
   </div>
 );
@@ -87,8 +91,8 @@ interface ClarificationSectionProps {
   onNewQA?: (qa: QAItem) => void;
 }
 
-const ClarificationSection: React.FC<ClarificationSectionProps> = ({ 
-  pendingQuestions = [], 
+const ClarificationSection: React.FC<ClarificationSectionProps> = ({
+  pendingQuestions = [],
   initialQAList = [],
   pageMarkdown = '',
   language = 'en',
@@ -160,7 +164,7 @@ const ClarificationSection: React.FC<ClarificationSectionProps> = ({
       setSelectedQA(item.detail);
       return;
     }
-    
+
     // Fetch detail from API
     setLoadingDetail(item.id);
     try {
@@ -171,22 +175,22 @@ const ClarificationSection: React.FC<ClarificationSectionProps> = ({
         course_map_id: courseMapId,
         node_id: nodeId,
       });
-      
+
       const detail = {
         title: response.title,
         content: response.body_markdown.split('\n\n').filter(p => p.trim()),
         visualLabel: response.image?.placeholder || 'Detailed Explanation'
       };
-      
+
       // Update qaList with fetched detail and persist
       setQaList(prev => {
-        const updated = prev.map(q => 
+        const updated = prev.map(q =>
           q.id === item.id ? { ...q, detail } : q
         );
         persistToStorage(updated);
         return updated;
       });
-      
+
       setSelectedQA(detail);
     } catch (error) {
       console.error('Failed to fetch QA detail:', error);
@@ -217,16 +221,7 @@ const ClarificationSection: React.FC<ClarificationSectionProps> = ({
                 {item.question}
               </h4>
               <div className="flex items-center gap-2 flex-shrink-0">
-                <button 
-                  onClick={() => handleShowDetail(item)}
-                  disabled={loadingDetail === item.id}
-                  className="px-3 h-7 flex items-center justify-center rounded-full bg-[#1A1B23] text-white active:scale-95 transition-all shadow-sm cursor-pointer disabled:opacity-50"
-                >
-                  <span className="text-[9px] font-black uppercase tracking-wider">
-                    {loadingDetail === item.id ? 'Loading...' : 'Details'}
-                  </span>
-                </button>
-                <button 
+                <button
                   onClick={() => setDeleteTargetId(item.id)}
                   className="w-7 h-7 flex items-center justify-center rounded-full bg-slate-50 dark:bg-white/5 active:scale-90 transition-all border border-slate-100 dark:border-white/5 cursor-pointer"
                 >
@@ -259,10 +254,10 @@ const ClarificationSection: React.FC<ClarificationSectionProps> = ({
               </div>
             </div>
             <div className="flex items-start gap-2">
-              <div className="pt-1 flex-shrink-0">
-                <div className="animate-spin text-secondary">
-                   <span className="material-symbols-rounded text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>progress_activity</span>
-                </div>
+              <div className="pt-1 flex-shrink-0 flex gap-1">
+                <div className="w-1.5 h-1.5 bg-secondary rounded-full animate-pulse"></div>
+                <div className="w-1.5 h-1.5 bg-secondary rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></div>
+                <div className="w-1.5 h-1.5 bg-secondary rounded-full animate-pulse" style={{ animationDelay: '0.4s' }}></div>
               </div>
               <SkeletonLoader />
             </div>
@@ -271,10 +266,10 @@ const ClarificationSection: React.FC<ClarificationSectionProps> = ({
       </div>
 
       <QADetailModal isOpen={!!selectedQA} onClose={() => setSelectedQA(null)} data={selectedQA} />
-      
-      <DeleteConfirmationModal 
-        isOpen={deleteTargetId !== null} 
-        onClose={() => setDeleteTargetId(null)} 
+
+      <DeleteConfirmationModal
+        isOpen={deleteTargetId !== null}
+        onClose={() => setDeleteTargetId(null)}
         onConfirm={handleDeleteConfirm}
       />
     </div>

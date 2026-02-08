@@ -2,6 +2,11 @@
  * Mascot Resource Configuration
  * 
  * 统一管理助教资源的映射关系和路径配置
+ * 
+ * 透明视频兼容策略：
+ * - Chrome/Firefox: VP9 alpha (.webm)
+ * - Safari: HEVC alpha (.mov, type="video/quicktime; codecs=hvc1")
+ * HEVC source 必须在 WebM 前面，因为 Safari 虽然能播放 webm 但不支持 VP9 alpha
  */
 
 export type MascotCharacter = 'oliver' | 'luna' | 'bolt';
@@ -21,24 +26,100 @@ export const SCENE_BASE_PATHS: Record<SceneType, string> = {
   onboarding: '/compressed_output/smile_transparent',
   hello: '/compressed_output/dress_hello',
   travel: '/compressed_output/back_processed',
-  default: '/compressed_output/smile_transparent', // 默认使用 smile_transparent
+  default: '/compressed_output/smile_transparent',
 };
 
-// 场景资源文件扩展名
-export const SCENE_EXTENSIONS: Record<SceneType, 'webp' | 'mp4' | 'webm'> = {
-  store: 'webp',      // 服装图片
-  onboarding: 'webm',  // 微笑动画（支持透明通道）
-  hello: 'webm',       // 问候动画（支持透明通道）
-  travel: 'webp',     // 背影图片
-  default: 'webm',
+// 场景资源类型
+export const SCENE_RESOURCE_TYPE: Record<SceneType, 'image' | 'video'> = {
+  store: 'image',
+  onboarding: 'video',
+  hello: 'video',
+  travel: 'image',
+  default: 'video',
+};
+
+// 图片场景的扩展名
+export const IMAGE_EXTENSION: Record<string, string> = {
+  store: 'webp',
+  travel: 'webp',
 };
 
 /**
- * 生成资源路径
- * @param character 角色
- * @param scene 场景
- * @param outfit 服装（可选）
- * @returns 完整的资源路径
+ * 视频源信息（用于 <source> 多格式 fallback）
+ */
+export interface VideoSource {
+  src: string;
+  type: string;
+}
+
+/**
+ * 生成视频文件名的基础部分（不含扩展名）
+ */
+function getVideoBaseName(
+  scene: SceneType,
+  character: MascotCharacter,
+  outfit: MascotOutfit
+): string {
+  const resourceCharacter = CHARACTER_MAPPING[character];
+
+  switch (scene) {
+    case 'onboarding':
+    case 'default':
+      return outfit === 'default'
+        ? `${resourceCharacter}_smile`
+        : `${resourceCharacter}_smile_${outfit}`;
+    case 'hello':
+      return `${resourceCharacter}_hello_${outfit}`;
+    default:
+      return '';
+  }
+}
+
+/**
+ * 检测浏览器视频格式支持（结果会缓存，只检测一次）
+ */
+let _preferredFormat: 'hevc' | 'webm' | null = null;
+
+function getPreferredVideoFormat(): 'hevc' | 'webm' {
+  if (_preferredFormat) return _preferredFormat;
+
+  const video = document.createElement('video');
+  // Safari 支持 HEVC alpha（透明视频更好）
+  const canHEVC = video.canPlayType('video/quicktime; codecs="hvc1"') !== '';
+  _preferredFormat = canHEVC ? 'hevc' : 'webm';
+  return _preferredFormat;
+}
+
+/**
+ * 根据浏览器能力只返回最佳格式，避免加载无用资源浪费流量
+ * - Safari: HEVC alpha (.mov)
+ * - Chrome/Firefox: VP9 alpha (.webm)
+ */
+export function getMascotVideoSources(
+  character: MascotCharacter,
+  scene: SceneType,
+  outfit: MascotOutfit = 'default'
+): VideoSource[] {
+  // hello 场景没有 default 版本，回退到 onboarding
+  if (scene === 'hello' && outfit === 'default') {
+    return getMascotVideoSources(character, 'onboarding', 'default');
+  }
+  if (scene === 'default') {
+    return getMascotVideoSources(character, 'onboarding', outfit);
+  }
+
+  const basePath = SCENE_BASE_PATHS[scene];
+  const baseName = getVideoBaseName(scene, character, outfit);
+  const format = getPreferredVideoFormat();
+
+  if (format === 'hevc') {
+    return [{ src: `${basePath}/${baseName}.mov`, type: 'video/quicktime; codecs="hvc1"' }];
+  }
+  return [{ src: `${basePath}/${baseName}.webm`, type: 'video/webm' }];
+}
+
+/**
+ * 生成资源路径（图片场景用，视频场景请用 getMascotVideoSources）
  */
 export function getMascotResourcePath(
   character: MascotCharacter,
@@ -46,49 +127,32 @@ export function getMascotResourcePath(
   outfit: MascotOutfit = 'default'
 ): string {
   const basePath = SCENE_BASE_PATHS[scene];
-  const extension = SCENE_EXTENSIONS[scene];
   const resourceCharacter = CHARACTER_MAPPING[character];
-  
-  // 不同场景的命名规则
+
   switch (scene) {
-    case 'store':
-      // 商店只显示服装，不需要角色名
-      // 例如: /compressed_output/cloth_processed/dress.webp
-      return outfit === 'default' 
-        ? `${basePath}/default.webp`  // 如果没有 default 图片，可以返回空
-        : `${basePath}/${outfit}.${extension}`;
-    
+    case 'store': {
+      const ext = IMAGE_EXTENSION['store'];
+      return outfit === 'default'
+        ? `${basePath}/default.webp`
+        : `${basePath}/${outfit}.${ext}`;
+    }
+
+    case 'travel': {
+      const ext = IMAGE_EXTENSION['travel'];
+      return outfit === 'default'
+        ? `${basePath}/${resourceCharacter}_back.${ext}`
+        : `${basePath}/${resourceCharacter}_back_${outfit}.${ext}`;
+    }
+
+    // 视频场景：返回 webm 路径作为默认（兼容旧代码）
     case 'onboarding':
-      // 引导阶段：微笑动画
-      // 例如: /compressed_output/smile/owl_smile.webm 或 owl_smile_dress.webm
-      if (outfit === 'default') {
-        return `${basePath}/${resourceCharacter}_smile.${extension}`;
-      } else {
-        return `${basePath}/${resourceCharacter}_smile_${outfit}.${extension}`;
-      }
-    
     case 'hello':
-      // 问候动画：必须带服装
-      // 例如: /compressed_output/dress_hello/owl_hello_dress.webm
-      if (outfit === 'default') {
-        // hello 动画没有 default 版本，使用 smile 作为回退
-        return getMascotResourcePath(character, 'onboarding', 'default');
-      }
-      return `${basePath}/${resourceCharacter}_hello_${outfit}.${extension}`;
-    
-    case 'travel':
-      // 背影图片
-      // 例如: /compressed_output/back_processed/owl_back.webp 或 owl_back_dress.webp
-      if (outfit === 'default') {
-        return `${basePath}/${resourceCharacter}_back.${extension}`;
-      } else {
-        return `${basePath}/${resourceCharacter}_back_${outfit}.${extension}`;
-      }
-    
     case 'default':
-    default:
-      // 默认使用 onboarding 场景
-      return getMascotResourcePath(character, 'onboarding', outfit);
+    default: {
+      const sources = getMascotVideoSources(character, scene, outfit);
+      // 返回 webm 源（列表中最后一个）作为后备
+      return sources[sources.length - 1].src;
+    }
   }
 }
 
@@ -96,8 +160,7 @@ export function getMascotResourcePath(
  * 获取资源类型（图片或视频）
  */
 export function getResourceType(scene: SceneType): 'image' | 'video' {
-  const ext = SCENE_EXTENSIONS[scene];
-  return (ext === 'mp4' || ext === 'webm') ? 'video' : 'image';
+  return SCENE_RESOURCE_TYPE[scene] || 'video';
 }
 
 /**
