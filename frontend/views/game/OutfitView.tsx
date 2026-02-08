@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import GameHeader from '../../components/GameHeader';
 import BottomNav from '../../components/BottomNav';
 import Mascot from '../../components/Mascot';
+import SuccessFeedbackPill from '../../components/SuccessFeedbackPill';
 import { MascotOutfit, setSelectedOutfit, getSelectedOutfit } from '../../utils/mascotUtils';
 import { getShopItems, purchaseItem, getUserInventory, equipItem } from '../../utils/api';
 
@@ -24,6 +25,10 @@ const OutfitView: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isPurchasing, setIsPurchasing] = useState(false);
   
+  // Toast state
+  const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+
   // 获取当前穿着的服装（响应式）
   const [currentOutfit, setCurrentOutfit] = useState<MascotOutfit>(getSelectedOutfit());
 
@@ -64,7 +69,7 @@ const OutfitView: React.FC = () => {
     setIsLoading(true);
     try {
       const itemType = category === 'Clothes' ? 'clothes' : 'furniture';
-      
+
       if (activeSubTab === 'Shop') {
         // 加载商店商品
         const response = await getShopItems(itemType);
@@ -91,7 +96,7 @@ const OutfitView: React.FC = () => {
           image: item.image_path,
           equipped: item.is_equipped, // 保存装备状态
         })));
-        
+
         // 同步已装备的服装到 localStorage
         if (itemType === 'clothes') {
           const equippedItem = response.inventory.find(item => item.is_equipped);
@@ -115,25 +120,28 @@ const OutfitView: React.FC = () => {
     setIsPurchasing(true);
     try {
       await purchaseItem({ item_id: itemId });
-      
+
       // 刷新商品列表
       await loadItems();
-      
+
       // 触发金币减少动画
       const item = items.find(i => i.id === itemId);
       if (item) {
-        window.dispatchEvent(new CustomEvent('gold-changed', { 
-          detail: { amount: -item.price } 
+        window.dispatchEvent(new CustomEvent('gold-changed', {
+          detail: { amount: -item.price }
         }));
       }
-      
-      alert('Purchase successful!');
+
+      setToastMessage('Purchase successful!');
+      setShowToast(true);
     } catch (error: any) {
       console.error('Failed to purchase item:', error);
       if (error.code === 'INSUFFICIENT_GOLD') {
-        alert('Insufficient gold!');
+        setToastMessage('Insufficient gold!');
+        setShowToast(true);
       } else {
-        alert('Purchase failed, please try again');
+        setToastMessage('Purchase failed, please try again');
+        setShowToast(true);
       }
     } finally {
       setIsPurchasing(false);
@@ -144,25 +152,26 @@ const OutfitView: React.FC = () => {
     try {
       // 调用后端 API 装备
       await equipItem({ item_id: itemId, equip: true });
-      
+
       // 同步到 localStorage（触发 Mascot 组件更新）
       if (outfit) {
         setSelectedOutfit(outfit);
         setCurrentOutfit(outfit);
       }
-      
+
       // 刷新库存列表
       await loadItems();
     } catch (error) {
       console.error('Failed to equip item:', error);
-      alert('Failed to equip, please try again');
+      setToastMessage('Failed to equip, please try again');
+      setShowToast(true);
     }
   };
 
   return (
     <div className="flex flex-col h-screen bg-[#F9F9F9] overflow-hidden select-none font-sans">
       <GameHeader />
-      
+
       <main className="h-[35%] relative flex flex-col items-center justify-center bg-gradient-to-b from-indigo-50/30 via-purple-50/20 to-white">
         <div className="absolute w-[240px] h-[240px] bg-indigo-100/30 rounded-full blur-[60px] -z-10"></div>
         <div className="relative z-10 w-[180px] h-[180px] drop-shadow-2xl animate-in fade-in zoom-in duration-500">
@@ -177,11 +186,11 @@ const OutfitView: React.FC = () => {
 
         <div className="px-10 mb-6 flex-shrink-0">
           <div className="bg-slate-50 p-1 rounded-2xl flex items-center border border-slate-100 shadow-inner">
-            <button 
+            <button
               onClick={() => setActiveSubTab('Mine')}
               className={`flex-1 py-2.5 rounded-xl text-[13px] font-black transition-all duration-300 ${activeSubTab === 'Mine' ? 'bg-white shadow-md text-slate-900 scale-[1.02]' : 'text-slate-400'}`}
             >Mine</button>
-            <button 
+            <button
               onClick={() => setActiveSubTab('Shop')}
               className={`flex-1 py-2.5 rounded-xl text-[13px] font-black transition-all duration-300 ${activeSubTab === 'Shop' ? 'bg-white shadow-md text-slate-900 scale-[1.02]' : 'text-slate-400'}`}
             >Shop</button>
@@ -190,7 +199,7 @@ const OutfitView: React.FC = () => {
 
         <div className="flex gap-2.5 mb-6 overflow-x-auto no-scrollbar flex-shrink-0">
           {categories.map(cat => (
-            <button 
+            <button
               key={cat}
               onClick={() => setCategory(cat)}
               className={`px-5 py-2.5 rounded-2xl text-[13px] font-black whitespace-nowrap transition-all duration-300 ${category === cat ? 'bg-black text-white shadow-xl scale-[1.05]' : 'bg-slate-50 text-slate-400 border border-slate-100'}`}
@@ -217,9 +226,9 @@ const OutfitView: React.FC = () => {
               {items.map(item => {
                 // 检查当前衣服是否正在穿着
                 const isUsed = item.outfit && item.outfit === currentOutfit;
-                
+
                 return (
-                  <div 
+                  <div
                     key={item.id}
                     onClick={() => {
                       if (activeSubTab === 'Shop') {
@@ -237,7 +246,7 @@ const OutfitView: React.FC = () => {
                   {activeSubTab === 'Mine' && item.owned && (
                     <div className="absolute top-2 right-2 w-2.5 h-2.5 bg-primary rounded-full shadow-lg ring-2 ring-white"></div>
                   )}
-                  
+
                   {/* 显示商品内容 */}
                   <div className="w-full h-full flex items-center justify-center relative">
                     {/* Shop: 显示价格标签 */}
@@ -255,7 +264,7 @@ const OutfitView: React.FC = () => {
                         </div>
                       ) : (
                         // 服装：显示服装贴图
-                        <img 
+                        <img
                           src={`/compressed_output/cloth_processed/${item.outfit}.webp`}
                           alt={item.name}
                           className="w-full h-full object-contain drop-shadow-sm"
@@ -263,7 +272,7 @@ const OutfitView: React.FC = () => {
                       )
                     ) : item.image ? (
                       // 家具：显示家具图片
-                      <img 
+                      <img
                         src={`/compressed_output/furniture/${item.image}`}
                         alt={item.name}
                         className="w-full h-full object-contain drop-shadow-sm"
@@ -301,14 +310,14 @@ const OutfitView: React.FC = () => {
                     <span className="material-symbols-outlined text-slate-300 text-[96px]">close</span>
                   </div>
                 ) : (
-                  <img 
+                  <img
                     src={`/compressed_output/cloth_processed/${selectedItem.outfit}.webp`}
                     alt={selectedItem.name}
                     className="w-full h-full object-contain"
                   />
                 )
               ) : selectedItem.image ? (
-                <img 
+                <img
                   src={`/compressed_output/furniture/${selectedItem.image}`}
                   alt={selectedItem.name}
                   className="w-full h-full object-contain p-4"
@@ -323,7 +332,7 @@ const OutfitView: React.FC = () => {
               </div>
             )}
             <div className="w-full flex flex-col gap-3">
-              <button 
+              <button
                 onClick={async () => {
                   if (selectedItem.owned) {
                     // 已拥有：装备（调用后端 API）
@@ -344,7 +353,7 @@ const OutfitView: React.FC = () => {
                   selectedItem.price === 0 ? 'Equip' : (selectedItem.owned ? 'Equip' : 'Buy Now')
                 )}
               </button>
-              <button 
+              <button
                 onClick={() => setSelectedItem(null)}
                 className="w-full text-slate-400 font-bold py-4"
               >Cancel</button>
@@ -352,6 +361,12 @@ const OutfitView: React.FC = () => {
           </div>
         </div>
       )}
+      
+      <SuccessFeedbackPill 
+        isOpen={showToast} 
+        onClose={() => setShowToast(false)} 
+        message={toastMessage}
+      />
     </div>
   );
 };

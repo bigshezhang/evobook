@@ -14,6 +14,7 @@ import {
   NodeProgressItem,
   CourseListItem,
 } from '../../utils/api';
+import { NODE_STATUS } from '../../utils/constants';
 
 interface NodePosition {
   nodeId: number;
@@ -106,7 +107,7 @@ const KnowledgeTree: React.FC = () => {
   const layers = useMemo(() => Object.keys(nodesByLayer).map(Number).sort((a, b) => a - b), [nodesByLayer]);
 
   // Calculate progress
-  const completedCount = nodeProgress.filter(p => p.status === 'completed').length;
+  const completedCount = nodeProgress.filter(p => p.status === NODE_STATUS.COMPLETED).length;
   const totalCount = courseData?.nodes.length || 1;
   const progressPercent = Math.round((completedCount / totalCount) * 100);
 
@@ -164,15 +165,15 @@ const KnowledgeTree: React.FC = () => {
     const progress = nodeProgress.find(p => p.node_id === nodeId);
 
     // Map backend status to frontend state
-    if (progress?.status === 'completed') return 'completed';
-    if (progress?.status === 'in_progress' || progress?.status === 'unlocked') return 'current';
+    if (progress?.status === NODE_STATUS.COMPLETED) return 'completed';
+    if (progress?.status === NODE_STATUS.IN_PROGRESS || progress?.status === NODE_STATUS.UNLOCKED) return 'current';
 
     // If no progress record, check if locked or available based on prerequisites
     const node = courseData?.nodes.find(n => n.id === nodeId);
     if (!node) return 'locked';
 
     const prereqsCompleted = node.pre_requisites.every(prereqId =>
-      nodeProgress.find(p => p.node_id === prereqId)?.status === 'completed'
+      nodeProgress.find(p => p.node_id === prereqId)?.status === NODE_STATUS.COMPLETED
     );
 
     return prereqsCompleted ? 'current' : 'locked';

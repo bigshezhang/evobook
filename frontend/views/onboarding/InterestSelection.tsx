@@ -1,11 +1,11 @@
 
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { STORAGE_KEYS } from '../../utils/constants';
 
-// Storage key for selected topic
-export const STORAGE_KEY_SELECTED_TOPIC = 'evo_selected_topic';
-// Storage key for session (imported from AssessmentChat for consistency)
-const STORAGE_KEY_SESSION_ID = 'evo_assessment_session_id';
+// Re-export for backward compatibility
+export const STORAGE_KEY_SELECTED_TOPIC = STORAGE_KEYS.SELECTED_TOPIC;
+const STORAGE_KEY_SESSION_ID = STORAGE_KEYS.ASSESSMENT_SESSION_ID;
 
 const interests = [
   { id: 'ai', label: 'AI', icon: 'smart_toy', color: 'bg-violet-200' },

@@ -5,6 +5,8 @@
  * 支持离线队列和失败重试机制。
  */
 
+import { BUSINESS_CONFIG } from './constants';
+
 interface HeartbeatSession {
   courseMapId: string;
   nodeId: number;
@@ -23,7 +25,7 @@ interface HeartbeatResponse {
 class LearningHeartbeatManager {
   private intervalId: number | null = null;
   private currentSession: HeartbeatSession | null = null;
-  private readonly HEARTBEAT_INTERVAL_MS = 30000; // 30 秒
+  private readonly HEARTBEAT_INTERVAL_MS = BUSINESS_CONFIG.HEARTBEAT_INTERVAL_MS;
   private readonly QUEUE_KEY = 'evobook_heartbeat_queue';
   private readonly MAX_QUEUE_SIZE = 10;
 

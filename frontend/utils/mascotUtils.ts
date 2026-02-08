@@ -18,9 +18,11 @@ export type MascotView = 'front' | 'back' | 'side';
 // Re-export types from mascotConfig for convenience
 export type { MascotCharacter, MascotOutfit, SceneType };
 
+import { STORAGE_KEYS } from './constants';
+
 // Storage keys
-export const MASCOT_STORAGE_KEY = 'evo_user_mascot';
-export const OUTFIT_STORAGE_KEY = 'evo_user_outfit';
+export const MASCOT_STORAGE_KEY = STORAGE_KEYS.USER_MASCOT;
+export const OUTFIT_STORAGE_KEY = STORAGE_KEYS.USER_OUTFIT;
 
 /**
  * 获取当前选中的角色

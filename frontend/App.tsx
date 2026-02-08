@@ -1,9 +1,10 @@
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { HashRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './utils/AuthContext';
 import { LanguageProvider } from './utils/LanguageContext';
 import { storeInviteCode, processPendingInvite } from './utils/inviteHandler';
+import SuccessFeedbackPill from './components/SuccessFeedbackPill';
 
 // Reset localStorage when ?reset=1 is in URL
 const useResetOnParam = () => {
@@ -85,7 +86,7 @@ const QADetailRouteView: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const data = location.state?.data;
-  
+
   return <QADetailModal isOpen={true} onClose={() => navigate(-1)} data={data} />;
 };
 
@@ -93,6 +94,10 @@ const QADetailRouteView: React.FC = () => {
 const AppInternals: React.FC = () => {
   const { user } = useAuth();
   
+  // Toast state
+  const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+
   // Detect invite code in URL
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -102,7 +107,7 @@ const AppInternals: React.FC = () => {
       console.log('Invite code detected and stored:', inviteCode);
     }
   }, []);
-  
+
   // Process pending invite after authentication
   useEffect(() => {
     if (!user) return;
@@ -110,7 +115,8 @@ const AppInternals: React.FC = () => {
     const processInvite = async () => {
       const result = await processPendingInvite();
       if (result.success && result.message) {
-        alert(result.message);
+        setToastMessage(result.message);
+        setShowToast(true);
       }
     };
 
@@ -120,42 +126,50 @@ const AppInternals: React.FC = () => {
 
     return () => clearTimeout(timer);
   }, [user]);
-  
-  return (
-    <Routes>
-      {/* Public route — login / signup */}
-      <Route path="/login" element={<LoginView />} />
 
-      {/* Onboarding Flow */}
-      <Route path="/" element={<ProtectedRoute><RootRedirect /></ProtectedRoute>} />
-      <Route path="/interests" element={<ProtectedRoute><InterestSelection /></ProtectedRoute>} />
-      <Route path="/assessment" element={<ProtectedRoute><AssessmentChatWithKey /></ProtectedRoute>} />
-      <Route path="/companion" element={<ProtectedRoute><CompanionSelection /></ProtectedRoute>} />
-      <Route path="/notifications" element={<ProtectedRoute><NotificationPermission /></ProtectedRoute>} />
-      <Route path="/generating" element={<ProtectedRoute><GeneratingCourse /></ProtectedRoute>} />
+  return (
+    <>
+      <Routes>
+        {/* Public route — login / signup */}
+        <Route path="/login" element={<LoginView />} />
+
+        {/* Onboarding Flow */}
+        <Route path="/" element={<ProtectedRoute><RootRedirect /></ProtectedRoute>} />
+        <Route path="/interests" element={<ProtectedRoute><InterestSelection /></ProtectedRoute>} />
+        <Route path="/assessment" element={<ProtectedRoute><AssessmentChatWithKey /></ProtectedRoute>} />
+        <Route path="/companion" element={<ProtectedRoute><CompanionSelection /></ProtectedRoute>} />
+        <Route path="/notifications" element={<ProtectedRoute><NotificationPermission /></ProtectedRoute>} />
+        <Route path="/generating" element={<ProtectedRoute><GeneratingCourse /></ProtectedRoute>} />
+
+        {/* Main Learning Flow */}
+        <Route path="/course-detail" element={<ProtectedRoute><CourseDetail /></ProtectedRoute>} />
+        <Route path="/knowledge-tree" element={<ProtectedRoute><KnowledgeTree /></ProtectedRoute>} />
+        <Route path="/knowledge-card" element={<ProtectedRoute><KnowledgeCardWithKey /></ProtectedRoute>} />
+        <Route path="/quiz" element={<ProtectedRoute><QuizView /></ProtectedRoute>} />
+        <Route path="/quiz-history" element={<ProtectedRoute><QuizHistoryList /></ProtectedRoute>} />
+        <Route path="/quiz-attempt" element={<ProtectedRoute><QuizAttemptDetail /></ProtectedRoute>} />
+        <Route path="/qa-detail" element={<ProtectedRoute><QADetailRouteView /></ProtectedRoute>} />
+
+        {/* Game Flow */}
+        <Route path="/game" element={<ProtectedRoute><TravelBoard /></ProtectedRoute>} />
+        <Route path="/game/outfit" element={<ProtectedRoute><OutfitView /></ProtectedRoute>} />
+
+        {/* Main Navigation Tabs */}
+        <Route path="/courses" element={<ProtectedRoute><CoursesDashboard /></ProtectedRoute>} />
+        {/* Keep /dashboard as alias for backward compatibility */}
+        <Route path="/dashboard" element={<Navigate to="/courses" replace />} />
+        <Route path="/discovery/:category" element={<ProtectedRoute><DiscoveryList /></ProtectedRoute>} />
+        <Route path="/profile" element={<ProtectedRoute><ProfileView /></ProtectedRoute>} />
+
+        <Route path="*" element={<Navigate to="/" />} />
+      </Routes>
       
-      {/* Main Learning Flow */}
-      <Route path="/course-detail" element={<ProtectedRoute><CourseDetail /></ProtectedRoute>} />
-      <Route path="/knowledge-tree" element={<ProtectedRoute><KnowledgeTree /></ProtectedRoute>} />
-      <Route path="/knowledge-card" element={<ProtectedRoute><KnowledgeCardWithKey /></ProtectedRoute>} />
-      <Route path="/quiz" element={<ProtectedRoute><QuizView /></ProtectedRoute>} />
-      <Route path="/quiz-history" element={<ProtectedRoute><QuizHistoryList /></ProtectedRoute>} />
-      <Route path="/quiz-attempt" element={<ProtectedRoute><QuizAttemptDetail /></ProtectedRoute>} />
-      <Route path="/qa-detail" element={<ProtectedRoute><QADetailRouteView /></ProtectedRoute>} />
-      
-      {/* Game Flow */}
-      <Route path="/game" element={<ProtectedRoute><TravelBoard /></ProtectedRoute>} />
-      <Route path="/game/outfit" element={<ProtectedRoute><OutfitView /></ProtectedRoute>} />
-      
-      {/* Main Navigation Tabs */}
-      <Route path="/courses" element={<ProtectedRoute><CoursesDashboard /></ProtectedRoute>} />
-      {/* Keep /dashboard as alias for backward compatibility */}
-      <Route path="/dashboard" element={<Navigate to="/courses" replace />} />
-      <Route path="/discovery/:category" element={<ProtectedRoute><DiscoveryList /></ProtectedRoute>} />
-      <Route path="/profile" element={<ProtectedRoute><ProfileView /></ProtectedRoute>} />
-      
-      <Route path="*" element={<Navigate to="/" />} />
-    </Routes>
+      <SuccessFeedbackPill 
+        isOpen={showToast} 
+        onClose={() => setShowToast(false)} 
+        message={toastMessage}
+      />
+    </>
   );
 };
 
@@ -170,7 +184,7 @@ const RootRedirect: React.FC = () => {
       try {
         // Check localStorage first for quick decision
         const onboardingDone = localStorage.getItem(STORAGE_KEYS.ONBOARDING_COMPLETED) === 'true';
-        
+
         if (onboardingDone) {
           // User has completed onboarding before, go to dashboard
           setHasCourses(true);
@@ -181,7 +195,7 @@ const RootRedirect: React.FC = () => {
         // Check backend for courses (handles cross-device login)
         const { getUserCourses } = await import('./utils/api');
         const data = await getUserCourses();
-        
+
         if (data.courses && data.courses.length > 0) {
           // User has courses, mark onboarding as done and go to dashboard
           localStorage.setItem(STORAGE_KEYS.ONBOARDING_COMPLETED, 'true');
@@ -213,13 +227,13 @@ const RootRedirect: React.FC = () => {
   if (hasCourses) {
     return <Navigate to="/courses" replace />;
   }
-  
+
   return <WelcomeView />;
 };
 
 const App: React.FC = () => {
   useResetOnParam();
-  
+
   return (
     <AuthProvider>
       <LanguageProvider>

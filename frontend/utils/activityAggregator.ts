@@ -5,6 +5,8 @@
  * for GitHub-style activity heatmap display.
  */
 
+import { ACTIVITY_INTENSITY, ActivityIntensity } from './constants';
+
 export interface Activity {
   completed_at: string; // ISO 8601 UTC string
 }
@@ -12,7 +14,7 @@ export interface Activity {
 export interface DayActivity {
   date: string; // YYYY-MM-DD local date
   count: number;
-  intensity: 'none' | 'light' | 'medium' | 'deep';
+  intensity: ActivityIntensity;
 }
 
 /**
@@ -53,15 +55,15 @@ export function aggregateActivitiesToHeatmap(
 
     // Determine intensity based on count
     // Rules: 1+ = light, 5+ = medium, 10+ = deep
-    let intensity: DayActivity['intensity'];
+    let intensity: ActivityIntensity;
     if (count >= 10) {
-      intensity = 'deep';
+      intensity = ACTIVITY_INTENSITY.DEEP;
     } else if (count >= 5) {
-      intensity = 'medium';
+      intensity = ACTIVITY_INTENSITY.MEDIUM;
     } else if (count >= 1) {
-      intensity = 'light';
+      intensity = ACTIVITY_INTENSITY.LIGHT;
     } else {
-      intensity = 'none';
+      intensity = ACTIVITY_INTENSITY.NONE;
     }
 
     result.push({ date: dateStr, count, intensity });

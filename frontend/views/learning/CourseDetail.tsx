@@ -4,6 +4,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import Header from '../../components/Header';
 import SuccessFeedbackPill from '../../components/SuccessFeedbackPill';
 import { getCourseDetail, buildLearningPath } from '../../utils/api';
+import { STORAGE_KEYS } from '../../utils/constants';
 
 const CourseDetail: React.FC = () => {
   const navigate = useNavigate();
@@ -48,12 +49,12 @@ const CourseDetail: React.FC = () => {
   const handleSetMainCourse = () => {
     setIsMainCourse(true);
     // 模拟修改用户数据表中的主页面课程设置
-    localStorage.setItem('evo_main_course', 'Neural Networks');
+    localStorage.setItem(STORAGE_KEYS.MAIN_COURSE, 'Neural Networks');
     setShowSuccess(true);
   };
 
   const handleConfirm = () => {
-    localStorage.setItem('evo_onboarding_completed', 'true');
+    localStorage.setItem(STORAGE_KEYS.ONBOARDING_COMPLETED, 'true');
     navigate(buildLearningPath('/knowledge-tree', { cid: cidFromUrl }));
   };
 

@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { onboardingNext, isChatResponse, isFinishResponse, type OnboardingResponse } from '../../utils/api';
+import { onboardingNext, isChatResponse, isFinishResponse, type OnboardingResponse, STORAGE_KEYS } from '../../utils/api';
 import { STORAGE_KEY_SELECTED_TOPIC } from './InterestSelection';
 import { getSelectedCharacter, type MascotCharacter } from '../../utils/mascotUtils';
 

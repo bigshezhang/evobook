@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import GameHeader from '../../components/GameHeader';
 import BottomNav from '../../components/BottomNav';
 import Mascot from '../../components/Mascot';
+import SuccessFeedbackPill from '../../components/SuccessFeedbackPill';
 import { buildLearningPath, getActiveCourse, getCurrency, rollDice, claimReward } from '../../utils/api';
 
 type TileType = 'gold' | 'xp' | 'roll' | 'normal' | 'star' | 'gift' | 'map';
@@ -25,6 +26,10 @@ const TravelBoard: React.FC = () => {
   const [isJumping, setIsJumping] = useState(false);
   const [eventModal, setEventModal] = useState<{ type: string; title: string; desc: string; reward?: number } | null>(null);
   const [activeCourseId, setActiveCourseId] = useState<string | null>(null);
+  
+  // Toast state
+  const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
 
   const [path, setPath] = useState<TileData[]>([]);
   const pathRef = useRef<TileData[]>([]);
@@ -148,9 +153,11 @@ const TravelBoard: React.FC = () => {
 
         // 显示错误提示
         if (error.code === 'INSUFFICIENT_DICE') {
-          alert('Insufficient dice!');
+          setToastMessage('Insufficient dice!');
+          setShowToast(true);
         } else {
-          alert('Failed to roll dice, please try again');
+          setToastMessage('Failed to roll dice, please try again');
+          setShowToast(true);
         }
       }
     }, 600);
@@ -456,6 +463,12 @@ const TravelBoard: React.FC = () => {
           </div>
         </div>
       )}
+
+      <SuccessFeedbackPill 
+        isOpen={showToast} 
+        onClose={() => setShowToast(false)} 
+        message={toastMessage}
+      />
 
       <BottomNav activeTab="game" />
     </div>
