@@ -118,7 +118,7 @@ const KnowledgeTree: React.FC = () => {
         return;
       }
 
-      const container = document.querySelector('.relative.px-6.flex-1.mt-6');
+      const container = document.querySelector('[data-dag-container]');
       if (!container) {
         console.log('Container not found');
         return;
@@ -342,7 +342,7 @@ const KnowledgeTree: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-[#F8F9FD] relative pb-40 overflow-x-hidden">
+    <div className="flex flex-col h-screen bg-[#F8F9FD] relative">
       <Header
         title="Learning"
         showBack={false}
@@ -354,121 +354,126 @@ const KnowledgeTree: React.FC = () => {
         }
       />
 
-      {/* Course Progress Banner with Navigation */}
-      <div className="px-6 mb-4 relative mt-4">
-        <div className={`${bannerColor} rounded-[28px] p-6 text-white shadow-xl relative overflow-hidden transition-colors duration-500`}>
-          {/* Content Container */}
-          <div className="relative z-10 flex items-center gap-4">
-            {/* Left Arrow */}
-            {allCourses.length > 1 && (
-              <button
-                onClick={handlePreviousCourse}
-                disabled={currentCourseIndex === 0}
-                className={`w-11 h-11 rounded-full flex items-center justify-center transition-all ${
-                  currentCourseIndex === 0
-                    ? 'opacity-30 cursor-not-allowed'
-                    : 'bg-white/20 hover:bg-white/30 active:scale-95 backdrop-blur-sm'
-                }`}
+      {/* Main Scrollable Content */}
+      <div className="flex-1 overflow-y-auto no-scrollbar pb-40">
+        {/* Course Progress Banner with Navigation */}
+        <div className="px-6 mb-4 relative mt-4">
+          <div className={`${bannerColor} rounded-[28px] p-6 text-white shadow-xl relative overflow-hidden transition-colors duration-500`}>
+            {/* Content Container */}
+            <div className="relative z-10 flex items-center gap-4">
+              {/* Left Arrow */}
+              {allCourses.length > 1 && (
+                <button
+                  onClick={handlePreviousCourse}
+                  disabled={currentCourseIndex === 0}
+                  className={`w-11 h-11 rounded-full flex items-center justify-center transition-all ${
+                    currentCourseIndex === 0
+                      ? 'opacity-30 cursor-not-allowed'
+                      : 'bg-white/20 hover:bg-white/30 active:scale-95 backdrop-blur-sm'
+                  }`}
+                >
+                  <span className="material-symbols-rounded text-white text-2xl" style={{ fontVariationSettings: "'FILL' 0, 'wght' 300" }}>arrow_back_ios_new</span>
+                </button>
+              )}
+
+              {/* Course Info - Centered */}
+              <div
+                onClick={() => navigate(buildLearningPath('/course-detail', { cid }))}
+                className="flex-1 cursor-pointer"
               >
-                <span className="material-symbols-rounded text-white text-2xl" style={{ fontVariationSettings: "'FILL' 0, 'wght' 300" }}>arrow_back_ios_new</span>
-              </button>
-            )}
+                <h2 className="text-[19px] font-extrabold tracking-tight text-center mb-3 leading-tight">{courseName}</h2>
 
-            {/* Course Info - Centered */}
-            <div
-              onClick={() => navigate(buildLearningPath('/course-detail', { cid }))}
-              className="flex-1 cursor-pointer"
-            >
-              <h2 className="text-[19px] font-extrabold tracking-tight text-center mb-3 leading-tight">{courseName}</h2>
-
-              {/* Progress Bar - Centered */}
-              <div className="flex items-center justify-center gap-3">
-                <div className="w-[180px] bg-white/25 h-2 rounded-full overflow-hidden border border-white/10 shadow-inner">
-                  <div
-                    className="bg-white h-full shadow-[0_0_8px_rgba(255,255,255,0.8)] transition-all duration-700 ease-out rounded-full"
-                    style={{ width: `${progressPercent}%` }}
-                  ></div>
+                {/* Progress Bar - Centered */}
+                <div className="flex items-center justify-center gap-3">
+                  <div className="w-[180px] bg-white/25 h-2 rounded-full overflow-hidden border border-white/10 shadow-inner">
+                    <div
+                      className="bg-white h-full shadow-[0_0_8px_rgba(255,255,255,0.8)] transition-all duration-700 ease-out rounded-full"
+                      style={{ width: `${progressPercent}%` }}
+                    ></div>
+                  </div>
+                  <span className="text-[11px] font-extrabold opacity-90 uppercase tracking-[0.15em] min-w-[65px]">{progressPercent}% DONE</span>
                 </div>
-                <span className="text-[11px] font-extrabold opacity-90 uppercase tracking-[0.15em] min-w-[65px]">{progressPercent}% DONE</span>
               </div>
+
+              {/* Right Arrow */}
+              {allCourses.length > 1 && (
+                <button
+                  onClick={handleNextCourse}
+                  disabled={currentCourseIndex === allCourses.length - 1}
+                  className={`w-11 h-11 rounded-full flex items-center justify-center transition-all ${
+                    currentCourseIndex === allCourses.length - 1
+                      ? 'opacity-30 cursor-not-allowed'
+                      : 'bg-white/20 hover:bg-white/30 active:scale-95 backdrop-blur-sm'
+                  }`}
+                >
+                  <span className="material-symbols-rounded text-white text-2xl" style={{ fontVariationSettings: "'FILL' 0, 'wght' 300" }}>arrow_forward_ios</span>
+                </button>
+              )}
             </div>
 
-            {/* Right Arrow */}
-            {allCourses.length > 1 && (
-              <button
-                onClick={handleNextCourse}
-                disabled={currentCourseIndex === allCourses.length - 1}
-                className={`w-11 h-11 rounded-full flex items-center justify-center transition-all ${
-                  currentCourseIndex === allCourses.length - 1
-                    ? 'opacity-30 cursor-not-allowed'
-                    : 'bg-white/20 hover:bg-white/30 active:scale-95 backdrop-blur-sm'
-                }`}
-              >
-                <span className="material-symbols-rounded text-white text-2xl" style={{ fontVariationSettings: "'FILL' 0, 'wght' 300" }}>arrow_forward_ios</span>
-              </button>
-            )}
+            {/* Background Decorations */}
+            <div className="absolute -right-6 -bottom-6 w-32 h-32 opacity-10 pointer-events-none rotate-12">
+              <span className="material-symbols-outlined" style={{ fontSize: '100px' }}>psychology</span>
+            </div>
+            <div className="absolute -left-10 -top-10 w-24 h-24 bg-white/10 rounded-full blur-2xl"></div>
           </div>
-
-          {/* Background Decorations */}
-          <div className="absolute -right-6 -bottom-6 w-32 h-32 opacity-10 pointer-events-none rotate-12">
-            <span className="material-symbols-outlined" style={{ fontSize: '100px' }}>psychology</span>
-          </div>
-          <div className="absolute -left-10 -top-10 w-24 h-24 bg-white/10 rounded-full blur-2xl"></div>
         </div>
-      </div>
 
-      {/* Dynamic DAG Rendering */}
-      <div className="relative px-6 flex-1 mt-6 overflow-y-auto no-scrollbar">
-        {/* SVG for connection lines */}
-        <svg
-          className="absolute inset-0 w-full h-full pointer-events-none z-0"
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          <defs>
-            {/* No gradients or filters needed */}
-          </defs>
-          {renderConnections()}
-        </svg>
+        {/* Dynamic DAG Rendering */}
+        <div className="relative px-6 mt-6">
+          <div className="relative" data-dag-container>
+            {/* SVG for connection lines */}
+            <svg
+              className="absolute inset-0 w-full h-full pointer-events-none z-0"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <defs>
+                {/* No gradients or filters needed */}
+              </defs>
+              {renderConnections()}
+            </svg>
 
-        <div className="flex flex-col items-center gap-12 relative py-6 z-10">
-          {layers.map((layer) => {
-            const nodesInLayer = nodesByLayer[layer];
-            const isMultiple = nodesInLayer.length > 1;
+            <div className="flex flex-col items-center gap-12 relative py-6 z-10">
+            {layers.map((layer) => {
+              const nodesInLayer = nodesByLayer[layer];
+              const isMultiple = nodesInLayer.length > 1;
 
-            return (
-              <div key={layer} className={`flex ${isMultiple ? 'gap-4' : ''} justify-center`}>
-                {nodesInLayer.map((node) => {
-                  const state = getNodeState(node.id);
-                  const icon = getNodeIcon(node, state);
-                  const nodeClasses = getNodeClasses(state);
-                  const widthClass = isMultiple ? 'w-36' : 'w-48';
+              return (
+                <div key={layer} className={`flex ${isMultiple ? 'gap-4' : ''} justify-center`}>
+                  {nodesInLayer.map((node) => {
+                    const state = getNodeState(node.id);
+                    const icon = getNodeIcon(node, state);
+                    const nodeClasses = getNodeClasses(state);
+                    const widthClass = isMultiple ? 'w-36' : 'w-48';
 
-                  return (
-                    <button
-                      key={node.id}
-                      ref={(el) => {
-                        if (el) nodeRefs.current.set(node.id, el);
-                        else nodeRefs.current.delete(node.id);
-                      }}
-                      onClick={() => handleNodeClick(node)}
-                      className={`${nodeClasses} ${widthClass} py-4 rounded-xl flex items-center justify-center gap-2`}
-                      style={getNodeStyle(state)}
-                    >
-                      <span
-                        className="material-symbols-outlined text-[18px] font-bold"
-                        style={{ fontVariationSettings: state === 'current' ? "'FILL' 1" : undefined }}
+                    return (
+                      <button
+                        key={node.id}
+                        ref={(el) => {
+                          if (el) nodeRefs.current.set(node.id, el);
+                          else nodeRefs.current.delete(node.id);
+                        }}
+                        onClick={() => handleNodeClick(node)}
+                        className={`${nodeClasses} ${widthClass} px-4 py-4 rounded-xl flex flex-col items-center justify-center gap-2`}
+                        style={getNodeStyle(state)}
                       >
-                        {icon}
-                      </span>
-                      <span className="text-xs font-black uppercase tracking-wider truncate px-1">
-                        {node.title}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            );
-          })}
+                        <span
+                          className="material-symbols-outlined text-[20px] font-bold"
+                          style={{ fontVariationSettings: state === 'current' ? "'FILL' 1" : undefined }}
+                        >
+                          {icon}
+                        </span>
+                        <span className="text-[11px] font-black uppercase tracking-wide text-center leading-tight line-clamp-2">
+                          {node.title}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            })}
+            </div>
+          </div>
         </div>
       </div>
 

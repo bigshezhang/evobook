@@ -129,7 +129,7 @@ const AssessmentChat: React.FC = () => {
       } catch (err) {
         if (!abortController.signal.aborted) {
           console.error('Failed to init session:', err);
-          setError('无法连接到服务器，请稍后重试');
+          setError('Unable to connect to server, please try again later');
         }
       } finally {
         if (!abortController.signal.aborted) {
@@ -150,7 +150,7 @@ const AssessmentChat: React.FC = () => {
       // Add final message before navigation
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: '太棒了！我已经了解了你的学习目标。现在让我为你定制专属学习路径...'
+        content: 'Great! I understand your learning goals. Now let me create a customized learning path for you...'
       }]);
 
       // Save data and navigate after a brief delay
@@ -203,7 +203,7 @@ const AssessmentChat: React.FC = () => {
       }
     } catch (err) {
       console.error('API error:', err);
-      setError('发送失败，请重试');
+      setError('Failed to send, please try again');
       // Restore options if there were any
     } finally {
       setLoading(false);
@@ -297,7 +297,7 @@ const AssessmentChat: React.FC = () => {
         {/* Options */}
         {options.length > 0 && !loading && (
           <div className="relative bg-white p-5 rounded-bubble shadow-soft flex flex-col gap-3 border border-white/50 mt-2">
-            <span className="text-[10px] font-black text-primary uppercase tracking-widest">选择一个选项</span>
+            <span className="text-[10px] font-black text-primary uppercase tracking-widest">Select an option</span>
             <div className="flex flex-wrap gap-2">
               {options.map((option, index) => (
                 <button
@@ -325,7 +325,7 @@ const AssessmentChat: React.FC = () => {
         <div className="relative flex items-center">
           <input
             className="w-full bg-white h-[60px] pl-6 pr-16 rounded-input border-none shadow-soft text-[15px] placeholder:text-black/20 font-medium disabled:opacity-50"
-            placeholder="输入你的回答..."
+            placeholder="Enter your answer..."
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}

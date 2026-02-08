@@ -6,6 +6,8 @@
  */
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from './supabase';
+import { getProfile } from './api';
+import { setSelectedCharacter } from './mascotUtils';
 import type { User, Session } from '@supabase/supabase-js';
 
 // ── Types ──────────────────────────────────────────────
@@ -31,10 +33,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Helper to sync user profile from backend
+    const syncUserProfile = async () => {
+      try {
+        const profile = await getProfile();
+        // Sync mascot to localStorage if it exists in backend
+        if (profile.mascot) {
+          setSelectedCharacter(profile.mascot as any);
+        }
+      } catch (error) {
+        // Ignore errors during profile sync (user might not have profile yet)
+        console.debug('Profile sync skipped:', error);
+      }
+    };
+
     // 1. Fetch the session that may already exist (e.g. from a stored refresh token)
     supabase.auth.getSession().then(({ data: { session: currentSession } }) => {
       setSession(currentSession);
       setUser(currentSession?.user ?? null);
+
+      // Sync profile if user is logged in
+      if (currentSession?.user) {
+        syncUserProfile();
+      }
+
       setLoading(false);
     });
 
@@ -43,6 +65,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       (_event, newSession) => {
         setSession(newSession);
         setUser(newSession?.user ?? null);
+
+        // Sync profile when user logs in
+        if (newSession?.user) {
+          syncUserProfile();
+        }
+
         setLoading(false);
       },
     );

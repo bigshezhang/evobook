@@ -2,6 +2,7 @@
 import React, { useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './utils/AuthContext';
+import { LanguageProvider } from './utils/LanguageContext';
 
 // Reset localStorage when ?reset=1 is in URL
 const useResetOnParam = () => {
@@ -33,6 +34,8 @@ import DiscoveryList from './views/main/DiscoveryList';
 import ProfileView from './views/main/ProfileView';
 import KnowledgeCard from './views/learning/KnowledgeCard';
 import QuizView from './views/learning/QuizView';
+import QuizHistoryList from './views/learning/QuizHistoryList';
+import QuizAttemptDetail from './views/learning/QuizAttemptDetail';
 import QADetailModal from './views/learning/QADetailModal';
 
 // Game Views
@@ -148,9 +151,10 @@ const App: React.FC = () => {
   
   return (
     <AuthProvider>
-      <HashRouter>
-        <div className="max-w-lg mx-auto min-h-screen bg-white shadow-xl relative overflow-x-hidden">
-          <Routes>
+      <LanguageProvider>
+        <HashRouter>
+          <div className="max-w-lg mx-auto min-h-screen bg-white shadow-xl relative overflow-x-hidden">
+            <Routes>
             {/* Public route — login / signup */}
             <Route path="/login" element={<LoginView />} />
 
@@ -167,6 +171,8 @@ const App: React.FC = () => {
             <Route path="/knowledge-tree" element={<ProtectedRoute><KnowledgeTree /></ProtectedRoute>} />
             <Route path="/knowledge-card" element={<ProtectedRoute><KnowledgeCardWithKey /></ProtectedRoute>} />
             <Route path="/quiz" element={<ProtectedRoute><QuizView /></ProtectedRoute>} />
+            <Route path="/quiz-history" element={<ProtectedRoute><QuizHistoryList /></ProtectedRoute>} />
+            <Route path="/quiz-attempt" element={<ProtectedRoute><QuizAttemptDetail /></ProtectedRoute>} />
             <Route path="/qa-detail" element={<ProtectedRoute><QADetailRouteView /></ProtectedRoute>} />
             
             {/* Game Flow */}
@@ -181,9 +187,10 @@ const App: React.FC = () => {
             <Route path="/profile" element={<ProtectedRoute><ProfileView /></ProtectedRoute>} />
             
             <Route path="*" element={<Navigate to="/" />} />
-          </Routes>
-        </div>
-      </HashRouter>
+            </Routes>
+          </div>
+        </HashRouter>
+      </LanguageProvider>
     </AuthProvider>
   );
 };

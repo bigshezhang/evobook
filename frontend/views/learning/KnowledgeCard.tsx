@@ -10,6 +10,7 @@ import {
   getKnowledgeCard,
   getCourseDetail,
   updateNodeProgress,
+  earnExp,
   KnowledgeCardRequest,
   Language,
   buildLearningPath,
@@ -17,6 +18,7 @@ import {
   MapMeta,
 } from '../../utils/api';
 import { heartbeatManager } from '../../utils/learningHeartbeat';
+import { useLanguage } from '../../utils/LanguageContext';
 
 // Page break delimiter used in markdown from API
 const PAGE_BREAK_DELIMITER = '<EVOBK_PAGE_BREAK />';
@@ -346,6 +348,13 @@ const KnowledgeCard: React.FC = () => {
   const [dynamicQuestions, setDynamicQuestions] = useState<string[]>([]);
   const [qaList, setQaList] = useState<QAItem[]>([]);
   
+  // Reward data from backend
+  const [rewardData, setRewardData] = useState<{
+    diceRolls: number;
+    expEarned: number;
+    levelUp?: boolean;
+  }>({ diceRolls: 2, expEarned: 50 });
+  
   // Course map ID for server-side caching
   const [courseMapId, setCourseMapId] = useState<string | undefined>(cidFromUrl || undefined);
 
@@ -369,7 +378,7 @@ const KnowledgeCard: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   
   // Language for API calls
-  const language: Language = 'en';
+  const language = useLanguage();
   
   // Split markdown content into pages
   const pages = useMemo(() => {
@@ -520,6 +529,7 @@ const KnowledgeCard: React.FC = () => {
         
         // Fetch knowledge card from API
         const request: KnowledgeCardRequest = {
+          language: language,
           course_map_id: courseMapData.course_map_id,
           course: {
             course_name: courseNameValue,
@@ -601,7 +611,7 @@ const KnowledgeCard: React.FC = () => {
   }, [currentNodeId]);
 
   /**
-   * Mark the current node as completed using backend API.
+   * Mark the current node as completed using backend API and fetch rewards.
    */
   const handleNodeCompletion = async () => {
     if (!courseMapId || !currentNodeId) return;
@@ -610,9 +620,38 @@ const KnowledgeCard: React.FC = () => {
       // Mark current node as completed
       await updateNodeProgress(courseMapId, currentNodeId, 'completed');
       console.log('Node progress updated successfully');
+      
+      // Fetch rewards from backend
+      const expResponse = await earnExp({
+        exp_amount: 50,
+        source: 'learning_reward',
+        source_details: {
+          course_map_id: courseMapId,
+          node_id: currentNodeId,
+          activity_type: 'knowledge_card_complete',
+        },
+      });
+      
+      // Update reward data
+      setRewardData({
+        diceRolls: 2, // TODO: 后端可以配置骰子奖励
+        expEarned: expResponse.exp_earned,
+        levelUp: expResponse.level_up,
+      });
+      
+      // Dispatch exp change event for GameHeader
+      window.dispatchEvent(new CustomEvent('exp-changed', { 
+        detail: { 
+          newExp: expResponse.new_exp,
+          levelUp: expResponse.level_up,
+          newLevel: expResponse.new_level,
+        } 
+      }));
+      
+      console.log('Rewards earned:', expResponse);
     } catch (error) {
-      console.error('Failed to update node progress:', error);
-      // Still show completion UI even if API call fails
+      console.error('Failed to update node progress or earn rewards:', error);
+      // Still show completion UI with default rewards even if API call fails
     }
   };
 
@@ -905,8 +944,8 @@ const KnowledgeCard: React.FC = () => {
         isOpen={showComplete}
         onClose={() => navigate(buildLearningPath('/knowledge-tree', { cid: courseMapId }))}
         onGoToGame={() => navigate('/game')}
-        diceRolls={2}
-        expEarned={50}
+        diceRolls={rewardData.diceRolls}
+        expEarned={rewardData.expEarned}
       />
     </div>
   );

@@ -136,7 +136,7 @@ const CourseDetail: React.FC = () => {
       <SuccessFeedbackPill
         isOpen={showSuccess}
         onClose={() => setShowSuccess(false)}
-        message="已加入为主页面课程"
+        message="Added as main course"
       />
     </div>
   );

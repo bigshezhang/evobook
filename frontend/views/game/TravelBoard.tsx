@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import GameHeader from '../../components/GameHeader';
 import BottomNav from '../../components/BottomNav';
 import Mascot from '../../components/Mascot';
-import { buildLearningPath, getActiveCourse } from '../../utils/api';
+import { buildLearningPath, getActiveCourse, getCurrency, rollDice, claimReward } from '../../utils/api';
 
 type TileType = 'gold' | 'xp' | 'roll' | 'normal' | 'star' | 'gift' | 'map';
 
@@ -41,6 +41,7 @@ const TravelBoard: React.FC = () => {
   useEffect(() => {
     generateMoreTiles(50);
     loadActiveCourse();
+    loadCurrency();
   }, []);
 
   const loadActiveCourse = async () => {
@@ -49,6 +50,15 @@ const TravelBoard: React.FC = () => {
       setActiveCourseId(course_map_id);
     } catch (error) {
       console.error('Failed to load active course:', error);
+    }
+  };
+
+  const loadCurrency = async () => {
+    try {
+      const data = await getCurrency();
+      setRollsLeft(data.dice_rolls_count);
+    } catch (error) {
+      console.error('Failed to load currency:', error);
     }
   };
 
@@ -94,13 +104,12 @@ const TravelBoard: React.FC = () => {
     setPath(updatedPath);
   };
 
-  const handleRoll = () => {
-    if (isRolling || isMoving || rollsLeft <= 0) return;
+  const handleRoll = async () => {
+    if (isRolling || isMoving || rollsLeft <= 0 || !activeCourseId) return;
     
     console.log('🎲 Rolling dice, rolls left before:', rollsLeft);
     
     // 先扣减骰子次数并触发动画（让用户先看到 -1 动画）
-    setRollsLeft(prev => prev - 1);
     setShowRollChange(-1);
     setRollAnimating(true);
     
@@ -110,19 +119,40 @@ const TravelBoard: React.FC = () => {
     setTimeout(() => setRollAnimating(false), 500);
     
     // 延迟 600ms 后再显示掷骰遮罩，让 -1 动画先播放完
-    setTimeout(() => {
+    setTimeout(async () => {
       setIsRolling(true);
       setRollResult(null);
       
-      setTimeout(() => {
-        const result = Math.floor(Math.random() * 4) + 1; // 1-4 均衡概率
-        setRollResult(result);
+      try {
+        // 调用后端 API 掷骰子
+        const response = await rollDice({
+          course_map_id: activeCourseId,
+          current_position: currentStep,
+        });
         
+        // 更新骰子数量
+        setRollsLeft(response.dice_rolls_remaining);
+        
+        // 显示掷骰结果
         setTimeout(() => {
-          setIsRolling(false);
-          startTravel(result);
-        }, 1200);
-      }, 1000);
+          setRollResult(response.dice_result);
+          
+          setTimeout(() => {
+            setIsRolling(false);
+            startTravel(response.dice_result);
+          }, 1200);
+        }, 1000);
+      } catch (error: any) {
+        console.error('Failed to roll dice:', error);
+        setIsRolling(false);
+        
+        // 显示错误提示
+        if (error.code === 'INSUFFICIENT_DICE') {
+          alert('Insufficient dice!');
+        } else {
+          alert('Failed to roll dice, please try again');
+        }
+      }
     }, 600);
   };
 
@@ -353,28 +383,70 @@ const TravelBoard: React.FC = () => {
             <h3 className="text-2xl font-black text-slate-900 mb-2">{eventModal.title}</h3>
             <p className="text-slate-400 font-bold mb-8 text-center">{eventModal.desc}</p>
             <button 
-              onClick={() => {
+              onClick={async () => {
                 const modal = eventModal;
                 setEventModal(null);
                 
-                // 弹窗关闭后，延迟一小会儿再触发动画，确保弹窗已消失
-                if (modal) {
-                  setTimeout(() => {
+                // 弹窗关闭后，调用后端 API 领取奖励
+                if (modal && activeCourseId) {
+                  try {
                     if (modal.type === 'gold' && modal.reward) {
-                      // 触发金币增加动画
-                      window.dispatchEvent(new CustomEvent('gold-changed', { detail: { amount: modal.reward } }));
-                      console.log('💰 Dispatched gold-changed event after modal closed:', modal.reward);
-                    } else if (modal.type === 'roll') {
-                      // 触发骰子增加动画
-                      setRollsLeft(prev => prev + 1);
-                      setShowRollChange(1);
-                      setRollAnimating(true);
-                      console.log('🎲 Roll +1 animation triggered after modal closed');
+                      // 调用后端 API 领取金币
+                      await claimReward({
+                        reward_type: 'gold',
+                        amount: modal.reward,
+                        source: 'tile_reward',
+                        source_details: {
+                          course_map_id: activeCourseId,
+                          tile_position: currentStep,
+                          tile_type: 'gold',
+                        },
+                      });
                       
-                      setTimeout(() => setShowRollChange(null), 800);
-                      setTimeout(() => setRollAnimating(false), 500);
+                      // 延迟触发动画
+                      setTimeout(() => {
+                        window.dispatchEvent(new CustomEvent('gold-changed', { detail: { amount: modal.reward } }));
+                        console.log('💰 Dispatched gold-changed event after modal closed:', modal.reward);
+                      }, 200);
+                    } else if (modal.type === 'roll' && modal.reward) {
+                      // 调用后端 API 领取骰子
+                      await claimReward({
+                        reward_type: 'dice',
+                        amount: modal.reward,
+                        source: 'tile_reward',
+                        source_details: {
+                          course_map_id: activeCourseId,
+                          tile_position: currentStep,
+                          tile_type: 'roll',
+                        },
+                      });
+                      
+                      // 延迟触发动画
+                      setTimeout(() => {
+                        setRollsLeft(prev => prev + modal.reward);
+                        setShowRollChange(modal.reward);
+                        setRollAnimating(true);
+                        console.log('🎲 Roll +1 animation triggered after modal closed');
+                        
+                        setTimeout(() => setShowRollChange(null), 800);
+                        setTimeout(() => setRollAnimating(false), 500);
+                      }, 200);
                     }
-                  }, 200);
+                  } catch (error) {
+                    console.error('Failed to claim reward:', error);
+                    // 即使 API 失败也显示动画（乐观更新）
+                    setTimeout(() => {
+                      if (modal.type === 'gold' && modal.reward) {
+                        window.dispatchEvent(new CustomEvent('gold-changed', { detail: { amount: modal.reward } }));
+                      } else if (modal.type === 'roll' && modal.reward) {
+                        setRollsLeft(prev => prev + modal.reward);
+                        setShowRollChange(modal.reward);
+                        setRollAnimating(true);
+                        setTimeout(() => setShowRollChange(null), 800);
+                        setTimeout(() => setRollAnimating(false), 500);
+                      }
+                    }, 200);
+                  }
                 }
               }}
               className="w-full py-5 bg-black text-white rounded-full font-black uppercase tracking-widest shadow-xl active:scale-95 transition-transform"

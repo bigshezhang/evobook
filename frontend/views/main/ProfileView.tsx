@@ -14,14 +14,14 @@ const ProfileView: React.FC = () => {
   const [showInvite, setShowInvite] = useState(false);
   const [stats, setStats] = useState<ProfileStats | null>(null);
   const [loading, setLoading] = useState(true);
-  
+
   // 获取用户选择的角色头像
   const getProfileAvatar = (): string => {
     const character = getSelectedCharacter();
     const resourceCharacter = CHARACTER_MAPPING[character];
     return `/compressed_output/processed_image_profile/${resourceCharacter}_profile.jpg`;
   };
-  
+
   // 获取静态图片路径（用于邀请海报）- 使用 processed_image_profile 目录
   const getStaticMascotImage = (): string => {
     const character = getSelectedCharacter();
@@ -76,11 +76,11 @@ const ProfileView: React.FC = () => {
   return (
     <div className="flex flex-col min-h-screen bg-[#F8F9FB] pb-32 overflow-x-hidden font-sans">
       {/* Header with explicit back navigation to dashboard */}
-      <Header 
+      <Header
         title="Profile"
         onBack={() => navigate('/courses')}
         rightAction={
-          <button 
+          <button
             onClick={() => navigate('/assessment')}
             className="flex items-center gap-2 px-4 h-10 rounded-2xl bg-white border border-slate-100 active:scale-95 transition-all shadow-sm"
           >
@@ -95,8 +95,8 @@ const ProfileView: React.FC = () => {
         <section className="flex flex-col items-center text-center pt-2">
           <div className="relative mb-6">
             <div className="w-32 h-32 bg-white rounded-[2.5rem] flex items-center justify-center relative z-10 shadow-xl border border-slate-50 overflow-hidden">
-              <img 
-                src={getProfileAvatar()} 
+              <img
+                src={getProfileAvatar()}
                 alt="Profile Avatar"
                 className="w-full h-full object-cover"
               />
@@ -106,7 +106,7 @@ const ProfileView: React.FC = () => {
             {/* Subtle glow background */}
             <div className="absolute inset-0 bg-primary/10 rounded-full blur-3xl -z-10 scale-125"></div>
           </div>
-          
+
           <div className="flex items-center gap-2 mb-1 justify-center">
             <h2 className="text-2xl font-black text-black uppercase tracking-tight break-all">
               {getUsernameFromEmail(user?.email)}
@@ -178,7 +178,7 @@ const ProfileView: React.FC = () => {
               </div>
               <span className="text-xs font-bold text-slate-500">Code: <span className="text-slate-900 font-black">{stats?.user_name ? stats.user_name.toUpperCase().replace(/\s+/g, '').slice(0, 8) + '99' : 'EVOBOOK99'}</span></span>
             </div>
-            <button 
+            <button
               onClick={() => setShowInvite(true)}
               className="h-10 px-6 bg-black text-white rounded-full font-black text-[13px] active:scale-95 transition-all shadow-lg"
             >
@@ -198,7 +198,7 @@ const ProfileView: React.FC = () => {
               <span className="material-symbols-outlined text-slate-300 text-lg">chevron_right</span>
             </button>
             <div className="h-px bg-slate-100/50 mx-5 my-1"></div>
-            <button 
+            <button
               onClick={async () => {
                 localStorage.clear();
                 await signOut();
@@ -219,12 +219,12 @@ const ProfileView: React.FC = () => {
       {/* Social Invitation Poster Modal Overlay */}
       {showInvite && (
         <div className="fixed inset-0 z-[100] bg-white flex flex-col items-center justify-center p-6 animate-in fade-in duration-300">
-          
+
           {/* Poster Content Card - 淡紫色渐变背景 */}
           <div className="w-full max-w-[340px] bg-gradient-to-br from-purple-50 via-purple-100/80 to-indigo-50 rounded-[3.5rem] shadow-2xl relative overflow-hidden flex flex-col animate-in zoom-in duration-400">
-            
+
             {/* Close Button Inside Card (X icon) */}
-            <button 
+            <button
               onClick={() => setShowInvite(false)}
               className="absolute top-6 right-6 w-8 h-8 flex items-center justify-center z-[110] active:scale-90"
             >
@@ -234,7 +234,7 @@ const ProfileView: React.FC = () => {
             {/* Square Mascot Container - 更紧凑 */}
             <div className="w-full pt-8 px-8 flex justify-center">
               <div className="relative w-full aspect-square bg-[#223344] rounded-[2rem] overflow-hidden shadow-2xl border-4 border-white/20">
-                <img 
+                <img
                   alt="Mascot"
                   className="w-full h-full object-cover"
                   src={getStaticMascotImage()}

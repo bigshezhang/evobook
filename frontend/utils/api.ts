@@ -32,7 +32,8 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
 export type Level = 'Novice' | 'Beginner' | 'Intermediate' | 'Advanced';
 export type Mode = 'Deep' | 'Fast' | 'Light';
 export type NodeType = 'learn' | 'quiz' | 'boss';
-export type Language = 'en' | 'zh';
+// Language is any ISO 639-1 language code (e.g., 'en', 'zh', 'es', 'fr', 'ja', 'de', etc.)
+export type Language = string;
 
 // ==================== Onboarding API Types ====================
 
@@ -175,6 +176,7 @@ export interface NodeInfo {
 }
 
 export interface KnowledgeCardRequest {
+  language: Language;
   course_map_id: string;  // Course map UUID
   course: CourseInfo;
   node: NodeInfo;
@@ -608,11 +610,18 @@ export async function getLearningActivities(
  */
 export function buildLearningPath(
   base: string,
-  params: { cid?: string | null; nid?: number | null },
+  params: { cid?: string | null; nid?: number | null; aid?: string | null; [key: string]: string | number | null | undefined },
 ): string {
   const sp = new URLSearchParams();
   if (params.cid) sp.set('cid', params.cid);
   if (params.nid != null) sp.set('nid', String(params.nid));
+  if (params.aid) sp.set('aid', params.aid);
+  // Support any additional params
+  Object.keys(params).forEach(key => {
+    if (!['cid', 'nid', 'aid'].includes(key) && params[key] != null) {
+      sp.set(key, String(params[key]));
+    }
+  });
   const qs = sp.toString();
   return qs ? `${base}?${qs}` : base;
 }
@@ -678,6 +687,74 @@ export async function sendLearningHeartbeat(
 
 // ==================== Profile Stats API ====================
 
+// ==================== Profile API ====================
+
+export interface Profile {
+  id: string;
+  display_name: string | null;
+  mascot: string | null;
+  onboarding_completed: boolean;
+  gold_balance: number;
+  dice_rolls_count: number;
+  level: number;
+  current_exp: number;
+  current_outfit: string;
+  travel_board_position: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProfileUpdateRequest {
+  display_name?: string | null;
+  mascot?: string | null;
+  onboarding_completed?: boolean | null;
+}
+
+/**
+ * Get the authenticated user's profile.
+ * 
+ * @returns User profile
+ */
+export async function getProfile(): Promise<Profile> {
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${API_BASE_URL}/api/v1/profile`, {
+    headers,
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(
+      errorData.detail?.message || `Failed to fetch profile: ${response.status}`
+    );
+  }
+
+  return response.json();
+}
+
+/**
+ * Update the authenticated user's profile.
+ * 
+ * @param updates - Partial profile updates
+ * @returns Updated profile
+ */
+export async function updateProfile(updates: ProfileUpdateRequest): Promise<Profile> {
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${API_BASE_URL}/api/v1/profile`, {
+    method: 'PATCH',
+    headers,
+    body: JSON.stringify(updates),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(
+      errorData.detail?.message || `Failed to update profile: ${response.status}`
+    );
+  }
+
+  return response.json();
+}
+
 export interface ProfileStats {
   user_name: string;
   joined_date: string; // ISO 8601 format
@@ -705,6 +782,420 @@ export async function getProfileStats(): Promise<ProfileStats> {
     const errorData = await response.json().catch(() => ({}));
     throw new Error(
       errorData.detail?.message || `Failed to fetch profile stats: ${response.status}`
+    );
+  }
+
+  return response.json();
+}
+
+// ==================== Quiz History API ====================
+
+export interface QuizSubmitRequest {
+  course_map_id: string;
+  node_id: number;
+  quiz_json: {
+    questions: QuizQuestion[];
+    user_answers: Array<{
+      questionIdx: number;
+      selected: string | string[] | boolean | null;
+    }>;
+  };
+  score: number;
+}
+
+export interface QuizSubmitResponse {
+  attempt_id: string;
+  created_at: string;
+}
+
+export interface QuizAttemptSummary {
+  id: string;
+  node_id: number;
+  score: number | null;
+  total_questions: number;
+  created_at: string;
+}
+
+export interface QuizHistoryResponse {
+  attempts: QuizAttemptSummary[];
+}
+
+export interface QuizAttemptDetail {
+  id: string;
+  course_map_id: string;
+  node_id: number;
+  quiz_json: {
+    questions: QuizQuestion[];
+    user_answers: Array<{
+      questionIdx: number;
+      selected: string | string[] | boolean | null;
+    }>;
+  };
+  score: number | null;
+  created_at: string;
+}
+
+/**
+ * Submit a quiz attempt with user answers and score.
+ * 
+ * @param request - Quiz submission data
+ * @returns Created attempt info
+ */
+export async function submitQuizAttempt(
+  request: QuizSubmitRequest
+): Promise<QuizSubmitResponse> {
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${API_BASE_URL}/api/v1/quiz/submit`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(request),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(
+      errorData.detail?.message || `Failed to submit quiz: ${response.status}`
+    );
+  }
+
+  return response.json();
+}
+
+/**
+ * Get quiz attempt history for a specific node.
+ * 
+ * @param courseMapId - Course map ID
+ * @param nodeId - Quiz node ID
+ * @returns List of quiz attempts
+ */
+export async function getQuizHistory(
+  courseMapId: string,
+  nodeId: number
+): Promise<QuizHistoryResponse> {
+  const headers = await getAuthHeaders();
+  const response = await fetch(
+    `${API_BASE_URL}/api/v1/quiz/history?course_map_id=${courseMapId}&node_id=${nodeId}`,
+    { headers }
+  );
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(
+      errorData.detail?.message || `Failed to fetch quiz history: ${response.status}`
+    );
+  }
+
+  return response.json();
+}
+
+/**
+ * Get full details of a quiz attempt.
+ * 
+ * @param attemptId - Quiz attempt ID
+ * @returns Full quiz attempt details
+ */
+export async function getQuizAttemptDetail(
+  attemptId: string
+): Promise<QuizAttemptDetail> {
+  const headers = await getAuthHeaders();
+  const response = await fetch(
+    `${API_BASE_URL}/api/v1/quiz/attempt/${attemptId}`,
+    { headers }
+  );
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(
+      errorData.detail?.message || `Failed to fetch quiz attempt: ${response.status}`
+    );
+  }
+
+  return response.json();
+}
+
+// ==================== Game Currency API ====================
+
+export interface GameCurrencyResponse {
+  gold_balance: number;
+  dice_rolls_count: number;
+  level: number;
+  current_exp: number;
+  exp_to_next_level: number;
+}
+
+/**
+ * Get user's game currency data (gold, dice rolls, level, exp).
+ * 
+ * @returns Game currency data
+ */
+export async function getCurrency(): Promise<GameCurrencyResponse> {
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${API_BASE_URL}/api/v1/game/currency`, {
+    headers,
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(
+      errorData.detail?.message || `Failed to fetch currency: ${response.status}`
+    );
+  }
+
+  return response.json();
+}
+
+export interface RollDiceRequest {
+  course_map_id: string;
+  current_position: number;
+}
+
+export interface RollDiceResponse {
+  dice_result: number;
+  dice_rolls_remaining: number;
+  new_position: number;
+}
+
+/**
+ * Roll dice in the travel board game.
+ * 
+ * @param request - Roll dice request
+ * @returns Dice result and remaining rolls
+ */
+export async function rollDice(request: RollDiceRequest): Promise<RollDiceResponse> {
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${API_BASE_URL}/api/v1/game/roll-dice`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(request),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new ApiRequestError(
+      errorData.error?.code || 'ROLL_DICE_FAILED',
+      errorData.error?.message || `Failed to roll dice: ${response.status}`,
+      errorData.error?.details
+    );
+  }
+
+  return response.json();
+}
+
+export interface ClaimRewardRequest {
+  reward_type: 'gold' | 'dice' | 'gift';
+  amount: number;
+  source: string;
+  source_details: Record<string, any>;
+}
+
+export interface ClaimRewardResponse {
+  success: boolean;
+  new_balance: number;
+}
+
+/**
+ * Claim a reward (gold, dice, or gift).
+ * 
+ * @param request - Reward claim request
+ * @returns Success status and new balance
+ */
+export async function claimReward(request: ClaimRewardRequest): Promise<ClaimRewardResponse> {
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${API_BASE_URL}/api/v1/game/claim-reward`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(request),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(
+      errorData.detail?.message || `Failed to claim reward: ${response.status}`
+    );
+  }
+
+  return response.json();
+}
+
+export interface EarnExpRequest {
+  exp_amount: number;
+  source: string;
+  source_details: Record<string, any>;
+}
+
+export interface EarnExpResponse {
+  exp_earned: number;
+  new_exp: number;
+  level_up: boolean;
+  new_level?: number;
+}
+
+/**
+ * Earn experience points from learning activities.
+ * 
+ * @param request - Experience earn request
+ * @returns Experience earned and level up status
+ */
+export async function earnExp(request: EarnExpRequest): Promise<EarnExpResponse> {
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${API_BASE_URL}/api/v1/game/earn-exp`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(request),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(
+      errorData.detail?.message || `Failed to earn exp: ${response.status}`
+    );
+  }
+
+  return response.json();
+}
+
+// ==================== Shop API ====================
+
+export interface ShopItem {
+  id: string;
+  name: string;
+  item_type: 'clothes' | 'furniture';
+  price: number;
+  image_path: string;
+  rarity: string;
+  owned: boolean;
+  is_equipped: boolean;
+}
+
+export interface ShopItemsResponse {
+  items: ShopItem[];
+  total: number;
+}
+
+/**
+ * Get shop items by type.
+ * 
+ * @param itemType - Type of items to fetch
+ * @returns List of shop items
+ */
+export async function getShopItems(itemType: 'clothes' | 'furniture'): Promise<ShopItemsResponse> {
+  const headers = await getAuthHeaders();
+  const response = await fetch(
+    `${API_BASE_URL}/api/v1/shop/items?item_type=${itemType}`,
+    { headers }
+  );
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(
+      errorData.detail?.message || `Failed to fetch shop items: ${response.status}`
+    );
+  }
+
+  return response.json();
+}
+
+export interface PurchaseItemRequest {
+  item_id: string;
+}
+
+export interface PurchaseItemResponse {
+  success: boolean;
+  new_gold_balance: number;
+  inventory_item_id: string;
+}
+
+/**
+ * Purchase an item from the shop.
+ * 
+ * @param request - Purchase request
+ * @returns Purchase result
+ */
+export async function purchaseItem(request: PurchaseItemRequest): Promise<PurchaseItemResponse> {
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${API_BASE_URL}/api/v1/shop/purchase`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(request),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new ApiRequestError(
+      errorData.error?.code || 'PURCHASE_FAILED',
+      errorData.error?.message || `Failed to purchase item: ${response.status}`,
+      errorData.error?.details
+    );
+  }
+
+  return response.json();
+}
+
+export interface InventoryItem {
+  item_id: string;
+  name: string;
+  item_type: 'clothes' | 'furniture';
+  image_path: string;
+  is_equipped: boolean;
+  purchased_at: string;
+}
+
+export interface UserInventoryResponse {
+  inventory: InventoryItem[];
+  total: number;
+}
+
+/**
+ * Get user's inventory items.
+ * 
+ * @param itemType - Optional filter by item type
+ * @returns User's inventory items
+ */
+export async function getUserInventory(itemType?: 'clothes' | 'furniture'): Promise<UserInventoryResponse> {
+  const headers = await getAuthHeaders();
+  const url = itemType 
+    ? `${API_BASE_URL}/api/v1/inventory?item_type=${itemType}`
+    : `${API_BASE_URL}/api/v1/inventory`;
+  
+  const response = await fetch(url, { headers });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(
+      errorData.detail?.message || `Failed to fetch inventory: ${response.status}`
+    );
+  }
+
+  return response.json();
+}
+
+export interface EquipItemRequest {
+  item_id: string;
+  equip: boolean;
+}
+
+export interface EquipItemResponse {
+  success: boolean;
+}
+
+/**
+ * Equip or unequip an inventory item.
+ * 
+ * @param request - Equip/unequip request
+ * @returns Operation result
+ */
+export async function equipItem(request: EquipItemRequest): Promise<EquipItemResponse> {
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${API_BASE_URL}/api/v1/inventory/equip`, {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify(request),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(
+      errorData.detail?.message || `Failed to equip item: ${response.status}`
     );
   }
 

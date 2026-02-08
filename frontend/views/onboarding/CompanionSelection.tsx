@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MascotCharacter, setSelectedCharacter } from '../../utils/mascotUtils';
 import Mascot from '../../components/Mascot';
+import { updateProfile } from '../../utils/api';
 
 const companions: { id: MascotCharacter; name: string; title: string; desc: string; icon: string; color: string; profileImage: string }[] = [
   { id: 'oliver', name: 'Oliver', title: 'Oliver the Owl', desc: 'WISE & FOCUSED', icon: 'skillet', color: 'bg-card-purple', profileImage: '/compressed_output/processed_image_profile/owl_profile.jpg' },
@@ -14,11 +15,27 @@ const CompanionSelection: React.FC = () => {
   const navigate = useNavigate();
   const [selected, setSelected] = useState(companions[0]);
 
-  const handleContinue = () => {
-    // 1. 保存选中的角色到本地存储（模拟后端交互）
-    setSelectedCharacter(selected.id);
-    // 2. 进入下一环节
-    navigate('/notifications');
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleContinue = async () => {
+    setIsLoading(true);
+    try {
+      // 1. 保存选中的角色到后端
+      await updateProfile({ mascot: selected.id });
+
+      // 2. 同步到本地存储
+      setSelectedCharacter(selected.id);
+
+      // 3. 进入下一环节
+      navigate('/notifications');
+    } catch (error) {
+      console.error('Failed to save mascot:', error);
+      // 即使失败也保存到本地，让用户继续
+      setSelectedCharacter(selected.id);
+      navigate('/notifications');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -32,7 +49,7 @@ const CompanionSelection: React.FC = () => {
           <div className="absolute inset-0 bg-primary/20 blur-3xl rounded-full scale-75"></div>
           <div className={`w-64 h-64 rounded-[48px] ${selected.color} flex items-center justify-center shadow-xl border-4 border-white mb-6 transition-all duration-300 overflow-hidden`}>
             {/* 使用 Mascot 组件显示 smile 微笑动画 */}
-            <Mascot 
+            <Mascot
               character={selected.id}
               scene="onboarding"
               autoPlay={true}
@@ -50,13 +67,13 @@ const CompanionSelection: React.FC = () => {
       <div className="pb-8 pt-4">
         <div className="flex gap-4 px-8 overflow-x-auto no-scrollbar pb-4">
           {companions.map(pet => (
-            <button 
+            <button
               key={pet.id}
               onClick={() => setSelected(pet)}
               className={`flex-shrink-0 w-24 h-28 rounded-[24px] ${pet.color} flex flex-col items-center justify-center border-2 ${selected.id === pet.id ? 'border-black' : 'border-transparent opacity-80'} overflow-hidden`}
             >
-              <img 
-                src={pet.profileImage} 
+              <img
+                src={pet.profileImage}
                 alt={pet.name}
                 className="w-16 h-16 object-cover rounded-xl mb-1"
               />
@@ -74,11 +91,12 @@ const CompanionSelection: React.FC = () => {
               <div className="h-full bg-black rounded-full" style={{ width: '75%' }}></div>
             </div>
           </div>
-          <button 
+          <button
             onClick={handleContinue}
-            className="w-full h-16 rounded-full bg-black text-white font-bold text-lg active:scale-95 transition-all shadow-xl"
+            disabled={isLoading}
+            className="w-full h-16 rounded-full bg-black text-white font-bold text-lg active:scale-95 transition-all shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Continue
+            {isLoading ? 'Saving...' : 'Continue'}
           </button>
         </div>
       </footer>
