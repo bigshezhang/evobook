@@ -3,11 +3,11 @@
 # 使用 screen 管理前后端进程，通过脚本统一指定端口
 #
 # 用法:
-#   ./scripts/start.sh          启动所有服务
-#   ./scripts/start.sh stop     停止所有服务
-#   ./scripts/start.sh restart  重启所有服务
-#   ./scripts/start.sh status   查看服务状态
-#   ./scripts/start.sh logs     查看日志 (附加到 screen)
+#   ./start.sh          启动所有服务
+#   ./start.sh stop     停止所有服务
+#   ./start.sh restart  重启所有服务
+#   ./start.sh status   查看服务状态
+#   ./start.sh logs     查看日志 (附加到 screen)
 
 set -euo pipefail
 
@@ -22,8 +22,8 @@ BACKEND_WORKERS=1
 # 路径 (自动推导，一般不用改)
 # ============================================================
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BACKEND_DIR="$(dirname "$SCRIPT_DIR")"
-FRONTEND_DIR="$(dirname "$BACKEND_DIR")/frontend"
+BACKEND_DIR="$SCRIPT_DIR/backend"
+FRONTEND_DIR="$SCRIPT_DIR/frontend"
 
 SCREEN_BACKEND="evobook-be"
 SCREEN_FRONTEND="evobook-fe"
