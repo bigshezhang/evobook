@@ -27,7 +27,6 @@ FRONTEND_DIR="$(dirname "$BACKEND_DIR")/evobook"
 
 SCREEN_BACKEND="evobook-be"
 SCREEN_FRONTEND="evobook-fe"
-DOCKER_PG_CONTAINER="evobook-postgres"
 
 # 颜色
 RED='\033[0;31m'
@@ -113,42 +112,7 @@ do_start() {
         sleep 1
     fi
 
-    # 1. 确保 PostgreSQL 容器运行
-    log_step "Checking PostgreSQL container..."
-    if docker ps --format '{{.Names}}' | grep -q "^${DOCKER_PG_CONTAINER}$"; then
-        log_info "PostgreSQL container is running"
-    elif docker ps -a --format '{{.Names}}' | grep -q "^${DOCKER_PG_CONTAINER}$"; then
-        log_warn "PostgreSQL container exists but stopped, starting..."
-        docker start "$DOCKER_PG_CONTAINER"
-        sleep 3
-    else
-        log_error "PostgreSQL container '$DOCKER_PG_CONTAINER' not found"
-        log_error "Create it with:"
-        echo "  docker run -d --name $DOCKER_PG_CONTAINER \\"
-        echo "    -e POSTGRES_USER=postgres \\"
-        echo "    -e POSTGRES_PASSWORD=remember1984 \\"
-        echo "    -e POSTGRES_DB=evobook \\"
-        echo "    -p 5432:5432 \\"
-        echo "    --restart unless-stopped \\"
-        echo "    postgres:16-alpine"
-        exit 1
-    fi
-
-    local pg_ready=0
-    for i in $(seq 1 10); do
-        if docker exec "$DOCKER_PG_CONTAINER" pg_isready -U postgres >/dev/null 2>&1; then
-            pg_ready=1
-            break
-        fi
-        sleep 1
-    done
-    if [ $pg_ready -eq 0 ]; then
-        log_error "PostgreSQL is not ready after 10s"
-        exit 1
-    fi
-    log_info "PostgreSQL is ready"
-
-    # 2. 运行数据库迁移
+    # 1. 运行数据库迁移
     log_step "Running database migrations..."
     cd "$BACKEND_DIR"
     if .venv/bin/alembic upgrade head 2>&1 | tail -3; then
@@ -157,7 +121,7 @@ do_start() {
         log_warn "Migration may have issues, check logs"
     fi
 
-    # 2.1 Seed shop items (idempotent — skips existing items)
+    # 1.1 Seed shop items (idempotent — skips existing items)
     log_step "Seeding shop items..."
     if .venv/bin/python3 scripts/seed_shop_items.py 2>&1 | tail -3; then
         log_info "Shop items seeding completed"
@@ -166,7 +130,7 @@ do_start() {
     fi
     echo ""
 
-    # 3. 检查端口冲突
+    # 2. 检查端口冲突
     local be_pid
     be_pid=$(check_port $BACKEND_PORT)
     if [ -n "$be_pid" ]; then
@@ -180,7 +144,7 @@ do_start() {
         exit 1
     fi
 
-    # 4. 检查并安装前端依赖（必须在构建前完成）
+    # 3. 检查并安装前端依赖（必须在构建前完成）
     log_step "Checking frontend dependencies..."
     if [ ! -d "$FRONTEND_DIR/node_modules" ]; then
         log_warn "node_modules not found, installing dependencies..."
@@ -202,10 +166,10 @@ do_start() {
         log_info "Dependencies up to date"
     fi
 
-    # 5. 并行启动：后端 + 前端构建
+    # 4. 并行启动：后端 + 前端构建
     log_step "Starting services in parallel..."
     
-    # 5.1 启动后端（后台）
+    # 4.1 启动后端（后台）
     log_info "Launching backend..."
     screen -dmS "$SCREEN_BACKEND" bash -c "
         cd $BACKEND_DIR
@@ -217,7 +181,7 @@ do_start() {
             --access-log
     "
 
-    # 5.2 构建前端（并行，始终全量构建）
+    # 4.2 构建前端（并行，始终全量构建）
     log_info "Building frontend (in parallel)..."
     (
         export PATH="/root/.nvm/versions/node/v22.15.0/bin:$PATH"
@@ -227,11 +191,11 @@ do_start() {
     ) &
     BUILD_PID=$!
 
-    # 5.3 等待构建完成
+    # 4.3 等待构建完成
     wait $BUILD_PID
     log_info "Frontend build completed"
 
-    # 6. 启动前端服务
+    # 5. 启动前端服务
     log_info "Launching frontend..."
     screen -dmS "$SCREEN_FRONTEND" bash -c "
         export PATH=\"/root/.nvm/versions/node/v22.15.0/bin:\$PATH\"
@@ -240,7 +204,7 @@ do_start() {
         exec npx vite preview --host 0.0.0.0 --port $FRONTEND_PORT
     "
 
-    # 7. 并行等待服务就绪
+    # 6. 并行等待服务就绪
     log_step "Waiting for services to be ready..."
     
     # 并行等待
@@ -271,7 +235,7 @@ do_start() {
         exit 1
     fi
 
-    # 8. 打印摘要
+    # 7. 打印摘要
     echo ""
     echo -e "${GREEN}========================================${NC}"
     echo -e "${GREEN}${BOLD}  EvoBook is running!${NC}"
@@ -351,13 +315,6 @@ do_stop() {
 do_status() {
     echo -e "${BOLD}EvoBook Service Status${NC}"
     echo ""
-
-    echo -n "  PostgreSQL:  "
-    if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${DOCKER_PG_CONTAINER}$"; then
-        echo -e "${GREEN}running${NC}"
-    else
-        echo -e "${RED}stopped${NC}"
-    fi
 
     echo -n "  Backend:     "
     if screen -ls 2>/dev/null | grep -q "$SCREEN_BACKEND"; then
