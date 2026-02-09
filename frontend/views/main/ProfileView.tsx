@@ -270,7 +270,7 @@ const ProfileView: React.FC = () => {
   const handleRestartTutorial = async () => {
     try {
       setStartingTutorial(true);
-      
+
       // Remove 'knowledge_tree' from guides_completed
       if (profile?.guides_completed) {
         const updatedGuides = profile.guides_completed.filter(
