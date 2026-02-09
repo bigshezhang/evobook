@@ -153,13 +153,10 @@ const KnowledgeTree: React.FC = () => {
       return () => clearTimeout(timer);
     }
 
-    // Only auto-show guide when nodeProgress is loaded
-    if (nodeProgress.length === 0) return;
-
     // Let the KnowledgeTreeGuide component check profile internally
     const timer = setTimeout(() => setShowGuide(true), 500);
     return () => clearTimeout(timer);
-  }, [isLoading, error, courseData, nodeProgress, searchParams]);
+  }, [isLoading, error, courseData, searchParams]);
 
   // Poll generation progress for nodes that are still generating
   useEffect(() => {

@@ -248,7 +248,7 @@ const RootRedirect: React.FC = () => {
   }
 
   if (hasCourses) {
-    return <Navigate to={ROUTES.COURSES} replace />;
+    return <Navigate to={ROUTES.KNOWLEDGE_TREE} replace />;
   }
 
   return <WelcomeView />;
