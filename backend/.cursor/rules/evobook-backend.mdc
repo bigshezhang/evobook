@@ -1,0 +1,334 @@
+---
+alwaysApply: true
+---
+# EvoBook 后端落地规则（FastAPI + Postgres + LiteLLM）— 不做 SSE
+
+## 0. 目标（不可协商）
+不要随便写 markdown 文档！
+在 `evobook_be/` 仓库中实现 EvoBook 后端，使已实现的前端 UI（目前只是画样式/空接口）能够跑通完整链路：
+1) Onboarding 对话（Prompt: onboarding）→ 输出用户画像 finish data
+2) 课程路径生成 DAG（Prompt: dag）→ 输出 DAG 节点（含 estimated_minutes 且总和=总投入时间）
+3) 内容生成（四类能力，分别有独立 Prompt）：
+   - Knowledge Card（Prompt: knowledge_card）：输出 JSON + YAML + Markdown，Markdown 含 XML 分页符与可解析 DSL
+   - Clarification（Prompt: clarification）
+   - QA Detail（Prompt: qa_detail）
+   - Quiz（Prompt: quiz）
+
+约束：**先不实现 SSE**，所有接口同步返回。
+
+---
+
+## 1. 技术栈约束
+- Web 框架：FastAPI（Python）
+- 数据库：Postgres
+- ORM：SQLAlchemy 2.0（建议 Async；若仓库已有 Sync 风格则保持一致）
+- 迁移：Alembic
+- LLM：LiteLLM（后续切 Gemini 时，只替换 provider/config，不重写业务编排）
+- Prompts：**硬编码文件**，只放一个目录 `app/prompts/*.txt`，不做 prompt_version 目录
+
+---
+
+## 2. Cursor 的工作方式（必须遵守）
+每次实施必须按以下顺序：
+1) 代码库勘察：
+   - 判断是否已有后端目录/依赖（pyproject.toml / requirements.txt / app/ 结构）
+   - 检查是否已有 Alembic / SQLAlchemy
+   - 若前端请求路径未定：后端先制定标准 `/api/v1`，写入 `docs/api-contract.md`
+2) 输出 5 个 Milestones 计划（每个 milestone 写：改哪些文件/新增哪些文件/验收方式）
+3) 按里程碑顺序实现，每完成一个 milestone 必须提供：
+   - 文件变更清单（新增/修改）
+   - 本地运行命令
+   - 最小验收（curl 或 pytest）
+4) 严格对齐 schema：字段名、类型、枚举值必须稳定一致，不允许"猜字段"
+
+---
+
+## 3. 全局错误结构与日志规则（硬规则）
+### 3.1 错误返回结构（所有 API）
+所有错误必须返回 JSON：
+```json
+{
+  "error": {
+    "code": "string",
+    "message": "string",
+    "details": any | null
+  }
+}
+```
+禁止返回 HTML 错误页。
+
+### 3.2 日志（继承 error-handling.mdc）
+- 结构化日志（key-value）
+- **日志消息必须是英文**
+- 至少包含：request_id、endpoint、latency_ms、success
+- LLM 调用必须额外包含：model、prompt_name、prompt_hash、retries
+
+---
+
+## 4. 环境变量（启动即校验，缺失直接失败）
+必需：
+- DATABASE_URL（Postgres DSN）
+- LITELLM_MODEL（例如 "gpt-4o-mini" 或其它 LiteLLM 支持的模型 ID）
+可选：
+- LOG_LEVEL（默认 INFO）
+- LiteLLM 所需的 provider keys（例如 OPENAI_API_KEY 等，按实际 provider）
+
+把说明写入 `docs/runbook-local.md`。
+
+---
+
+## 5. Prompts 管理（硬规则：无版本）
+- Prompts 目录：`app/prompts/`
+- 文件名固定：
+  - onboarding.txt
+  - dag.txt
+  - knowledge_card.txt
+  - clarification.txt
+  - qa_detail.txt
+  - quiz.txt
+
+禁止实现 prompt_version。
+必须实现：
+- prompt_hash = sha256(prompt_text)
+- 每次 LLM 调用记录 prompt_name + prompt_hash（日志 + DB 表 prompt_runs）
+
+Prompt 读取必须安全：
+- 只允许白名单 name→filename 映射
+- 禁止路径穿越 / 任意文件读取
+
+---
+
+## 6. LiteLLM Client 规范（硬规则）
+实现 `app/llm/client.py`，需支持：
+- timeout
+- 重试：最多 2 次，指数退避
+- 结构化输出校验（必须）：
+  - JSON：必须可 parse 成 dict
+  - YAML：必须可 parse 成 dict
+  - Markdown：非空（可加最小长度阈值）
+- 若校验失败：
+  1) 重试一次（同 prompt）
+  2) 如仍失败，可选一次"修复提示"再请求（只允许轻量纠错，不能改变业务意图）
+  3) 仍失败则返回可控错误（统一错误结构）
+
+每次调用必须记录：
+- request_id（uuid）
+- model
+- prompt_name
+- prompt_hash
+- retries
+- latency_ms
+- success
+- raw_text（可选：允许截断存储）
+
+---
+
+## 7. 数据库要求（最低表集合）
+至少实现并迁移以下表（详见 docs/db-schema.md）：
+1) onboarding_sessions
+2) prompt_runs
+3) course_maps
+4) node_contents
+5) quizzes（可选：也可放在 node_contents 里，但需清晰区分 type）
+
+要求：
+- 会话状态必须持久化（不能只用内存）
+- 所有生成产物必须可追溯（至少 request_id + prompt_hash）
+
+---
+
+## 8. API 端点契约（路径未定时按此实现）
+统一前缀：`/api/v1`
+
+### 8.1 GET /healthz
+Response：
+```json
+{ "ok": true, "ts": "ISO8601 string" }
+```
+
+### 8.2 POST /api/v1/onboarding/next
+Request：
+```json
+{
+  "session_id": "uuid | null",
+  "user_message": "string | null",
+  "user_choice": "string | null"
+}
+```
+
+Response（chat）：
+```json
+{
+  "type": "chat",
+  "message": "string",
+  "options": ["string","string","string"],
+  "session_id": "uuid"
+}
+```
+
+Response（finish）：
+```json
+{
+  "type": "finish",
+  "data": {
+    "topic": "string",
+    "level": "Novice|Beginner|Intermediate|Advanced",
+    "verified_concept": "string",
+    "focus": "string",
+    "source": "string",
+    "intent": "add_info|change_topic"
+  },
+  "session_id": "uuid"
+}
+```
+
+### 8.3 POST /api/v1/course-map/generate
+Request：
+```json
+{
+  "topic": "string",
+  "level": "Novice|Beginner|Intermediate|Advanced",
+  "focus": "string",
+  "verified_concept": "string",
+  "mode": "Deep|Fast|Light",
+  "total_commitment_minutes": 120
+}
+```
+
+Response：
+```json
+{
+  "map_meta": {
+    "course_name": "string",
+    "strategy_rationale": "string",
+    "mode": "Deep|Fast|Light",
+    "time_budget_minutes": 120,
+    "time_sum_minutes": 120,
+    "time_delta_minutes": 0
+  },
+  "nodes": [
+    {
+      "id": 1,
+      "title": "string",
+      "description": "string",
+      "type": "learn|quiz",
+      "layer": 1,
+      "pre_requisites": [],
+      "estimated_minutes": 20
+    }
+  ]
+}
+```
+
+硬约束：
+- 必须有分支和汇合（不能线性）
+- sum(nodes[].estimated_minutes) == total_commitment_minutes
+
+### 8.4 POST /api/v1/node-content/knowledge-card
+Request：
+```json
+{
+  "course": {
+    "course_name": "string",
+    "course_context": "string",
+    "topic": "string",
+    "level": "Novice|Beginner|Intermediate|Advanced",
+    "mode": "Deep|Fast|Light"
+  },
+  "node": {
+    "id": 1,
+    "title": "string",
+    "description": "string",
+    "type": "learn",
+    "estimated_minutes": 16
+  }
+}
+```
+
+Response（严格 JSON）：
+```json
+{
+  "type": "knowledge_card",
+  "node_id": 1,
+  "totalPagesInCard": 2,
+  "markdown": "string",
+  "yaml": "string"
+}
+```
+
+markdown 必须包含：
+- XML 分页符：`<EVOBK_PAGE_BREAK />`
+- 每页以 H2 开头作为"页标题"
+- H2 只能用于页标题（正文禁止再出现 H2）
+- 必须包含 Key Elements box + Expert Tip box（使用 DSL，见 docs/prompt-pack.md）
+
+### 8.5 POST /api/v1/node-content/clarification
+Request：
+```json
+{
+  "language": "en|zh",
+  "user_question_raw": "string",
+  "page_markdown": "string"
+}
+```
+Response：
+```json
+{ "type": "clarification", "corrected_title": "string", "short_answer": "string" }
+```
+
+### 8.6 POST /api/v1/node-content/qa-detail
+Request：
+```json
+{
+  "language": "en|zh",
+  "qa_title": "string",
+  "qa_short_answer": "string"
+}
+```
+Response：
+```json
+{
+  "type": "qa_detail",
+  "title": "string",
+  "body_markdown": "string",
+  "image": { "placeholder": "string", "prompt": "string" }
+}
+```
+
+### 8.7 POST /api/v1/quiz/generate
+Request：
+```json
+{
+  "language": "en|zh",
+  "mode": "Deep|Fast|Light",
+  "learned_topics": [
+    { "topic_name": "string", "pages_markdown": "string" }
+  ]
+}
+```
+Response：
+```json
+{
+  "type": "quiz",
+  "title": "string",
+  "greeting": { "topics_included": ["string"], "message": "string" },
+  "questions": [ ... ]
+}
+```
+
+---
+
+## 9. 验收（必须可执行）
+必须提供：
+- `docs/runbook-local.md`：包含环境变量、迁移、启动、curl 验收
+- `scripts/test_llm.py`：验证 LiteLLM client + 结构化校验
+- `scripts/e2e_run.py`：端到端（onboarding → dag → knowledge_card → quiz），输出写入 `.out/`
+
+---
+
+## 10. Milestones（建议实现顺序）
+1) Skeleton + DB + /healthz + Alembic
+2) LiteLLM client + retries + validators
+3) Prompt registry（无版本）+ prompt_hash + prompt_runs 表
+4) Onboarding state machine + /onboarding/next + tests
+5) DAG + content endpoints + e2e script

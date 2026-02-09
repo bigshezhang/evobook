@@ -1,0 +1,26 @@
+---
+description: General project conventions for evobook backend
+alwaysApply: true
+---
+
+# General Conventions
+
+## Language
+
+- Code comments in **English**
+- Log messages in **English**
+- User-facing output in **Chinese** (中文)
+
+## Python Commands
+
+- Always use `python3` in command line, never `python`
+
+## Imports
+
+- Use **static imports** only
+- Avoid dynamic imports unless absolutely necessary
+
+## Destructive Changes
+
+- **Never** make destructive changes without explicit approval
+- Ask before deleting files, dropping tables, or removing functionality

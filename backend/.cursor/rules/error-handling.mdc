@@ -1,0 +1,52 @@
+---
+alwaysApply: true
+---
+# Error Handling & Logging
+
+## Error Handling
+
+- Never silently swallow exceptions
+- Use specific exception types
+- Include context in error messages
+
+```python
+# ❌ Bad
+try:
+    process_order(order)
+except Exception:
+    pass
+
+# ✅ Good
+try:
+    process_order(order)
+except OrderValidationError as e:
+    logger.warning("Order validation failed", order_id=order.id, error=str(e))
+    raise
+except Exception as e:
+    logger.error("Unexpected error processing order", order_id=order.id, exc_info=True)
+    raise OrderProcessingError(f"Failed to process order {order.id}") from e
+```
+
+## Logging
+
+- Use structured logging (key-value pairs)
+- Log messages in **English**
+- Include relevant context
+
+```python
+# ✅ Good
+logger.info("User created successfully", user_id=user.id, email=user.email)
+logger.error("Payment failed", order_id=order.id, amount=amount, error=str(e))
+
+# ❌ Bad
+logger.info(f"用户 {user.id} 创建成功")
+logger.error("Error occurred")
+```
+
+## Log Levels
+
+- **DEBUG**: Detailed diagnostic info
+- **INFO**: Normal operations, state changes
+- **WARNING**: Recoverable issues
+- **ERROR**: Failures requiring attention
+- **CRITICAL**: System failures

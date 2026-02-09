@@ -1,0 +1,48 @@
+# Project Setup and Tooling
+
+## Package Manager
+
+This project uses **uv** (not conda, not pip) for Python package management.
+
+### Commands
+
+Always use `uv run` prefix for Python commands:
+
+```bash
+# ✅ Correct
+uv run uvicorn app.main:app --reload --port 8000
+uv run alembic upgrade head
+uv run pytest
+uv run python3 scripts/test_llm.py
+
+# ❌ Wrong
+python3 -m uvicorn app.main:app --reload --port 8000
+alembic upgrade head
+pytest
+```
+
+### Running Database Migrations
+
+```bash
+cd /Users/lazyman/Desktop/evobook_be
+uv run alembic upgrade head
+```
+
+### Starting Development Server
+
+```bash
+cd /Users/lazyman/Desktop/evobook_be
+uv run uvicorn app.main:app --reload --port 8000
+```
+
+### Running Tests
+
+```bash
+cd /Users/lazyman/Desktop/evobook_be
+uv run pytest
+```
+
+## Project Structure
+
+- Backend: `/Users/lazyman/Desktop/evobook_be`
+- Frontend: `/Users/lazyman/Desktop/evobook`
