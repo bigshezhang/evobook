@@ -23,6 +23,11 @@ EvoBook/
 
 ```bash
 cd frontend
+
+# Copy environment variables
+cp .env.example .env
+# Edit .env with your configuration
+
 npm install
 npm run dev
 ```
