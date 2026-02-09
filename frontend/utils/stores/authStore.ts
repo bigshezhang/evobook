@@ -11,6 +11,7 @@ import { create } from 'zustand';
 import { supabase } from '../supabase';
 import { getProfile } from '../api';
 import { useMascotStore } from './mascotStore';
+import { identifyUser } from '../umami';
 import type { MascotOutfit } from '../mascotConfig';
 import type { User, Session } from '@supabase/supabase-js';
 
@@ -69,7 +70,7 @@ export function initAuthListener(): void {
   /**
    * Sync user profile from backend and update mascot store.
    */
-  const syncUserProfile = async () => {
+  const syncUserProfile = async (user: User) => {
     try {
       const profile = await getProfile();
       if (profile.mascot) {
@@ -82,6 +83,18 @@ export function initAuthListener(): void {
       // Ignore errors during profile sync (user might not have profile yet)
       console.debug('Profile sync skipped:', error);
     }
+
+    // Identify user in Umami analytics (with retry for async script loading)
+    const identifyWithRetry = (attempts = 0) => {
+      identifyUser(user.id);
+      
+      // Retry up to 3 times if Umami script not loaded yet
+      if (typeof window !== 'undefined' && !window.umami && attempts < 3) {
+        setTimeout(() => identifyWithRetry(attempts + 1), 1000);
+      }
+    };
+    
+    identifyWithRetry();
   };
 
   // 1. Fetch existing session (e.g. from a stored refresh token)
@@ -90,7 +103,7 @@ export function initAuthListener(): void {
     setUser(currentSession?.user ?? null);
 
     if (currentSession?.user) {
-      syncUserProfile();
+      syncUserProfile(currentSession.user);
     }
 
     setLoading(false);
@@ -102,7 +115,7 @@ export function initAuthListener(): void {
     setUser(newSession?.user ?? null);
 
     if (newSession?.user) {
-      syncUserProfile();
+      syncUserProfile(newSession.user);
     }
 
     setLoading(false);
