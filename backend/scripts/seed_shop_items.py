@@ -11,6 +11,10 @@ from pathlib import Path
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from app.domain.repositories.game_transaction_repository import GameTransactionRepository
+from app.domain.repositories.profile_repository import ProfileRepository
+from app.domain.repositories.shop_item_repository import ShopItemRepository
+from app.domain.repositories.user_inventory_repository import UserInventoryRepository
 from app.domain.services.shop_service import ShopService
 from app.infrastructure.database import get_db_session
 
@@ -350,8 +354,14 @@ async def main() -> None:
 
     async for db in get_db_session():
         try:
-            result = await ShopService.seed_initial_items(
-                db=db,
+            # Build service with all required repositories
+            service = ShopService(
+                shop_item_repo=ShopItemRepository(db),
+                user_inventory_repo=UserInventoryRepository(db),
+                profile_repo=ProfileRepository(db),
+                game_transaction_repo=GameTransactionRepository(db),
+            )
+            result = await service.seed_initial_items(
                 items_data=INITIAL_ITEMS,
             )
 

@@ -156,6 +156,14 @@ do_start() {
     else
         log_warn "Migration may have issues, check logs"
     fi
+
+    # 2.1 Seed shop items (idempotent — skips existing items)
+    log_step "Seeding shop items..."
+    if .venv/bin/python3 scripts/seed_shop_items.py 2>&1 | tail -3; then
+        log_info "Shop items seeding completed"
+    else
+        log_warn "Shop items seeding may have issues, check logs"
+    fi
     echo ""
 
     # 3. 检查端口冲突

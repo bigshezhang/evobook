@@ -23,12 +23,10 @@ from app.core.error_codes import (
 )
 from app.core.exceptions import AppException
 from app.domain.repositories.course_map_repository import CourseMapRepository
-from app.domain.repositories.invite_repository import InviteRepository
 from app.domain.repositories.learning_activity_repository import LearningActivityRepository
 from app.domain.repositories.profile_repository import ProfileRepository
 from app.domain.repositories.user_stats_repository import UserStatsRepository
 from app.domain.services.activity_service import ActivityService
-from app.domain.services.invite_service import InviteService
 from app.domain.services.profile_service import ProfileService
 from app.domain.services.ranking_service import RankingService
 from app.infrastructure.database import get_db_session
@@ -117,8 +115,8 @@ class ProfileStatsResponse(BaseModel):
     global_rank: int | None = Field(..., description="Global rank (from 1)")
     rank_percentile: int | None = Field(..., description="Percentile (0-100)")
     total_users: int = Field(..., description="Total users with study time stats")
-    invite_code: str = Field(..., description="User invite code (6 chars)")
-    successful_invites_count: int = Field(..., description="Successful invite count")
+    invite_code: str | None = Field(None, description="User invite code (6 chars), nullable – fetched via /invite-code")
+    successful_invites_count: int = Field(0, description="Successful invite count")
 
 
 # ---------------------------------------------------------------------------
@@ -236,7 +234,6 @@ async def get_profile_stats(
     try:
         profile_repo = ProfileRepository(db)
         user_stats_repo = UserStatsRepository(db)
-        invite_repo = InviteRepository(db)
 
         # 1. Get user profile
         profile = await profile_repo.find_by_id(user_id)
@@ -250,11 +247,10 @@ async def get_profile_stats(
         ranking_service = RankingService(user_stats_repo=user_stats_repo)
         ranking = await ranking_service.get_user_rank(user_id=user_id)
 
-        # 4. Get invite data
-        invite_service = InviteService(invite_repo=invite_repo, profile_repo=profile_repo)
-        invite_data = await invite_service.get_or_create_invite_code(user_id=user_id)
-
-        # 5. Build response
+        # 4. Build response
+        # NOTE: invite_code is fetched via the dedicated /invite-code endpoint;
+        # calling get_or_create here caused a race condition (concurrent
+        # invite creation) that triggered 500 errors and broke global_rank.
         if stats:
             total_study_seconds = stats.total_study_seconds
             completed_courses_count = stats.completed_courses_count
@@ -276,8 +272,8 @@ async def get_profile_stats(
             "global_rank": ranking["global_rank"],
             "rank_percentile": ranking["rank_percentile"],
             "total_users": ranking["total_users"],
-            "invite_code": invite_data["invite_code"],
-            "successful_invites_count": invite_data["successful_invites_count"],
+            "invite_code": None,
+            "successful_invites_count": 0,
         }
 
     except AppException:
