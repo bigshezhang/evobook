@@ -10,6 +10,10 @@ interface RewardModalProps {
   diceRolls?: number;
   expEarned?: number;
   goldEarned?: number;
+  /** Number of correctly answered questions */
+  correctCount?: number;
+  /** Total number of questions */
+  totalCount?: number;
   onGoToGame?: () => void;
 }
 
@@ -19,6 +23,8 @@ const RewardModal: React.FC<RewardModalProps> = ({
   diceRolls = 2,
   expEarned = 50,
   goldEarned = 0,
+  correctCount,
+  totalCount,
   onGoToGame
 }) => {
   const navigate = useNavigate();
@@ -49,7 +55,17 @@ const RewardModal: React.FC<RewardModalProps> = ({
         </div>
 
         {/* Title */}
-        <h2 className="text-[32px] font-extrabold text-primary dark:text-white mb-8 tracking-tight">Section Complete!</h2>
+        <h2 className="text-[32px] font-extrabold text-primary dark:text-white mb-3 tracking-tight">Section Complete!</h2>
+
+        {/* Quiz Score */}
+        {totalCount != null && correctCount != null && (
+          <div className="mb-8 flex items-center gap-2 bg-emerald-50 dark:bg-emerald-900/20 px-5 py-2.5 rounded-full border border-emerald-200 dark:border-emerald-700/30">
+            <span className="material-symbols-rounded text-emerald-500 text-[22px]" style={{ fontVariationSettings: "'FILL' 1" }}>check_circle</span>
+            <span className="text-[15px] font-bold text-emerald-700 dark:text-emerald-300">
+              {correctCount}/{totalCount} Correct
+            </span>
+          </div>
+        )}
 
         {/* Reward Cards */}
         <div className="flex gap-3 mb-10 w-full">

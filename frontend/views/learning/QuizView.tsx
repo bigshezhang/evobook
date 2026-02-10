@@ -555,6 +555,8 @@ const QuizView: React.FC = () => {
         diceRolls={rewardData.diceRolls}
         expEarned={rewardData.expEarned}
         goldEarned={rewardData.goldEarned}
+        correctCount={quizStats.correct}
+        totalCount={quizStats.total}
       />
     </div>
   );
