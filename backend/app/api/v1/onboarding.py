@@ -54,6 +54,7 @@ class FinishData(BaseModel):
     source: str
     mode: str
     intent: str
+    interested_concepts: list[str] | None = None
 
 
 class FinishResponse(BaseModel):

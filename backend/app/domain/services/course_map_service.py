@@ -212,6 +212,11 @@ class CourseMapService:
                 message="DAG must have at least one node",
                 details={"nodes_count": 0},
             )
+        if len(nodes) > 20:
+            raise DAGValidationError(
+                message="DAG must have at most 20 nodes",
+                details={"nodes_count": len(nodes)},
+            )
 
         # 1. Validate time sum
         time_sum = sum(node.get("estimated_minutes", 0) for node in nodes)
@@ -287,9 +292,9 @@ class CourseMapService:
         Raises:
             DAGValidationError: If DAG is linear (no branches/merges).
         """
-        if len(nodes) < 3:
+        if len(nodes) < 5:
             raise DAGValidationError(
-                message="DAG must have at least 3 nodes for branching structure",
+                message="DAG must have at least 5 nodes for branching structure",
                 details={"nodes_count": len(nodes)},
             )
 

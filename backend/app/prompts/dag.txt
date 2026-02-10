@@ -34,10 +34,10 @@ Receive user profile data and output a DAG suitable for front-end rendering:
 3) Time rules (hard constraint):
    - Every node must have estimated_minutes (integer, recommended 5-min steps)
    - sum(nodes[].estimated_minutes) MUST equal total_commitment_minutes (exact)
-4) Suggested node count (varies with duration):
-   - Light: 3–5 nodes
-   - Fast: 5–8 nodes
-   - Deep: 7–10 nodes
+4) Suggested node count (varies with duration): 5–20 nodes total
+   - Light: 5–8 nodes
+   - Fast: 8–12 nodes
+   - Deep: 12–20 nodes
 5) Reward multiplier (reward_multiplier):
    - Every node must have reward_multiplier (float, range 1.0 - 3.0)
    - Regular learn nodes: 1.0 - 1.2
