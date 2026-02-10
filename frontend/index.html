@@ -32,8 +32,20 @@
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block" rel="stylesheet">
 
-    <!-- Umami Analytics - async 立即开始加载，不阻塞解析 -->
-    <script async src="%VITE_UMAMI_SCRIPT_URL%" data-website-id="%VITE_UMAMI_WEBSITE_ID%"></script>
+    <!-- Umami Analytics - only load when env vars are configured -->
+    <script>
+      (function() {
+        var src = '%VITE_UMAMI_SCRIPT_URL%';
+        var id = '%VITE_UMAMI_WEBSITE_ID%';
+        if (src && !src.includes('VITE_UMAMI')) {
+          var s = document.createElement('script');
+          s.async = true;
+          s.src = src;
+          s.setAttribute('data-website-id', id);
+          document.head.appendChild(s);
+        }
+      })();
+    </script>
 <script type="importmap">
 {
   "imports": {

@@ -24,10 +24,14 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
     const { data: { session } } = await supabase.auth.getSession();
     if (session?.access_token) {
       headers['Authorization'] = `Bearer ${session.access_token}`;
+      console.debug('[AUTH] Token attached, length:', session.access_token.length, 'expires_at:', session.expires_at);
+    } else {
+      console.warn('[AUTH] No session or access_token available!', 'session:', session ? 'exists' : 'null');
     }
-  } catch {
+  } catch (err) {
     // If fetching the session fails we still send the request without auth.
     // The backend will return 401 if auth is required.
+    console.error('[AUTH] getSession() failed:', err);
   }
 
   return headers;

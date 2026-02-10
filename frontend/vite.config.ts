@@ -1,11 +1,34 @@
 import path from 'path';
-import { defineConfig, loadEnv } from 'vite';
+import { defineConfig, loadEnv, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
+
+/**
+ * Vite plugin to fix "URI malformed" errors caused by spaces in the project path.
+ * Intercepts requests before Vite's built-in middleware and sanitises malformed URIs.
+ */
+function fixMalformedUri(): Plugin {
+  return {
+    name: 'fix-malformed-uri',
+    configureServer(server) {
+      server.middlewares.use((req, _res, next) => {
+        if (req.url) {
+          try {
+            decodeURI(req.url);
+          } catch {
+            // Encode bare '%' that are not part of a valid percent-encoding triplet
+            req.url = req.url.replace(/%(?![0-9A-Fa-f]{2})/g, '%25');
+          }
+        }
+        next();
+      });
+    },
+  };
+}
 
 export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, '.', '');
     // 后端地址：优先读环境变量，脚本可通过 BACKEND_URL 覆盖
-    const backendUrl = process.env.BACKEND_URL || 'http://localhost:8000';
+    const backendUrl = process.env.BACKEND_URL || 'http://localhost:8001';
     const proxyConfig = {
       '/api': {
         target: backendUrl,
@@ -37,7 +60,7 @@ export default defineConfig(({ mode }) => {
       esbuild: {
         drop: mode === 'production' ? ['console', 'debugger'] : [],
       },
-      plugins: [react()],
+      plugins: [fixMalformedUri(), react()],
       define: {
         'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
         'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY)

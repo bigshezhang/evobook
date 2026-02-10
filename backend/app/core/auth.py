@@ -61,10 +61,26 @@ def _decode_supabase_token(token: str) -> dict:
     Raises:
         HTTPException: If token is invalid or expired.
     """
+    # Log token info for debugging (truncated for security)
+    token_preview = token[:20] + "..." + token[-10:] if len(token) > 30 else token
+    logger.info("Decoding Supabase token", token_preview=token_preview, token_length=len(token))
+
     try:
+        # Decode header without verification to inspect claims
+        try:
+            unverified_header = jwt.get_unverified_header(token)
+            logger.info("Token header (unverified)", header=unverified_header)
+        except Exception as header_err:
+            logger.error("Failed to decode token header", error=str(header_err))
+
         # Fetch the signing key from JWKS endpoint based on token's "kid" header
         jwks_client = _get_jwks_client()
+        settings = get_settings()
+        jwks_url = f"{settings.supabase_url}/auth/v1/.well-known/jwks.json"
+        logger.info("Fetching signing key from JWKS", jwks_url=jwks_url)
+
         signing_key = jwks_client.get_signing_key_from_jwt(token)
+        logger.info("Got signing key", key_id=signing_key.key_id if hasattr(signing_key, 'key_id') else 'N/A')
 
         payload = jwt.decode(
             token,
@@ -72,18 +88,22 @@ def _decode_supabase_token(token: str) -> dict:
             algorithms=["RS256", "ES256", "EdDSA"],
             audience="authenticated",
         )
+        logger.info("Token decoded successfully", sub=payload.get("sub"), aud=payload.get("aud"))
         return payload
     except jwt.ExpiredSignatureError:
+        logger.warning("Token has expired", token_preview=token_preview)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={"code": "TOKEN_EXPIRED", "message": "Token has expired"},
         )
     except jwt.InvalidTokenError as e:
+        logger.warning("Invalid token", error=str(e), token_preview=token_preview)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={"code": ERROR_INVALID_TOKEN, "message": f"Invalid token: {e}"},
         )
     except Exception as e:
+        logger.error("Authentication failed unexpectedly", error=str(e), error_type=type(e).__name__, token_preview=token_preview)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={"code": "AUTH_ERROR", "message": f"Authentication failed: {e}"},
@@ -213,11 +233,13 @@ async def get_current_user_id(
         HTTPException 401: If no token or invalid token.
     """
     if credentials is None:
+        logger.warning("Auth failed: no Authorization header present in request")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={"code": "NOT_AUTHENTICATED", "message": "Authorization header missing"},
         )
 
+    logger.info("Auth header present, scheme=%s, token_length=%d", credentials.scheme, len(credentials.credentials))
     payload = _decode_supabase_token(credentials.credentials)
 
     sub = payload.get("sub")
