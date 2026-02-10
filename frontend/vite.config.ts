@@ -28,7 +28,7 @@ function fixMalformedUri(): Plugin {
 export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, '.', '');
     // 后端地址：优先读环境变量，脚本可通过 BACKEND_URL 覆盖
-    const backendUrl = process.env.BACKEND_URL || 'http://localhost:8001';
+    const backendUrl = process.env.BACKEND_URL || 'http://localhost:8002';
     const proxyConfig = {
       '/api': {
         target: backendUrl,

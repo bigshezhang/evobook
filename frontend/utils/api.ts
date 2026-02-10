@@ -72,6 +72,7 @@ export interface FinishData {
   source: string;
   mode: Mode;
   intent: 'add_info' | 'change_topic';
+  interested_concepts?: string[];
 }
 
 export interface FinishResponse {
@@ -81,7 +82,14 @@ export interface FinishResponse {
   session_id: string;
 }
 
-export type OnboardingResponse = ChatResponse | FinishResponse;
+export interface ConceptListCheckResponse {
+  type: 'concept_list_check';
+  message: string;
+  concepts: string[];
+  session_id: string;
+}
+
+export type OnboardingResponse = ChatResponse | FinishResponse | ConceptListCheckResponse;
 
 // ==================== Discovery API Types ====================
 
@@ -116,6 +124,7 @@ export interface CourseMapGenerateRequest {
   verified_concept: string;
   mode: Mode;
   total_commitment_minutes: number;
+  interested_concepts?: string[];
 }
 
 export interface MapMeta {
@@ -595,6 +604,10 @@ export function isChatResponse(response: OnboardingResponse): response is ChatRe
 
 export function isFinishResponse(response: OnboardingResponse): response is FinishResponse {
   return response.type === 'finish';
+}
+
+export function isConceptListCheckResponse(response: OnboardingResponse): response is ConceptListCheckResponse {
+  return response.type === 'concept_list_check';
 }
 
 // ==================== LocalStorage Keys ====================

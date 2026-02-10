@@ -54,6 +54,7 @@ class CourseMapService:
         total_commitment_minutes: int,
         user_id: UUID | None = None,
         language: str = "en",
+        interested_concepts: list[str] | None = None,
     ) -> dict[str, Any]:
         """Generate a course map DAG using LLM.
 
@@ -66,6 +67,7 @@ class CourseMapService:
             total_commitment_minutes: Total time budget.
             user_id: Optional authenticated user ID to associate with the map.
             language: Language code for LLM output (ISO 639-1, e.g. "en", "zh").
+            interested_concepts: Optional list of areas/directions the user wants to explore.
 
         Returns:
             Dict containing course_map_id, map_meta, and nodes.
@@ -93,6 +95,7 @@ class CourseMapService:
             mode=mode,
             total_commitment_minutes=total_commitment_minutes,
             language=language,
+            interested_concepts=interested_concepts,
         )
         full_prompt = f"{prompt_text}\n\n# User Input\n{context}"
 
@@ -153,6 +156,7 @@ class CourseMapService:
         mode: str,
         total_commitment_minutes: int,
         language: str = "en",
+        interested_concepts: list[str] | None = None,
     ) -> str:
         """Build context string for DAG prompt.
 
@@ -164,11 +168,12 @@ class CourseMapService:
             mode: Learning mode.
             total_commitment_minutes: Time budget.
             language: Language code for LLM output.
+            interested_concepts: Optional list of areas/directions the user wants to explore.
 
         Returns:
             Formatted context string.
         """
-        return json.dumps({
+        context_data = {
             "language": language,
             "topic": topic,
             "level": level,
@@ -176,7 +181,12 @@ class CourseMapService:
             "verified_concept": verified_concept,
             "mode": mode,
             "total_commitment_minutes": total_commitment_minutes,
-        }, ensure_ascii=False, indent=2)
+        }
+        
+        if interested_concepts:
+            context_data["interested_concepts"] = interested_concepts
+            
+        return json.dumps(context_data, ensure_ascii=False, indent=2)
 
     def _validate_dag_structure(
         self,

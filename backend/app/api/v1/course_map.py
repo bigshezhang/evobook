@@ -42,6 +42,7 @@ class CourseMapGenerateRequest(BaseModel):
     verified_concept: str = Field(..., description="Concept verified during onboarding")
     mode: Literal["Deep", "Fast", "Light"] = Field(..., description="Learning mode")
     total_commitment_minutes: int = Field(..., ge=30, le=480, description="Total time budget in minutes (30-480)")
+    interested_concepts: list[str] | None = Field(None, description="Optional list of areas/directions the user wants to explore")
 
 
 class MapMeta(BaseModel):
@@ -96,6 +97,7 @@ async def generate_course_map(
         verified_concept=request.verified_concept, mode=request.mode,
         total_commitment_minutes=request.total_commitment_minutes,
         user_id=user_id, language=language,
+        interested_concepts=request.interested_concepts,
     )
 
     course_map_id = result["course_map_id"]

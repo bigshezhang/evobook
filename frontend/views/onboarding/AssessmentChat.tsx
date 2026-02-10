@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { onboardingNext, isChatResponse, isFinishResponse, type OnboardingResponse } from '../../utils/api';
+import { onboardingNext, isChatResponse, isFinishResponse, isConceptListCheckResponse, type OnboardingResponse } from '../../utils/api';
 import { getSelectedCharacter, type MascotCharacter } from '../../utils/mascotUtils';
 import { useAppStore } from '../../utils/stores';
 import { ROUTES } from '../../utils/routes';
@@ -27,11 +27,16 @@ const AssessmentChat: React.FC = () => {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [conceptCheck, setConceptCheck] = useState<{
+    message: string;
+    concepts: string[];
+    selected: Set<string>;
+  } | null>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   // Track how many messages have been rendered to only animate new ones
   const renderedMsgCountRef = useRef(0);
   // Debounce timer for smooth scrolling
-  const scrollTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const scrollTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   // Discovery preset from URL
   const discoveryPresetId = searchParams.get('preset');
@@ -244,6 +249,14 @@ const AssessmentChat: React.FC = () => {
       setOptions(response.options);
     } else if (isFinishResponse(response)) {
       handleFinishResponse(response);
+    } else if (isConceptListCheckResponse(response)) {
+      setSessionId(response.session_id);
+      setConceptCheck({
+        message: response.message,
+        concepts: response.concepts,
+        selected: new Set(),
+      });
+      setOptions([]);
     }
   };
 
@@ -271,6 +284,13 @@ const AssessmentChat: React.FC = () => {
         setOptions(response.options);
       } else if (isFinishResponse(response)) {
         handleFinishResponse(response);
+      } else if (isConceptListCheckResponse(response)) {
+        setConceptCheck({
+          message: response.message,
+          concepts: response.concepts,
+          selected: new Set(),
+        });
+        setOptions([]);
       }
     } catch (err) {
       console.error('API error:', err);
@@ -366,6 +386,116 @@ const AssessmentChat: React.FC = () => {
                 <span className="w-2 h-2 bg-gray-300 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Concept List Check */}
+        {conceptCheck && !loading && (
+          <div className="relative bg-white p-6 rounded-[32px] shadow-soft flex flex-col gap-5 border border-white/50 mt-2 animate-bubble-in">
+            {/* Title */}
+            <h3 className="text-[15px] font-semibold text-[#1a1b23]">{conceptCheck.message}</h3>
+            
+            {/* Concept Tags */}
+            <div className="flex flex-wrap gap-2.5">
+              {conceptCheck.concepts.map((concept) => {
+                const isSelected = conceptCheck.selected.has(concept);
+                return (
+                  <button
+                    key={concept}
+                    onClick={() => {
+                      const newSelected = new Set(conceptCheck.selected);
+                      if (isSelected) {
+                        newSelected.delete(concept);
+                      } else {
+                        newSelected.add(concept);
+                      }
+                      setConceptCheck({ ...conceptCheck, selected: newSelected });
+                    }}
+                    className={`
+                      px-4 py-2.5 rounded-full text-[15px] font-semibold transition-all 
+                      flex items-center gap-1.5 border-2
+                      ${isSelected 
+                        ? 'bg-black text-white border-black' 
+                        : 'bg-white text-gray-700 border-gray-200 hover:border-gray-300'
+                      }
+                    `}
+                  >
+                    {isSelected && (
+                      <span className="material-symbols-rounded text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>
+                        check
+                      </span>
+                    )}
+                    {concept}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Submit Button */}
+            <button
+              onClick={async () => {
+                const selectedConcepts = Array.from(conceptCheck.selected);
+                
+                // Add user message showing selection
+                const selectionText = selectedConcepts.length > 0 
+                  ? `I want to learn: ${selectedConcepts.join(', ')}` 
+                  : 'I want to explore all areas';
+                setMessages(prev => [...prev, { role: 'user', content: selectionText }]);
+                
+                setConceptCheck(null);
+                setLoading(true);
+                
+                try {
+                  const response = await onboardingNext({
+                    session_id: sessionId,
+                    user_message: JSON.stringify({ interested_concepts: selectedConcepts }),
+                  });
+                  
+                  if (isChatResponse(response)) {
+                    setMessages(prev => [...prev, { role: 'assistant', content: response.message }]);
+                    setOptions(response.options);
+                  } else if (isFinishResponse(response)) {
+                    handleFinishResponse(response);
+                  } else if (isConceptListCheckResponse(response)) {
+                    setConceptCheck({
+                      message: response.message,
+                      concepts: response.concepts,
+                      selected: new Set(),
+                    });
+                    setOptions([]);
+                  }
+                } catch (err) {
+                  console.error('[AssessmentChat] Failed to submit concepts:', err);
+                  setMessages(prev => [...prev, { 
+                    role: 'assistant', 
+                    content: 'Sorry, something went wrong. Please try again.' 
+                  }]);
+                } finally {
+                  setLoading(false);
+                }
+              }}
+              disabled={loading}
+              className={`
+                w-full py-4 px-6 rounded-full font-bold text-[15px] 
+                transition-all flex items-center justify-center gap-2
+                ${loading
+                  ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                  : 'bg-black text-white hover:bg-black/90 active:scale-95'
+                }
+              `}
+            >
+              {loading ? (
+                <>
+                  <span className="material-symbols-rounded animate-spin">progress_activity</span>
+                  Processing...
+                </>
+              ) : (
+                <>
+                  Continue
+                  {conceptCheck.selected.size > 0 && ` (${conceptCheck.selected.size} selected)`}
+                </>
+              )}
+            </button>
           </div>
         )}
 

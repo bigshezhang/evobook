@@ -63,6 +63,17 @@ Use these exact XML blocks in Markdown so the frontend can parse them:
 - Fast: practical + key ideas, moderate depth.
 - Deep: richer explanations + subtle pitfalls.
 
+# Accessibility & Progressive Explanation (CRITICAL)
+- **Define before using**: Every technical term or concept MUST be briefly explained the first time it appears.
+  Do NOT assume the reader already knows domain-specific vocabulary.
+- **Build from familiar to unfamiliar**: Start each page with relatable analogies or everyday examples,
+  then gradually introduce the formal/technical explanation.
+- **No orphaned jargon**: If you mention a concept that hasn't been covered in earlier nodes,
+  include a 1-sentence plain-language explanation inline (e.g., "Gradient Descent — a method to
+  minimize errors by adjusting parameters step by step").
+- **Summarize before advancing**: End each page with a brief recap of the key takeaway before
+  the reader moves to the next page.
+
 # Page Count Heuristic (deterministic)
 Compute pages from estimated_minutes:
 - pages = clamp( round(estimated_minutes / 8), 2, 8 )

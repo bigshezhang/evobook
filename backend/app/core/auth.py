@@ -63,6 +63,7 @@ def _decode_supabase_token(token: str) -> dict:
     """
     # Log token info for debugging (truncated for security)
     token_preview = token[:20] + "..." + token[-10:] if len(token) > 30 else token
+    print(f"[AUTH DEBUG] >>> Decoding token: {token_preview} (len={len(token)})", flush=True)
     logger.info("Decoding Supabase token", token_preview=token_preview, token_length=len(token))
 
     try:
@@ -233,13 +234,15 @@ async def get_current_user_id(
         HTTPException 401: If no token or invalid token.
     """
     if credentials is None:
+        print("[AUTH DEBUG] >>> NO Authorization header in request!", flush=True)
         logger.warning("Auth failed: no Authorization header present in request")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={"code": "NOT_AUTHENTICATED", "message": "Authorization header missing"},
         )
 
-    logger.info("Auth header present, scheme=%s, token_length=%d", credentials.scheme, len(credentials.credentials))
+    print(f"[AUTH DEBUG] >>> Token received, scheme={credentials.scheme}, length={len(credentials.credentials)}", flush=True)
+    logger.info("Auth header present", scheme=credentials.scheme, token_length=len(credentials.credentials))
     payload = _decode_supabase_token(credentials.credentials)
 
     sub = payload.get("sub")

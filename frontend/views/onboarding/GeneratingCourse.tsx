@@ -64,6 +64,7 @@ const GeneratingCourse: React.FC = () => {
           verified_concept: onboardingData.verified_concept,
           mode,
           total_commitment_minutes: totalCommitmentMinutes,
+          interested_concepts: onboardingData.interested_concepts,
         });
 
         // Check if aborted before updating state

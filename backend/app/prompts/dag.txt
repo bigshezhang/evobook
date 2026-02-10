@@ -22,6 +22,8 @@ Receive user profile data and output a DAG suitable for front-end rendering:
 - verified_concept: String (concept verified as mastered)
 - mode: "Deep" | "Fast" | "Light"
 - total_commitment_minutes: number (total investment in minutes)
+- interested_concepts: list[String] (optional — areas/directions the user wants to explore;
+  use these to ENSURE coverage in the DAG, each selected area should have at least one dedicated learning node)
 
 # Hard Rules (Structure & Time)
 1) DAG is Acyclic — dependencies are one-directional; no cycles allowed.
@@ -47,7 +49,23 @@ Receive user profile data and output a DAG suitable for front-end rendering:
 # Experience Guidelines
 1) Gamified naming: Verb + Noun, but accurately aligned with topic and focus.
 2) Strong relevance: Every branch must serve the focus.
-3) Difficulty alignment: Respect level and verified_concept; Root should not repeat what the user already knows.
+3) Difficulty alignment: Respect level and verified_concept.
+4) **Foundation First (CRITICAL)**: The Root node and early Layer nodes MUST introduce foundational concepts
+   and terminology before diving into advanced topics, even if the user has some prior knowledge.
+   - For Novice/Beginner: Start with "What is X?" and core vocabulary definitions.
+   - For Intermediate: Start with a concise review of key foundations, then build up.
+   - For Advanced: Start with a quick recap, then focus on depth.
+   - NEVER assume the user can understand advanced content without proper groundwork.
+5) **Progressive Complexity**: Nodes must follow a clear learning progression:
+   Layer 1 → Basic concepts & definitions
+   Layer 2 → Core principles & how things work
+   Layer 3+ → Applications, advanced techniques, and synthesis
+6) **Interested Concepts Handling**: If interested_concepts are provided in the input:
+   - Every interested_concept MUST have at least one corresponding learning node in the DAG.
+   - Integrate all user-selected areas into a coherent, connected learning path.
+   - More selections → more nodes (within the mode's allowed node count range).
+   - Weave the selected areas together logically: use shared foundations as root/early nodes,
+     then branch into the specific interested areas, and merge them in synthesis/application nodes.
 
 # Output Schema (STRICT JSON ONLY)
 {

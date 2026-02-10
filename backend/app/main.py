@@ -40,13 +40,22 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
         session_factory = get_session_factory()
         async with session_factory() as db:
-            recovery_service = RecoveryService()
+            from app.domain.repositories.node_content_repository import NodeContentRepository
+            from app.domain.repositories.course_map_repository import CourseMapRepository
+
             llm_client = LLMClient(settings)
+            node_content_repo = NodeContentRepository(db)
+            course_map_repo = CourseMapRepository(db)
+
+            recovery_service = RecoveryService(
+                node_content_repo=node_content_repo,
+                course_map_repo=course_map_repo,
+            )
 
             # Create content generation service for recovery
             content_generation_service = ContentGenerationService(
                 llm_client=llm_client,
-                db_session=db,
+                node_content_repo=node_content_repo,
             )
 
             # Execute recovery

@@ -66,6 +66,7 @@ class OnboardingState:
     source: str | None = None
     intent: UserIntent | None = None
     history: list[dict[str, Any]] = field(default_factory=list)
+    interested_concepts: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize state to dict for JSON storage.
@@ -84,6 +85,7 @@ class OnboardingState:
             "source": self.source,
             "intent": self.intent.value if self.intent else None,
             "history": self.history,
+            "interested_concepts": self.interested_concepts,
         }
 
     @classmethod
@@ -107,6 +109,7 @@ class OnboardingState:
             source=data.get("source"),
             intent=UserIntent(data["intent"]) if data.get("intent") else None,
             history=data.get("history", []),
+            interested_concepts=data.get("interested_concepts", []),
         )
 
     @classmethod
@@ -123,6 +126,7 @@ class OnboardingState:
             session_id=session_id or uuid4(),
             phase=OnboardingPhase.EXPLORATION,
             history=[],
+            interested_concepts=[],
         )
 
 
@@ -208,6 +212,23 @@ class OnboardingService:
         user_input = user_message or user_choice
         if user_input:
             state.history.append({"role": "user", "content": user_input})
+            
+            # 2.5. Parse and store interested_concepts if provided
+            if user_message:
+                try:
+                    message_data = json.loads(user_message)
+                    if "interested_concepts" in message_data:
+                        interested_concepts = message_data["interested_concepts"]
+                        state.interested_concepts = interested_concepts
+                        logger.info(
+                            "Stored interested concepts",
+                            session_id=str(state.session_id),
+                            concepts=interested_concepts,
+                            count=len(interested_concepts),
+                        )
+                except (json.JSONDecodeError, TypeError):
+                    # Not JSON, treat as regular message
+                    pass
 
         # 3. Call LLM with conversation context
         llm_response = await self._call_llm(state)
@@ -249,10 +270,21 @@ class OnboardingService:
 
         # 11. Return appropriate response
         if response_data.get("type") == "finish":
+            finish_data = response_data.get("data", {})
+            # Include interested_concepts from state if available
+            if state.interested_concepts:
+                finish_data["interested_concepts"] = state.interested_concepts
             return {
                 "type": "finish",
                 "message": response_data.get("message", ""),
-                "data": response_data.get("data", {}),
+                "data": finish_data,
+                "session_id": state.session_id,
+            }
+        elif response_data.get("type") == "concept_list_check":
+            return {
+                "type": "concept_list_check",
+                "message": response_data.get("message", ""),
+                "concepts": response_data.get("concepts", []),
                 "session_id": state.session_id,
             }
         else:
