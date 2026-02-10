@@ -54,7 +54,8 @@ require_cmd() {
 check_port() {
     local port=$1
     local pid
-    pid=$(ss -tlnp 2>/dev/null | grep ":${port} " | grep -oP 'pid=\K[0-9]+' | head -1)
+    # 使用 lsof（兼容 macOS 和 Linux）
+    pid=$(lsof -ti ":${port}" 2>/dev/null | head -1)
     if [ -n "$pid" ]; then
         echo "$pid"
     fi
@@ -91,7 +92,12 @@ do_start() {
 
     # 确保 uv 在 PATH 中
     if ! command -v uv &>/dev/null; then
-        source /root/.local/bin/env 2>/dev/null || true
+        # 尝试常见的安装位置
+        if [ -f "$HOME/.local/bin/uv" ]; then
+            export PATH="$HOME/.local/bin:$PATH"
+        elif [ -f "$HOME/.cargo/bin/uv" ]; then
+            export PATH="$HOME/.cargo/bin:$PATH"
+        fi
     fi
     require_cmd uv
 
@@ -112,9 +118,28 @@ do_start() {
         sleep 1
     fi
 
+    # 0. 检查并初始化后端虚拟环境
+    log_step "Checking backend virtual environment..."
+    cd "$BACKEND_DIR"
+    if [ ! -d ".venv" ]; then
+        log_warn "Virtual environment not found, creating..."
+        uv venv
+        log_info "Virtual environment created"
+    fi
+
+    # 检查并同步依赖
+    if [ ! -f ".venv/.synced" ] || [ "pyproject.toml" -nt ".venv/.synced" ]; then
+        log_step "Syncing backend dependencies..."
+        uv sync
+        touch .venv/.synced
+        log_info "Dependencies synced"
+    else
+        log_info "Dependencies up to date"
+    fi
+    echo ""
+
     # 1. 运行数据库迁移
     log_step "Running database migrations..."
-    cd "$BACKEND_DIR"
     if .venv/bin/alembic upgrade head 2>&1 | tail -3; then
         log_info "Database migrations completed"
     else
@@ -149,7 +174,6 @@ do_start() {
     if [ ! -d "$FRONTEND_DIR/node_modules" ]; then
         log_warn "node_modules not found, installing dependencies..."
         (
-            export PATH="/root/.nvm/versions/node/v22.15.0/bin:$PATH"
             cd "$FRONTEND_DIR"
             npm install
         )
@@ -157,7 +181,6 @@ do_start() {
     elif [ "$FRONTEND_DIR/package.json" -nt "$FRONTEND_DIR/node_modules" ]; then
         log_warn "package.json changed, updating dependencies..."
         (
-            export PATH="/root/.nvm/versions/node/v22.15.0/bin:$PATH"
             cd "$FRONTEND_DIR"
             npm install
         )
@@ -168,7 +191,7 @@ do_start() {
 
     # 4. 并行启动：后端 + 前端构建
     log_step "Starting services in parallel..."
-    
+
     # 4.1 启动后端（后台）
     log_info "Launching backend..."
     screen -dmS "$SCREEN_BACKEND" bash -c "
@@ -184,7 +207,6 @@ do_start() {
     # 4.2 构建前端（并行，始终全量构建）
     log_info "Building frontend (in parallel)..."
     (
-        export PATH="/root/.nvm/versions/node/v22.15.0/bin:$PATH"
         export BACKEND_URL="http://localhost:${BACKEND_PORT}"
         cd "$FRONTEND_DIR"
         npx vite build 2>&1 | tail -5
@@ -198,7 +220,7 @@ do_start() {
     # 5. 启动前端服务
     log_info "Launching frontend..."
     screen -dmS "$SCREEN_FRONTEND" bash -c "
-        export PATH=\"/root/.nvm/versions/node/v22.15.0/bin:\$PATH\"
+
         export BACKEND_URL=\"http://localhost:${BACKEND_PORT}\"
         cd $FRONTEND_DIR
         exec npx vite preview --host 0.0.0.0 --port $FRONTEND_PORT
@@ -206,7 +228,7 @@ do_start() {
 
     # 6. 并行等待服务就绪
     log_step "Waiting for services to be ready..."
-    
+
     # 并行等待
     wait_for_service "http://localhost:${BACKEND_PORT}/healthz" "Backend" 30 &
     BE_WAIT_PID=$!
@@ -216,7 +238,7 @@ do_start() {
     # 等待两个服务都就绪
     local be_ok=0
     local fe_ok=0
-    
+
     if wait $BE_WAIT_PID; then
         be_ok=1
         log_info "Backend is running on port $BACKEND_PORT"
