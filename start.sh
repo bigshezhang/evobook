@@ -155,19 +155,40 @@ do_start() {
     fi
     echo ""
 
-    # 2. 检查端口冲突
+    # 2. 检查并清理端口冲突
+    log_step "Checking and cleaning ports..."
     local be_pid
     be_pid=$(check_port $BACKEND_PORT)
     if [ -n "$be_pid" ]; then
-        log_error "Port $BACKEND_PORT is already in use by PID $be_pid"
-        exit 1
+        log_warn "Port $BACKEND_PORT is in use by PID $be_pid, stopping..."
+        kill "$be_pid" 2>/dev/null || true
+        sleep 1
+        # 如果进程还在，强制终止
+        if kill -0 "$be_pid" 2>/dev/null; then
+            kill -9 "$be_pid" 2>/dev/null || true
+            sleep 1
+        fi
+        log_info "Port $BACKEND_PORT cleared"
     fi
+    
     local fe_pid
     fe_pid=$(check_port $FRONTEND_PORT)
     if [ -n "$fe_pid" ]; then
-        log_error "Port $FRONTEND_PORT is already in use by PID $fe_pid"
-        exit 1
+        log_warn "Port $FRONTEND_PORT is in use by PID $fe_pid, stopping..."
+        kill "$fe_pid" 2>/dev/null || true
+        sleep 1
+        # 如果进程还在，强制终止
+        if kill -0 "$fe_pid" 2>/dev/null; then
+            kill -9 "$fe_pid" 2>/dev/null || true
+            sleep 1
+        fi
+        log_info "Port $FRONTEND_PORT cleared"
     fi
+    
+    if [ -z "$be_pid" ] && [ -z "$fe_pid" ]; then
+        log_info "Ports are available"
+    fi
+    echo ""
 
     # 3. 检查并安装前端依赖（必须在构建前完成）
     log_step "Checking frontend dependencies..."
