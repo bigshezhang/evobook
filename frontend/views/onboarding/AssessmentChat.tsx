@@ -6,6 +6,8 @@ import { useAppStore } from '../../utils/stores';
 import { ROUTES } from '../../utils/routes';
 import { useThemeColor, PAGE_THEME_COLORS } from '../../utils/themeColor';
 import { useLanguage } from '../../utils/LanguageContext';
+import { useLanguageStore } from '../../utils/stores';
+import { getFirstQuestionPreset } from '../../utils/onboardingPresets';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -174,15 +176,22 @@ const AssessmentChat: React.FC = () => {
     const abortController = new AbortController();
 
     const initSession = async () => {
+      const topic = useAppStore.getState().selectedTopic;
+
+      if (!topic && !discoveryPresetId) {
+        // Fresh entry: show preset immediately, no API call, no loading.
+        // First API call will happen when user clicks an option or sends a message.
+        const lang = useLanguageStore.getState().language;
+        const preset = getFirstQuestionPreset(lang);
+        setMessages([{ role: 'assistant', content: preset.message }]);
+        setOptions(preset.options);
+        return;
+      }
+
+      // Has pre-selected topic or discovery preset: call API (Phase 1 is skipped)
       setLoading(true);
       setError(null);
       try {
-        // Read selected topic for initial context
-        const topic = useAppStore.getState().selectedTopic;
-
-        // Pass initial_topic to skip Phase 1 if topic is pre-selected
-        // Backend will start at calibration phase directly
-        // If discovery_preset_id is provided, it will inject seed context
         const response = await onboardingNext({
           initial_topic: topic || undefined,
           discovery_preset_id: discoveryPresetId || undefined,
@@ -273,18 +282,27 @@ const AssessmentChat: React.FC = () => {
     setInput('');
 
     try {
-      const response = await onboardingNext({
-        session_id: sessionId,
-        user_message: userChoice ? null : messageContent,
-        user_choice: userChoice || null,
-      });
+      // When sessionId is null this is the first interaction (from preset).
+      // Send the user's choice as initial_topic so the backend creates a
+      // new session and skips Phase 1 directly into Phase 2 (calibration).
+      const response = sessionId
+        ? await onboardingNext({
+            session_id: sessionId,
+            user_message: userChoice ? null : messageContent,
+            user_choice: userChoice || null,
+          })
+        : await onboardingNext({
+            initial_topic: messageContent,
+          });
 
       if (isChatResponse(response)) {
+        setSessionId(response.session_id);
         setMessages(prev => [...prev, { role: 'assistant', content: response.message }]);
         setOptions(response.options);
       } else if (isFinishResponse(response)) {
         handleFinishResponse(response);
       } else if (isConceptListCheckResponse(response)) {
+        setSessionId(response.session_id);
         setConceptCheck({
           message: response.message,
           concepts: response.concepts,
@@ -376,8 +394,8 @@ const AssessmentChat: React.FC = () => {
           );
         })}
 
-        {/* Loading indicator */}
-        {loading && (
+        {/* Loading indicator - hide when preset first message and options are already shown */}
+        {loading && !(messages.length === 1 && options.length > 0) && (
           <div className="flex flex-col gap-2 max-w-[85%] self-start animate-bubble-in">
             <div className="relative bg-white p-4 rounded-bubble rounded-tl-none shadow-soft border border-white/50">
               <div className="flex gap-1">
@@ -500,7 +518,7 @@ const AssessmentChat: React.FC = () => {
         )}
 
         {/* Options */}
-        {options.length > 0 && !loading && (
+        {options.length > 0 && (
           <div className="relative bg-white p-5 rounded-bubble shadow-soft flex flex-col gap-3 border border-white/50 mt-2 animate-bubble-in">
             <span className="text-[10px] font-black text-primary uppercase tracking-widest">{text.selectOption}</span>
             <div className="flex flex-wrap gap-2">
