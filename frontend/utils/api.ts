@@ -305,7 +305,7 @@ export interface QuizQuestion {
 export interface QuizGenerateResponse {
   type: 'quiz';
   title: string;
-  greeting: QuizGreeting;
+  greeting?: QuizGreeting;
   questions: QuizQuestion[];
 }
 
@@ -849,6 +849,23 @@ export async function getProfileStats(): Promise<ProfileStats> {
 
 // ==================== Quiz History API ====================
 
+export interface QuizDraftSaveRequest {
+  course_map_id: string;
+  node_id: number;
+  quiz_json: {
+    questions: QuizQuestion[];
+    user_answers: Array<{
+      questionIdx: number;
+      selected: string | string[] | boolean | null;
+    }>;
+  };
+}
+
+export interface QuizDraftSaveResponse {
+  attempt_id: string;
+  created_at: string;
+}
+
 export interface QuizSubmitRequest {
   course_map_id: string;
   node_id: number;
@@ -860,6 +877,7 @@ export interface QuizSubmitRequest {
     }>;
   };
   score: number;
+  attempt_id?: string | null;
 }
 
 export interface QuizSubmitResponse {
@@ -892,6 +910,61 @@ export interface QuizAttemptDetail {
   };
   score: number | null;
   created_at: string;
+}
+
+/**
+ * Save quiz draft (questions and user answers) for resume later.
+ * Creates or updates the draft for this user+course+node.
+ *
+ * @param request - Draft data
+ * @returns Draft attempt info
+ */
+export async function saveQuizDraft(
+  request: QuizDraftSaveRequest
+): Promise<QuizDraftSaveResponse> {
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${API_BASE_URL}/api/v1/quiz/draft`, {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify(request),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(
+      errorData.detail?.message || `Failed to save quiz draft: ${response.status}`
+    );
+  }
+
+  return response.json();
+}
+
+/**
+ * Get in-progress quiz draft for a node, if any.
+ * Returns 404 when no draft exists.
+ *
+ * @param courseMapId - Course map ID
+ * @param nodeId - Quiz node ID
+ * @returns Draft with questions and user_answers
+ */
+export async function getQuizDraft(
+  courseMapId: string,
+  nodeId: number
+): Promise<QuizAttemptDetail> {
+  const headers = await getAuthHeaders();
+  const response = await fetch(
+    `${API_BASE_URL}/api/v1/quiz/draft?course_map_id=${courseMapId}&node_id=${nodeId}`,
+    { headers }
+  );
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(
+      errorData.detail?.message || `Failed to fetch quiz draft: ${response.status}`
+    );
+  }
+
+  return response.json();
 }
 
 /**

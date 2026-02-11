@@ -38,6 +38,7 @@ class QuizAttemptRepository(BaseRepository[QuizAttempt]):
         user_id: UUID,
         course_map_id: UUID,
         node_id: int,
+        exclude_drafts: bool = False,
     ) -> list[QuizAttempt]:
         """Find all attempts for a user's course map node.
 
@@ -45,9 +46,41 @@ class QuizAttemptRepository(BaseRepository[QuizAttempt]):
             user_id: User UUID.
             course_map_id: Course map UUID.
             node_id: Quiz node ID.
+            exclude_drafts: If True, only return completed attempts (score IS NOT NULL).
 
         Returns:
             List of QuizAttempt instances ordered by created_at desc.
+        """
+        conditions = [
+            QuizAttempt.user_id == user_id,
+            QuizAttempt.course_map_id == course_map_id,
+            QuizAttempt.node_id == node_id,
+        ]
+        if exclude_drafts:
+            conditions.append(QuizAttempt.score.is_not(None))
+        stmt = (
+            select(QuizAttempt)
+            .where(*conditions)
+            .order_by(desc(QuizAttempt.created_at))
+        )
+        result = await self.db.execute(stmt)
+        return list(result.scalars().all())
+
+    async def find_draft_by_user_course_node(
+        self,
+        user_id: UUID,
+        course_map_id: UUID,
+        node_id: int,
+    ) -> QuizAttempt | None:
+        """Find the latest draft (in-progress, score is null) for a user's node.
+
+        Args:
+            user_id: User UUID.
+            course_map_id: Course map UUID.
+            node_id: Quiz node ID.
+
+        Returns:
+            The draft QuizAttempt or None.
         """
         stmt = (
             select(QuizAttempt)
@@ -55,11 +88,13 @@ class QuizAttemptRepository(BaseRepository[QuizAttempt]):
                 QuizAttempt.user_id == user_id,
                 QuizAttempt.course_map_id == course_map_id,
                 QuizAttempt.node_id == node_id,
+                QuizAttempt.score.is_(None),  # draft: score not yet set
             )
             .order_by(desc(QuizAttempt.created_at))
+            .limit(1)
         )
         result = await self.db.execute(stmt)
-        return list(result.scalars().all())
+        return result.scalar_one_or_none()
 
     async def find_by_id_and_user(
         self, attempt_id: UUID, user_id: UUID

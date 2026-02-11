@@ -45,7 +45,7 @@ class QuizGenerateRequest(BaseModel):
 
 
 class QuizGreeting(BaseModel):
-    """Quiz greeting message."""
+    """Quiz greeting message (deprecated, kept for backward compatibility)."""
 
     topics_included: list[str]
     message: str
@@ -66,8 +66,26 @@ class QuizGenerateResponse(BaseModel):
 
     type: Literal["quiz"]
     title: str
-    greeting: QuizGreeting
+    greeting: QuizGreeting | None = None
     questions: list[QuizQuestion]
+
+
+class QuizDraftSaveRequest(BaseModel):
+    """Request body for quiz/draft save endpoint."""
+
+    course_map_id: UUID = Field(..., description="Course map ID")
+    node_id: int = Field(..., description="Quiz node ID")
+    quiz_json: dict[str, Any] = Field(
+        ...,
+        description="Quiz data: questions and user_answers (draft, score not required)",
+    )
+
+
+class QuizDraftSaveResponse(BaseModel):
+    """Response body for quiz/draft save endpoint."""
+
+    attempt_id: UUID = Field(..., description="Draft attempt ID (create or update)")
+    created_at: datetime = Field(..., description="Creation or update timestamp")
 
 
 class QuizSubmitRequest(BaseModel):
@@ -77,6 +95,10 @@ class QuizSubmitRequest(BaseModel):
     node_id: int = Field(..., description="Quiz node ID")
     quiz_json: dict[str, Any] = Field(..., description="Quiz data including questions and user answers")
     score: int = Field(..., ge=0, le=100, description="Quiz score (0-100)")
+    attempt_id: UUID | None = Field(
+        default=None,
+        description="If provided and is a draft, update it with score instead of creating new",
+    )
 
 
 class QuizSubmitResponse(BaseModel):
@@ -150,7 +172,7 @@ async def generate_quiz(
         user_id: Optional authenticated user ID from JWT.
 
     Returns:
-        QuizGenerateResponse with type, title, greeting, questions.
+        QuizGenerateResponse with type, title, questions.
     """
     service = QuizService(llm_client=llm_client)
 
@@ -168,6 +190,79 @@ async def generate_quiz(
     )
 
     return result
+
+
+@router.put("/draft", response_model=QuizDraftSaveResponse)
+async def save_quiz_draft(
+    request: QuizDraftSaveRequest,
+    db: Annotated[AsyncSession, Depends(get_db_session)],
+    user_id: UUID = Depends(get_current_user_id),
+) -> QuizDraftSaveResponse:
+    """Save or update quiz draft (questions and user answers, without score).
+
+    Used to persist in-progress quiz so user can resume after leaving.
+    If a draft already exists for this user+course+node, it is updated.
+    Otherwise a new draft is created.
+    """
+    quiz_repo = QuizAttemptRepository(db)
+    draft = await quiz_repo.find_draft_by_user_course_node(
+        user_id=user_id,
+        course_map_id=request.course_map_id,
+        node_id=request.node_id,
+    )
+
+    if draft:
+        draft.quiz_json = request.quiz_json
+        await quiz_repo.commit()
+        await quiz_repo.refresh(draft)
+        return QuizDraftSaveResponse(
+            attempt_id=draft.id,
+            created_at=draft.created_at,
+        )
+
+    attempt = QuizAttempt(
+        user_id=user_id,
+        course_map_id=request.course_map_id,
+        node_id=request.node_id,
+        quiz_json=request.quiz_json,
+        score=None,
+    )
+    await quiz_repo.create(attempt)
+    await quiz_repo.commit()
+    await quiz_repo.refresh(attempt)
+    return QuizDraftSaveResponse(
+        attempt_id=attempt.id,
+        created_at=attempt.created_at,
+    )
+
+
+@router.get("/draft", response_model=QuizAttemptDetail)
+async def get_quiz_draft(
+    course_map_id: UUID,
+    node_id: int,
+    db: Annotated[AsyncSession, Depends(get_db_session)],
+    user_id: UUID = Depends(get_current_user_id),
+) -> QuizAttemptDetail:
+    """Get in-progress quiz draft for a node, if any."""
+    quiz_repo = QuizAttemptRepository(db)
+    draft = await quiz_repo.find_draft_by_user_course_node(
+        user_id=user_id,
+        course_map_id=course_map_id,
+        node_id=node_id,
+    )
+    if not draft:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Quiz draft not found",
+        )
+    return QuizAttemptDetail(
+        id=draft.id,
+        course_map_id=draft.course_map_id,
+        node_id=draft.node_id,
+        quiz_json=draft.quiz_json,
+        score=draft.score,
+        created_at=draft.created_at,
+    )
 
 
 @router.post("/submit", response_model=QuizSubmitResponse, status_code=status.HTTP_201_CREATED)
@@ -192,8 +287,20 @@ async def submit_quiz(
     Raises:
         HTTPException: 401 if user is not authenticated.
     """
-    # Create quiz attempt record
     quiz_repo = QuizAttemptRepository(db)
+
+    if request.attempt_id:
+        existing = await quiz_repo.find_by_id_and_user(request.attempt_id, user_id)
+        if existing and existing.score is None:
+            existing.quiz_json = request.quiz_json
+            existing.score = request.score
+            await quiz_repo.commit()
+            await quiz_repo.refresh(existing)
+            return QuizSubmitResponse(
+                attempt_id=existing.id,
+                created_at=existing.created_at,
+            )
+
     attempt = QuizAttempt(
         user_id=user_id,
         course_map_id=request.course_map_id,
@@ -236,9 +343,11 @@ async def get_quiz_history(
     Raises:
         HTTPException: 401 if user is not authenticated.
     """
-    # Query attempts for this user, course_map, and node
+    # Query completed attempts only (exclude drafts where score is null)
     quiz_repo = QuizAttemptRepository(db)
-    attempts = await quiz_repo.find_by_user_course_node(user_id, course_map_id, node_id)
+    attempts = await quiz_repo.find_by_user_course_node(
+        user_id, course_map_id, node_id, exclude_drafts=True
+    )
 
     # Build summary list
     summaries = [

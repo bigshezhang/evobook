@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import Header from '../../components/Header';
 import RewardModal from '../../components/RewardModal';
@@ -10,6 +10,8 @@ import {
   getNodeProgress,
   updateNodeProgress,
   submitQuizAttempt,
+  saveQuizDraft,
+  getQuizDraft,
   earnExp,
   QuizGenerateResponse,
   QuizQuestion,
@@ -57,9 +59,11 @@ const QuizView: React.FC = () => {
   const [courseData, setCourseData] = useState<any>(null);
   const [completedTopics, setCompletedTopics] = useState<Array<{ topic_name: string; pages_markdown: string }>>([]);
 
-  // Quiz data from API (loaded after clicking start)
+  // Quiz data from API (loaded after clicking start or from draft)
   const [quizData, setQuizData] = useState<QuizGenerateResponse | null>(null);
   const [userAnswers, setUserAnswers] = useState<UserAnswer[]>([]);
+  const [draftAttemptId, setDraftAttemptId] = useState<string | null>(null);
+  const draftSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Start/stop heartbeat when entering/leaving the quiz page
   useEffect(() => {
@@ -128,6 +132,75 @@ const QuizView: React.FC = () => {
     loadCourseData();
   }, [cidFromUrl]);
 
+  // Try to restore quiz from draft when we have courseMapId and nodeId
+  useEffect(() => {
+    if (initialLoading || error || !courseMapId || nodeId == null) return;
+
+    let cancelled = false;
+    getQuizDraft(courseMapId, nodeId)
+      .then((draft) => {
+        if (cancelled) return;
+        const q = draft.quiz_json?.questions;
+        const ua = draft.quiz_json?.user_answers;
+        if (q?.length && Array.isArray(ua) && ua.length === q.length) {
+          setQuizData({
+            type: 'quiz',
+            title: 'Resumed Quiz',
+            questions: q,
+          });
+          setUserAnswers(ua);
+          setShowGreeting(false);
+          setDraftAttemptId(draft.id);
+        }
+      })
+      .catch(() => {
+        // No draft (404) or network error - stay on greeting, user will click Start
+        if (!cancelled) {
+          // Ignore - normal when no draft exists
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [initialLoading, error, courseMapId, nodeId]);
+
+  // Debounced save of quiz draft when user answers change
+  const saveDraft = useCallback(() => {
+    if (!courseMapId || nodeId == null || !quizData || submitted) return;
+
+    saveQuizDraft({
+      course_map_id: courseMapId,
+      node_id: nodeId,
+      quiz_json: {
+        questions: quizData.questions,
+        user_answers: userAnswers,
+      },
+    })
+      .then((res) => {
+        setDraftAttemptId(res.attempt_id);
+      })
+      .catch((err) => {
+        console.warn('[QuizView] Failed to save draft:', err);
+      });
+  }, [courseMapId, nodeId, quizData, userAnswers, submitted]);
+
+  useEffect(() => {
+    if (!quizData || submitted) return;
+    if (draftSaveTimeoutRef.current) {
+      clearTimeout(draftSaveTimeoutRef.current);
+    }
+    draftSaveTimeoutRef.current = setTimeout(() => {
+      draftSaveTimeoutRef.current = null;
+      saveDraft();
+    }, 600);
+    return () => {
+      if (draftSaveTimeoutRef.current) {
+        clearTimeout(draftSaveTimeoutRef.current);
+      }
+    };
+  }, [quizData, userAnswers, submitted, saveDraft]);
+
   // Generate quiz when user clicks start button
   const handleStartQuiz = async () => {
     if (!courseData || completedTopics.length === 0) return;
@@ -146,14 +219,31 @@ const QuizView: React.FC = () => {
       setQuizData(response);
 
       // Initialize user answers
-      setUserAnswers(response.questions.map((_, idx) => ({
+      const initialAnswers = response.questions.map((_, idx) => ({
         questionIdx: idx,
-        selected: null,
-      })));
+        selected: null as string | string[] | boolean | null,
+      }));
+      setUserAnswers(initialAnswers);
 
       // Hide greeting and show quiz
       setShowGreeting(false);
 
+      // Persist generated quiz immediately as draft
+      if (courseMapId && nodeId != null) {
+        try {
+          const draftRes = await saveQuizDraft({
+            course_map_id: courseMapId,
+            node_id: nodeId,
+            quiz_json: {
+              questions: response.questions,
+              user_answers: initialAnswers,
+            },
+          });
+          setDraftAttemptId(draftRes.attempt_id);
+        } catch (e) {
+          console.warn('[QuizView] Failed to save quiz draft after generate:', e);
+        }
+      }
     } catch (err) {
       console.error('Failed to generate quiz:', err);
       setError(err instanceof Error ? err.message : 'Failed to generate quiz');
@@ -533,6 +623,7 @@ const QuizView: React.FC = () => {
                   user_answers: userAnswers,
                 },
                 score: Math.round((quizStats.correct / quizStats.total) * 100),
+                attempt_id: draftAttemptId ?? undefined,
               });
               console.log('[QuizView] Quiz attempt submitted successfully');
 
