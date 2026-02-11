@@ -218,19 +218,17 @@ class CourseMapService:
                 details={"nodes_count": len(nodes)},
             )
 
-        # 1. Validate time sum
+        # Log time sum for monitoring (no longer a validation error)
         time_sum = sum(node.get("estimated_minutes", 0) for node in nodes)
         if time_sum != total_commitment_minutes:
-            raise DAGValidationError(
-                message=f"Time sum mismatch: expected {total_commitment_minutes}, got {time_sum}",
-                details={
-                    "expected": total_commitment_minutes,
-                    "actual": time_sum,
-                    "delta": total_commitment_minutes - time_sum,
-                },
+            logger.info(
+                "Node times do not sum to total_commitment_minutes (this is expected)",
+                total_commitment_minutes=total_commitment_minutes,
+                actual_time_sum=time_sum,
+                delta=total_commitment_minutes - time_sum,
             )
 
-        # 2. Validate reward multipliers
+        # Validate reward multipliers
         self._validate_reward_multipliers(nodes)
 
         # 3. Validate branches and merges

@@ -430,7 +430,7 @@ const AssessmentChat: React.FC = () => {
                       setConceptCheck({ ...conceptCheck, selected: newSelected });
                     }}
                     className={`
-                      px-4 py-2.5 rounded-full text-[15px] font-semibold transition-all 
+                      px-4 py-2.5 rounded-full text-[15px] font-semibold transition-colors
                       flex items-center gap-1.5 border-2
                       ${isSelected 
                         ? 'bg-black text-white border-black' 
@@ -438,11 +438,9 @@ const AssessmentChat: React.FC = () => {
                       }
                     `}
                   >
-                    {isSelected && (
-                      <span className="material-symbols-rounded text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>
-                        check
-                      </span>
-                    )}
+                    <span className={`material-symbols-rounded text-[18px] ${isSelected ? '' : 'invisible'}`} style={{ fontVariationSettings: "'FILL' 1" }}>
+                      check
+                    </span>
                     {concept}
                   </button>
                 );

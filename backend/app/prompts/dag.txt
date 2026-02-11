@@ -12,7 +12,7 @@ Your core task: Design a DAG learning path with branches and merges based on use
 # Objective
 Receive user profile data and output a DAG suitable for front-end rendering:
 - Must include Branches and Merges; NEVER a linear list.
-- Output must include estimated_minutes per node, with the total strictly equal to total_commitment_minutes.
+- Output must include estimated_minutes per node. Use total_commitment_minutes as a reference for overall course length.
 
 # Input Data
 - language: String (ISO 639-1 code, e.g. "en", "zh")
@@ -31,13 +31,14 @@ Receive user profile data and output a DAG suitable for front-end rendering:
    - Layer 1: 1 Root (zero-barrier entry)
    - Layer 2: At least 2 parallel branch nodes
    - Layer 3+: At least 1 merge node (depends on multiple branches)
-3) Time rules (hard constraint):
+3) Time rules:
    - Every node must have estimated_minutes (integer, recommended 5-min steps)
-   - sum(nodes[].estimated_minutes) MUST equal total_commitment_minutes (exact)
+   - total_commitment_minutes is provided as a reference for overall course length
+   - Distribute time across nodes based on topic difficulty and learning depth
 4) Suggested node count (varies with duration): 5–20 nodes total
    - Light: 5–8 nodes
-   - Fast: 8–12 nodes
-   - Deep: 12–20 nodes
+   - Fast: 10–14 nodes
+   - Deep: 16–20 nodes
 5) Reward multiplier (reward_multiplier):
    - Every node must have reward_multiplier (float, range 1.0 - 3.0)
    - Regular learn nodes: 1.0 - 1.2
@@ -93,7 +94,7 @@ Receive user profile data and output a DAG suitable for front-end rendering:
 
 # Validation (do silently)
 - time_sum_minutes = sum(estimated_minutes)
-- time_delta_minutes = time_budget_minutes - time_sum_minutes (must be 0)
+- time_delta_minutes = time_budget_minutes - time_sum_minutes (for reference only)
 - Must have at least one branch and one merge
 - Valid JSON only
 - All user-facing text must be in the specified language

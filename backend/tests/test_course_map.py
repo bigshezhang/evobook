@@ -105,8 +105,8 @@ class TestCourseMapAPI:
         assert len(course_map.nodes) > 0
 
     @pytest.mark.asyncio
-    async def test_time_sum_equals_commitment_minutes(self, client: AsyncClient):
-        """Test that sum of node times equals total_commitment_minutes."""
+    async def test_nodes_have_estimated_minutes(self, client: AsyncClient):
+        """Test that all nodes have estimated_minutes field."""
         LLMClient.set_mock_dag_context(total_minutes=150, mode="Fast")
 
         response = await client.post(
@@ -124,12 +124,11 @@ class TestCourseMapAPI:
         assert response.status_code == 200
         data = response.json()
 
-        # Calculate actual time sum
-        time_sum = sum(node["estimated_minutes"] for node in data["nodes"])
-
-        assert time_sum == 150
-        assert data["map_meta"]["time_sum_minutes"] == 150
-        assert data["map_meta"]["time_delta_minutes"] == 0
+        # Verify all nodes have estimated_minutes
+        for node in data["nodes"]:
+            assert "estimated_minutes" in node
+            assert isinstance(node["estimated_minutes"], int)
+            assert node["estimated_minutes"] > 0
 
     @pytest.mark.asyncio
     async def test_dag_has_branch_and_merge(self, client: AsyncClient):
@@ -295,7 +294,7 @@ class TestCourseMapService:
             db_session=None,
         )
 
-        # DAG data with incorrect time sum
+        # DAG data with valid structure (time sum no longer validated)
         dag_data = {
             "map_meta": {},
             "nodes": [
@@ -306,8 +305,6 @@ class TestCourseMapService:
             ],
         }
 
-        # Total is 110, but we expect 120
-        with pytest.raises(DAGValidationError) as exc_info:
-            service._validate_dag_structure(dag_data, mode="Fast", total_commitment_minutes=120)
-
-        assert "Time sum mismatch" in str(exc_info.value.message)
+        # Total is 110, total_commitment_minutes is 120 - should pass (time sum no longer validated)
+        service._validate_dag_structure(dag_data, mode="Fast", total_commitment_minutes=120)
+        # If no exception raised, test passes

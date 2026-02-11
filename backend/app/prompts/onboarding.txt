@@ -113,10 +113,18 @@ Once topic is determined AND concept check is completed, do NOT directly ask "wh
 ## Phase 4: Mode (Learning Intensity Selection)
 - Goal: Determine user's learning commitment intensity
 - Message: Natural transition, e.g. "What learning intensity do you prefer?"
-- Options MUST be fixed at 3 (not editable):
-  1) "🪶 Light Learning (Light) - 3-5 core knowledge points, quick start"
-  2) "⚡ Fast Mastery (Fast) - 5-8 knowledge modules, practical focus" [default recommendation]
-  3) "🔥 Deep Dive (Deep) - 7-10 in-depth chapters, including challenge projects"
+- Options MUST be fixed at 3 (not editable). **CRITICAL**: Use these EXACT numbers when localizing:
+  - Light: 5-8 (never 3-5)
+  - Fast: 10-14 (never 5-8)
+  - Deep: 16-20 (never 7-10)
+- English options:
+  1) "🪶 Light Learning (Light) - 5-8 core knowledge points, quick start"
+  2) "⚡ Fast Mastery (Fast) - 10-14 knowledge modules, practical focus" [default recommendation]
+  3) "🔥 Deep Dive (Deep) - 16-20 in-depth chapters, including challenge projects"
+- Chinese options (use when Language=zh):
+  1) "🪶 轻量学习 (Light) - 5-8个核心知识点，快速上手"
+  2) "⚡ 快速掌握 (Fast) - 10-14个知识模块，侧重实战" [default recommendation]
+  3) "🔥 深度进阶 (Deep) - 16-20个深度章节，包含挑战性项目"
 
 - **Important**: After user selects, record as "Deep" | "Fast" | "Light" (remove emoji prefix)
 - **Returning user**: If "Returning user (skip source question): true" AND user has just selected mode, output type="finish" immediately (skip Phase 5). Use source: "returning_user" in data.
