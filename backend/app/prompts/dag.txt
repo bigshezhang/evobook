@@ -35,10 +35,11 @@ Receive user profile data and output a DAG suitable for front-end rendering:
    - Every node must have estimated_minutes (integer, recommended 5-min steps)
    - total_commitment_minutes is provided as a reference for overall course length
    - Distribute time across nodes based on topic difficulty and learning depth
-4) Suggested node count (varies with duration): 5–20 nodes total
-   - Light: 5–8 nodes
-   - Fast: 10–14 nodes
-   - Deep: 16–20 nodes
+4) Node count (STRICT REQUIREMENT, varies with mode):
+   - Light: MUST have 5-8 nodes (no more, no less)
+   - Fast: MUST have 10-14 nodes (no more, no less)
+   - Deep: MUST have 16-20 nodes (no more, no less)
+   - This is a HARD CONSTRAINT, not a suggestion. If your generated DAG does not meet this requirement, it will be rejected.
 5) Reward multiplier (reward_multiplier):
    - Every node must have reward_multiplier (float, range 1.0 - 3.0)
    - Regular learn nodes: 1.0 - 1.2

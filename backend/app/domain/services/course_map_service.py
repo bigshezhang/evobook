@@ -99,23 +99,50 @@ class CourseMapService:
         )
         full_prompt = f"{prompt_text}\n\n# User Input\n{context}"
 
-        # Call LLM
-        response = await self.llm.complete(
-            prompt_name="dag",
-            prompt_text=full_prompt,
-            output_format=OutputFormat.JSON,
-        )
+        # Call LLM with retry logic for node count validation
+        max_retries = 2
+        last_error = None
+        
+        for attempt in range(max_retries):
+            if attempt > 0:
+                logger.info(
+                    "Retrying DAG generation due to node count mismatch",
+                    attempt=attempt,
+                    mode=mode,
+                )
+                # Add error feedback to prompt
+                retry_prompt = f"{full_prompt}\n\n# CORRECTION NEEDED\nYour previous attempt generated {last_error['actual_count']} nodes, but mode '{mode}' requires {last_error['expected_range']} nodes. Please regenerate the DAG with the correct number of nodes."
+                response = await self.llm.complete(
+                    prompt_name="dag",
+                    prompt_text=retry_prompt,
+                    output_format=OutputFormat.JSON,
+                )
+            else:
+                response = await self.llm.complete(
+                    prompt_name="dag",
+                    prompt_text=full_prompt,
+                    output_format=OutputFormat.JSON,
+                )
 
-        # Parse and validate response
-        dag_data = response.parsed_data
-        if not isinstance(dag_data, dict):
-            raise LLMValidationError(
-                message="LLM returned invalid DAG structure",
-                details={"raw_text": response.raw_text[:500]},
-            )
+            # Parse and validate response
+            dag_data = response.parsed_data
+            if not isinstance(dag_data, dict):
+                raise LLMValidationError(
+                    message="LLM returned invalid DAG structure",
+                    details={"raw_text": response.raw_text[:500]},
+                )
 
-        # Validate DAG structure
-        self._validate_dag_structure(dag_data, mode, total_commitment_minutes)
+            # Validate DAG structure
+            try:
+                self._validate_dag_structure(dag_data, mode, total_commitment_minutes)
+                break  # Validation passed, exit retry loop
+            except DAGValidationError as e:
+                # Check if it's a node count error that we can retry
+                if "node count" in e.message.lower() and attempt < max_retries - 1:
+                    last_error = e.details
+                    continue
+                else:
+                    raise  # Re-raise if it's not a node count error or we're out of retries
 
         # Persist to database
         course_map = CourseMap(
@@ -212,10 +239,38 @@ class CourseMapService:
                 message="DAG must have at least one node",
                 details={"nodes_count": 0},
             )
-        if len(nodes) > 20:
-            raise DAGValidationError(
-                message="DAG must have at most 20 nodes",
-                details={"nodes_count": len(nodes)},
+        
+        # Validate node count based on mode (STRICT REQUIREMENT)
+        node_count_ranges = {
+            "Light": (5, 8),
+            "Fast": (10, 14),
+            "Deep": (16, 20),
+        }
+        
+        if mode not in node_count_ranges:
+            logger.warning(
+                "Unknown mode, skipping node count validation",
+                mode=mode,
+            )
+        else:
+            min_nodes, max_nodes = node_count_ranges[mode]
+            actual_count = len(nodes)
+            
+            if actual_count < min_nodes or actual_count > max_nodes:
+                raise DAGValidationError(
+                    message=f"Node count does not match mode '{mode}' requirement",
+                    details={
+                        "mode": mode,
+                        "expected_range": f"{min_nodes}-{max_nodes}",
+                        "actual_count": actual_count,
+                    },
+                )
+            
+            logger.info(
+                "Node count validation passed",
+                mode=mode,
+                actual_count=actual_count,
+                expected_range=f"{min_nodes}-{max_nodes}",
             )
 
         # Log time sum for monitoring (no longer a validation error)
@@ -290,12 +345,9 @@ class CourseMapService:
         Raises:
             DAGValidationError: If DAG is linear (no branches/merges).
         """
-        if len(nodes) < 5:
-            raise DAGValidationError(
-                message="DAG must have at least 5 nodes for branching structure",
-                details={"nodes_count": len(nodes)},
-            )
-
+        # Note: Node count validation is already done in _validate_dag_structure
+        # Light mode (5-8 nodes) should still have branches and merges
+        
         # Group nodes by layer
         layers: dict[int, list[dict[str, Any]]] = {}
         for node in nodes:
