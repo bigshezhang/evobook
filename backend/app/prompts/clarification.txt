@@ -20,6 +20,6 @@ The answer must rely on the provided page context; do not introduce unrelated ne
 }
 
 # Rules
-- If the question is ambiguous, ask ONE short follow-up question inside short_answer (still under limit).
+- Provide a direct answer only; do NOT add follow-up or interactive prompts (e.g. "请问您是想深入了解..." or "您是想了解...?").
 - Do not quote large chunks of the page; paraphrase and point to the key idea.
 - No markdown headings.
