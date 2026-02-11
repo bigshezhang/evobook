@@ -190,6 +190,17 @@ class OnboardingService:
         self._language = language
         self._discovery_preset = discovery_preset
 
+        # 1.4. Check if returning user (onboarding completed) - skip SOURCE phase
+        self._skip_source_phase = False
+        if user_id:
+            profile = await self.profile_repo.find_by_id(user_id)
+            if profile and profile.onboarding_completed:
+                self._skip_source_phase = True
+                logger.info(
+                    "Returning user detected, skipping SOURCE phase",
+                    user_id=str(user_id),
+                )
+
         # 1.5. If initial_topic provided for new session, skip to calibration phase
         if initial_topic and state.phase == OnboardingPhase.EXPLORATION and not state.topic:
             state.topic = initial_topic
@@ -429,6 +440,7 @@ class OnboardingService:
             Formatted context string.
         """
         language = getattr(self, "_language", "en")
+        skip_source = getattr(self, "_skip_source_phase", False)
         lines = [
             f"Language: {language}",
             f"Phase: {state.phase.value}",
@@ -438,6 +450,7 @@ class OnboardingService:
             f"Focus: {state.focus or 'Not set'}",
             f"Mode: {state.mode or 'Not set'}",
             f"Source: {state.source or 'Not set'}",
+            f"Returning user (skip source question): {str(skip_source).lower()}",
         ]
 
         # Inject discovery preset context if available
@@ -520,6 +533,14 @@ class OnboardingService:
             if user_turns > 0 and state.phase != OnboardingPhase.HANDOFF:
                 # Simple heuristic: advance after each user response
                 next_phase = PHASE_ORDER[current_idx + 1]
+                # Skip SOURCE phase for returning users (onboarding already completed)
+                skip_source = getattr(self, "_skip_source_phase", False)
+                if skip_source and next_phase == OnboardingPhase.SOURCE:
+                    next_phase = OnboardingPhase.HANDOFF
+                    logger.debug(
+                        "Skipping SOURCE phase for returning user",
+                        session_id=str(state.session_id),
+                    )
                 logger.debug(
                     "Advancing phase",
                     session_id=str(state.session_id),

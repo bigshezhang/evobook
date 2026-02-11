@@ -119,14 +119,16 @@ Once topic is determined AND concept check is completed, do NOT directly ask "wh
   3) "🔥 Deep Dive (Deep) - 7-10 in-depth chapters, including challenge projects"
 
 - **Important**: After user selects, record as "Deep" | "Fast" | "Light" (remove emoji prefix)
+- **Returning user**: If "Returning user (skip source question): true" AND user has just selected mode, output type="finish" immediately (skip Phase 5). Use source: "returning_user" in data.
 
 ## Phase 5: Source (Traffic Source)
 - Goal: Understand where the user came from (for channel analysis)
 - Message: "One last question — how did you hear about EvoBook?"
 - Options: 3 channel options (editable)
+- **Skip Rule**: If Context shows "Returning user (skip source question): true", SKIP this phase entirely. This user has completed onboarding before and is creating another course—do NOT ask the source question. Instead output type="finish" immediately with source: "returning_user" in data.
 
 ## Phase 6: System Handoff (Output Profile)
-- Trigger: After user selects source
+- Trigger: After user selects source; OR when returning user selects mode (skip source)
 - Action: Output type="finish" with message and data fields:
 Response MUST be:
 {
