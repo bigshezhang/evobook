@@ -438,9 +438,15 @@ const AssessmentChat: React.FC = () => {
                       }
                     `}
                   >
-                    <span className={`material-symbols-rounded text-[18px] ${isSelected ? '' : 'invisible'}`} style={{ fontVariationSettings: "'FILL' 1" }}>
-                      check
-                    </span>
+                    {isSelected ? (
+                      <span className="material-symbols-rounded text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>
+                        check_circle
+                      </span>
+                    ) : (
+                      <span className="material-symbols-rounded text-[18px] text-gray-400">
+                        radio_button_unchecked
+                      </span>
+                    )}
                     {concept}
                   </button>
                 );

@@ -14,11 +14,25 @@ const DEFAULT_LANGUAGE = 'en';
 const PRESETS = {
   en: {
     message: 'What would you like to learn?',
-    options: ['Machine Learning', 'Product Design', 'Language Learning'],
+    options: [
+      'Machine Learning',
+      'Product Design',
+      'Language Learning',
+      'Data Science',
+      'Web Development',
+      'Digital Marketing',
+    ],
   },
   zh: {
     message: '你想学习什么？',
-    options: ['机器学习', '产品设计', '语言学习'],
+    options: [
+      '机器学习',
+      '产品设计',
+      '语言学习',
+      '数据科学',
+      'Web开发',
+      '数字营销',
+    ],
   },
 } as const;
 
