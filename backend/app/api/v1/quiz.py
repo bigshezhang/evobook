@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.core.auth import get_optional_user_id, get_current_user_id
+from app.core.logging import get_logger
 from app.domain.models.quiz_attempt import QuizAttempt
 from app.domain.repositories.quiz_attempt_repository import QuizAttemptRepository
 from app.domain.services.quiz_service import QuizService
@@ -21,6 +22,7 @@ from app.llm.client import LLMClient
 from app.api.routes import QUIZ_PREFIX
 
 router = APIRouter(prefix=QUIZ_PREFIX, tags=["quiz"])
+logger = get_logger(__name__)
 
 
 # --- Request/Response Models ---
@@ -291,15 +293,36 @@ async def submit_quiz(
 
     if request.attempt_id:
         existing = await quiz_repo.find_by_id_and_user(request.attempt_id, user_id)
-        if existing and existing.score is None:
-            existing.quiz_json = request.quiz_json
-            existing.score = request.score
-            await quiz_repo.commit()
-            await quiz_repo.refresh(existing)
-            return QuizSubmitResponse(
-                attempt_id=existing.id,
-                created_at=existing.created_at,
-            )
+        if existing:
+            # If already submitted (score is not None), return existing attempt
+            # This prevents duplicate submissions
+            if existing.score is not None:
+                logger.warning(
+                    "Duplicate quiz submission blocked",
+                    attempt_id=request.attempt_id,
+                    user_id=str(user_id),
+                    existing_score=existing.score,
+                )
+                return QuizSubmitResponse(
+                    attempt_id=existing.id,
+                    created_at=existing.created_at,
+                )
+            
+            # If it's a draft (score is None), update it
+            if existing.score is None:
+                existing.quiz_json = request.quiz_json
+                existing.score = request.score
+                await quiz_repo.commit()
+                await quiz_repo.refresh(existing)
+                logger.info(
+                    "Quiz draft updated with submission",
+                    attempt_id=existing.id,
+                    score=request.score,
+                )
+                return QuizSubmitResponse(
+                    attempt_id=existing.id,
+                    created_at=existing.created_at,
+                )
 
     attempt = QuizAttempt(
         user_id=user_id,

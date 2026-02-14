@@ -42,6 +42,7 @@ const QuizView: React.FC = () => {
   const [nodeId, setNodeId] = useState<number | null>(nidFromUrl ? parseInt(nidFromUrl) : null);
   const [showGreeting, setShowGreeting] = useState(true);
   const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [showReward, setShowReward] = useState(false);
   const [quizStats, setQuizStats] = useState({ correct: 0, total: 0, gold: 0 });
   const [rewardData, setRewardData] = useState<{
@@ -547,6 +548,7 @@ const QuizView: React.FC = () => {
           <button
             onClick={async () => {
               if (submitted) {
+                // Second click: View Results - earn rewards and show modal
                 const stats = calculateScore();
                 // Call earnExp to actually award gold/dice/EXP
                 if (courseMapId && nodeId) {
@@ -593,18 +595,58 @@ const QuizView: React.FC = () => {
                 }
                 setShowReward(true);
               } else {
-                setSubmitted(true);
-                calculateScore();
+                // First click: Submit Answers - submit to backend immediately
+                if (submitting) return; // Prevent duplicate submissions
+                
+                setSubmitting(true);
+                
+                try {
+                  // Submit quiz attempt to backend
+                  if (courseMapId && nodeId && quizData) {
+                    await submitQuizAttempt({
+                      course_map_id: courseMapId,
+                      node_id: nodeId,
+                      quiz_json: {
+                        questions: quizData.questions,
+                        user_answers: userAnswers,
+                      },
+                      score: Math.round((calculateScore().correct / calculateScore().total) * 100),
+                      attempt_id: draftAttemptId ?? undefined,
+                    });
+                    console.log('[QuizView] Quiz attempt submitted successfully');
+                  }
+                  
+                  // Calculate and display results
+                  calculateScore();
+                  setSubmitted(true);
+                } catch (error) {
+                  console.error('[QuizView] Failed to submit quiz:', error);
+                  // Still show results even if submission failed
+                  calculateScore();
+                  setSubmitted(true);
+                } finally {
+                  setSubmitting(false);
+                }
               }
             }}
-            className="flex-1 h-12 bg-black text-white rounded-full flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-all"
+            disabled={submitting}
+            className="flex-1 h-12 bg-black text-white rounded-full flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <span className="text-[14px] font-extrabold tracking-tight">
-              {submitted ? 'View Results' : 'Submit Answers'}
-            </span>
-            <span className="material-symbols-rounded text-[18px]">
-              {submitted ? 'arrow_forward' : 'send'}
-            </span>
+            {submitting ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                <span className="text-[14px] font-extrabold tracking-tight">Submitting...</span>
+              </>
+            ) : (
+              <>
+                <span className="text-[14px] font-extrabold tracking-tight">
+                  {submitted ? 'View Results' : 'Submit Answers'}
+                </span>
+                <span className="material-symbols-rounded text-[18px]">
+                  {submitted ? 'arrow_forward' : 'send'}
+                </span>
+              </>
+            )}
           </button>
         </div>
       </div>
@@ -612,22 +654,10 @@ const QuizView: React.FC = () => {
       <RewardModal
         isOpen={showReward}
         onClose={async () => {
-          // Submit quiz attempt to backend
-          if (courseMapId && nodeId && quizData) {
+          // Quiz already submitted when user clicked "Submit Answers"
+          // Now just check if this is the first completion and update node progress
+          if (courseMapId && nodeId) {
             try {
-              await submitQuizAttempt({
-                course_map_id: courseMapId,
-                node_id: nodeId,
-                quiz_json: {
-                  questions: quizData.questions,
-                  user_answers: userAnswers,
-                },
-                score: Math.round((quizStats.correct / quizStats.total) * 100),
-                attempt_id: draftAttemptId ?? undefined,
-              });
-              console.log('[QuizView] Quiz attempt submitted successfully');
-
-              // Check if this is the first completion - update node progress
               const progressData = await getNodeProgress(courseMapId);
               const currentNodeProgress = progressData.progress.find(p => p.node_id === nodeId);
 
@@ -638,7 +668,7 @@ const QuizView: React.FC = () => {
                 console.log('[QuizView] Node already completed, not updating status');
               }
             } catch (error) {
-              console.error('Failed to submit quiz or update progress:', error);
+              console.error('[QuizView] Failed to update progress:', error);
             }
           }
           navigate(buildLearningPath(ROUTES.KNOWLEDGE_TREE, { cid: courseMapId }));
