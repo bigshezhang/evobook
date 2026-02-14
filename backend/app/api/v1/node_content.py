@@ -69,6 +69,7 @@ class QADetailRequest(BaseModel):
     language: str = Field(..., description="Response language (ISO 639-1 code)")
     qa_title: str = Field(..., description="Title of the QA")
     qa_short_answer: str = Field(..., description="Short answer to expand upon")
+    page_markdown: str = Field(..., description="Current page markdown content to avoid duplication")
     course_map_id: str | None = Field(default=None, description="Optional course map ID for caching")
     node_id: int | None = Field(default=None, description="Optional node ID for caching")
 
@@ -150,6 +151,6 @@ async def generate_qa_detail(
 
     return await service.generate_qa_detail(
         language=request.language, qa_title=request.qa_title,
-        qa_short_answer=request.qa_short_answer, course_map_id=course_map_id,
-        node_id=request.node_id, user_id=user_id,
+        qa_short_answer=request.qa_short_answer, page_markdown=request.page_markdown,
+        course_map_id=course_map_id, node_id=request.node_id, user_id=user_id,
     )

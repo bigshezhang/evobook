@@ -142,6 +142,7 @@ class TestQADetailAPI:
                 "language": "en",
                 "qa_title": "What is variable assignment?",
                 "qa_short_answer": "Variable assignment uses the = operator to store values.",
+                "page_markdown": "# Variables\n\nVariables store data in memory.",
             },
         )
 
@@ -169,6 +170,7 @@ class TestQADetailAPI:
                 "language": "zh",
                 "qa_title": "什么是变量赋值？",
                 "qa_short_answer": "变量赋值使用 = 操作符来存储值。",
+                "page_markdown": "# 变量\n\n变量在内存中存储数据。",
             },
         )
 

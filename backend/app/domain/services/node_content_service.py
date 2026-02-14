@@ -367,6 +367,7 @@ class NodeContentService:
         language: str,
         qa_title: str,
         qa_short_answer: str,
+        page_markdown: str,
         course_map_id: UUID | None = None,
         node_id: int | None = None,
         user_id: UUID | None = None,
@@ -379,6 +380,7 @@ class NodeContentService:
             language: Response language (en|zh).
             qa_title: Title of the QA.
             qa_short_answer: Short answer to expand upon.
+            page_markdown: Current page markdown content to avoid duplication.
             course_map_id: Optional course map ID for caching.
             node_id: Optional node ID for caching.
             user_id: Optional authenticated user ID (reserved for future use).
@@ -425,6 +427,7 @@ class NodeContentService:
             "language": language,
             "qa_title": qa_title,
             "qa_short_answer": qa_short_answer,
+            "page_markdown": page_markdown,
         }, ensure_ascii=False, indent=2)
         full_prompt = f"{prompt_text}\n\n# User Input\n{context}"
 
