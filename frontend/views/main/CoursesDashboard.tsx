@@ -410,7 +410,7 @@ const CoursesDashboard: React.FC = () => {
                   {userCourses
                     .filter(course => {
                       if (statusFilter === 'all') return true;
-                      if (statusFilter === 'progress') return course.progress_percentage > 0;
+                      if (statusFilter === 'progress') return course.progress_percentage > 0 && course.progress_percentage < 100;
                       if (statusFilter === 'tolearn') return course.progress_percentage === 0;
                       return true;
                     })
