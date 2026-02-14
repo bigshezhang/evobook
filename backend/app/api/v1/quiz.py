@@ -7,17 +7,18 @@ from datetime import datetime
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import get_settings
+from app.config import Settings, get_settings
 from app.core.auth import get_optional_user_id, get_current_user_id
 from app.core.logging import get_logger
 from app.domain.models.quiz_attempt import QuizAttempt
+from app.domain.repositories.course_map_repository import CourseMapRepository
 from app.domain.repositories.quiz_attempt_repository import QuizAttemptRepository
 from app.domain.services.quiz_service import QuizService
-from app.infrastructure.database import get_db_session
+from app.infrastructure.database import get_async_session_maker, get_db_session
 from app.llm.client import LLMClient
 from app.api.routes import QUIZ_PREFIX
 
@@ -197,7 +198,9 @@ async def generate_quiz(
 @router.put("/draft", response_model=QuizDraftSaveResponse)
 async def save_quiz_draft(
     request: QuizDraftSaveRequest,
+    background_tasks: BackgroundTasks,
     db: Annotated[AsyncSession, Depends(get_db_session)],
+    llm_client: Annotated[LLMClient, Depends(get_llm_client)],
     user_id: UUID = Depends(get_current_user_id),
 ) -> QuizDraftSaveResponse:
     """Save or update quiz draft (questions and user answers, without score).
@@ -205,6 +208,9 @@ async def save_quiz_draft(
     Used to persist in-progress quiz so user can resume after leaving.
     If a draft already exists for this user+course+node, it is updated.
     Otherwise a new draft is created.
+
+    If missing answers are detected in the questions, a background task
+    is started to fill them in asynchronously.
     """
     quiz_repo = QuizAttemptRepository(db)
     draft = await quiz_repo.find_draft_by_user_course_node(
@@ -213,28 +219,52 @@ async def save_quiz_draft(
         node_id=request.node_id,
     )
 
+    # Save or update draft
     if draft:
         draft.quiz_json = request.quiz_json
         await quiz_repo.commit()
         await quiz_repo.refresh(draft)
-        return QuizDraftSaveResponse(
-            attempt_id=draft.id,
-            created_at=draft.created_at,
+        attempt_id = draft.id
+        created_at = draft.created_at
+    else:
+        attempt = QuizAttempt(
+            user_id=user_id,
+            course_map_id=request.course_map_id,
+            node_id=request.node_id,
+            quiz_json=request.quiz_json,
+            score=None,
         )
+        await quiz_repo.create(attempt)
+        await quiz_repo.commit()
+        await quiz_repo.refresh(attempt)
+        attempt_id = attempt.id
+        created_at = attempt.created_at
 
-    attempt = QuizAttempt(
-        user_id=user_id,
-        course_map_id=request.course_map_id,
-        node_id=request.node_id,
-        quiz_json=request.quiz_json,
-        score=None,
-    )
-    await quiz_repo.create(attempt)
-    await quiz_repo.commit()
-    await quiz_repo.refresh(attempt)
+    # Check if questions have missing answers
+    questions = request.quiz_json.get("questions", [])
+    if questions:
+        quiz_service = QuizService(llm_client)
+        missing_issues = quiz_service._check_missing_answers(questions)
+        
+        if missing_issues:
+            # Start background task to fill missing answers
+            logger.info(
+                "Starting background task to fill missing answers",
+                attempt_id=str(attempt_id),
+                missing_count=len(missing_issues),
+            )
+            
+            background_tasks.add_task(
+                _fill_quiz_answers_background,
+                attempt_id=attempt_id,
+                course_map_id=request.course_map_id,
+                quiz_json=request.quiz_json,
+                settings=get_settings(),
+            )
+
     return QuizDraftSaveResponse(
-        attempt_id=attempt.id,
-        created_at=attempt.created_at,
+        attempt_id=attempt_id,
+        created_at=created_at,
     )
 
 
@@ -427,3 +457,108 @@ async def get_quiz_attempt_detail(
         score=attempt.score,
         created_at=attempt.created_at,
     )
+
+
+# --- Background Tasks ---
+
+async def _fill_quiz_answers_background(
+    attempt_id: UUID,
+    course_map_id: UUID,
+    quiz_json: dict[str, Any],
+    settings: Settings,
+) -> None:
+    """Background task to fill missing answers in a quiz draft.
+
+    This task runs asynchronously after the draft is saved, so the user
+    gets immediate response while answers are being filled in the background.
+
+    Args:
+        attempt_id: The draft attempt ID to update.
+        course_map_id: Course map ID to get language settings.
+        quiz_json: The quiz JSON data with questions.
+        settings: Application settings for database and LLM.
+    """
+    logger.info(
+        "Background task started: filling quiz answers",
+        attempt_id=str(attempt_id),
+    )
+
+    try:
+        # Create new database session for background task
+        session_maker = get_async_session_maker(settings.database_url)
+        
+        async with session_maker() as db:
+            # Get language from course map
+            course_map_repo = CourseMapRepository(db)
+            course_map = await course_map_repo.get_by_id(course_map_id)
+            
+            if not course_map:
+                logger.error(
+                    "Course map not found for quiz draft",
+                    attempt_id=str(attempt_id),
+                    course_map_id=str(course_map_id),
+                )
+                return
+            
+            language = course_map.language or "en"
+            
+            # Create LLM client and quiz service
+            llm_client = LLMClient(settings)
+            quiz_service = QuizService(llm_client)
+
+            # Get the questions
+            questions = quiz_json.get("questions", [])
+            if not questions:
+                logger.warning(
+                    "No questions found in quiz_json",
+                    attempt_id=str(attempt_id),
+                )
+                return
+
+            # Fill missing answers
+            try:
+                updated_questions = await quiz_service.fill_missing_answers(
+                    questions=questions,
+                    language=language,
+                )
+
+                # Update the draft in database
+                quiz_repo = QuizAttemptRepository(db)
+                draft = await quiz_repo.get_by_id(attempt_id)
+                
+                if not draft:
+                    logger.error(
+                        "Draft not found when trying to update answers",
+                        attempt_id=str(attempt_id),
+                    )
+                    return
+
+                # Update quiz_json with filled answers
+                updated_quiz_json = draft.quiz_json.copy()
+                updated_quiz_json["questions"] = updated_questions
+                draft.quiz_json = updated_quiz_json
+
+                await quiz_repo.commit()
+                await quiz_repo.refresh(draft)
+
+                logger.info(
+                    "Successfully filled quiz answers in background",
+                    attempt_id=str(attempt_id),
+                )
+
+            except Exception as e:
+                logger.error(
+                    "Failed to fill quiz answers",
+                    attempt_id=str(attempt_id),
+                    error=str(e),
+                    exc_info=True,
+                )
+                # Don't raise - background task should not crash
+
+    except Exception as e:
+        logger.error(
+            "Background task failed: filling quiz answers",
+            attempt_id=str(attempt_id),
+            error=str(e),
+            exc_info=True,
+        )

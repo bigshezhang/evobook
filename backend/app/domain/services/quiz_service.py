@@ -37,9 +37,11 @@ class QuizService:
         mode: str,
         learned_topics: list[dict[str, str]],
         user_id: UUID | None = None,
-        max_retries: int = 2,
     ) -> dict[str, Any]:
         """Generate a quiz from learned topics.
+
+        Returns the quiz immediately even if some answers are missing.
+        Missing answers can be filled in later using fill_missing_answers().
 
         Args:
             language: Response language (en|zh).
@@ -47,10 +49,10 @@ class QuizService:
             learned_topics: List of topics with their page content.
                 Each item: {"topic_name": str, "pages_markdown": str}
             user_id: Optional authenticated user ID (reserved for future use).
-            max_retries: Maximum number of retries if answers are missing.
 
         Returns:
             Dict containing type, title, greeting, questions.
+            Note: Some questions may have missing answers.
 
         Raises:
             LLMValidationError: If LLM response parsing fails.
@@ -62,107 +64,65 @@ class QuizService:
             topics_count=len(learned_topics),
         )
 
-        last_error: LLMValidationError | None = None
+        # Build prompt context
+        prompt_text = PromptRegistry.get_prompt(PromptName.QUIZ)
+        context = json.dumps({
+            "language": language,
+            "mode": mode,
+            "learned_topics": learned_topics,
+        }, ensure_ascii=False, indent=2)
+        full_prompt = f"{prompt_text}\n\n# User Input\n{context}"
 
-        for attempt in range(max_retries + 1):
-            try:
-                # Build prompt context
-                prompt_text = PromptRegistry.get_prompt(PromptName.QUIZ)
-                context = json.dumps({
-                    "language": language,
-                    "mode": mode,
-                    "learned_topics": learned_topics,
-                }, ensure_ascii=False, indent=2)
-                full_prompt = f"{prompt_text}\n\n# User Input\n{context}"
-
-                # If this is a retry, add error feedback to prompt
-                if attempt > 0 and last_error:
-                    error_message = self._format_error_message_for_retry(last_error)
-                    full_prompt = (
-                        f"{full_prompt}\n\n"
-                        f"# IMPORTANT - Previous Generation Error\n"
-                        f"The previous quiz generation had the following issue:\n"
-                        f"{error_message}\n\n"
-                        f"Please regenerate the quiz and make sure ALL questions have the required answer fields:\n"
-                        f"- 'single' type questions MUST have an 'answer' field (string)\n"
-                        f"- 'multi' type questions MUST have an 'answers' field (array of strings)\n"
-                        f"- 'boolean' type questions MUST have an 'answer' field (string: 'True' or 'False')\n"
-                    )
-
-                    logger.warning(
-                        "Retrying quiz generation with error feedback",
-                        attempt=attempt + 1,
-                        error=str(last_error),
-                    )
-
-                # Call LLM
-                response = await self.llm.complete(
-                    prompt_name="quiz",
-                    prompt_text=full_prompt,
-                    output_format=OutputFormat.JSON,
-                )
-
-                # Parse and validate response
-                data = response.parsed_data
-                if not isinstance(data, dict):
-                    raise LLMValidationError(
-                        message="LLM returned invalid quiz structure",
-                        details={"raw_text": response.raw_text[:500]},
-                    )
-
-                # Validate quiz structure
-                self._validate_quiz_response(data, learned_topics)
-
-                # Success! Check specifically for missing answers
-                missing_answers_issues = self._check_missing_answers(data.get("questions", []))
-                if missing_answers_issues:
-                    raise LLMValidationError(
-                        message="Quiz questions missing required answer fields",
-                        details={"missing_answers": missing_answers_issues},
-                    )
-
-                logger.info(
-                    "Quiz generated successfully",
-                    title=data.get("title", "")[:50],
-                    questions_count=len(data.get("questions", [])),
-                    attempts=attempt + 1,
-                )
-
-                return {
-                    "type": "quiz",
-                    "title": data.get("title", ""),
-                    "greeting": data.get("greeting", {}),
-                    "questions": data.get("questions", []),
-                }
-
-            except LLMValidationError as e:
-                last_error = e
-                if attempt < max_retries:
-                    # Continue to next retry
-                    continue
-                else:
-                    # No more retries, raise the error
-                    logger.error(
-                        "Quiz generation failed after all retries",
-                        max_retries=max_retries,
-                        error=str(e),
-                    )
-                    raise
-
-        # Should not reach here, but just in case
-        raise last_error or LLMValidationError(
-            message="Quiz generation failed for unknown reason",
-            details={},
+        # Call LLM
+        response = await self.llm.complete(
+            prompt_name="quiz",
+            prompt_text=full_prompt,
+            output_format=OutputFormat.JSON,
         )
 
+        # Parse and validate response
+        data = response.parsed_data
+        if not isinstance(data, dict):
+            raise LLMValidationError(
+                message="LLM returned invalid quiz structure",
+                details={"raw_text": response.raw_text[:500]},
+            )
+
+        # Validate quiz structure (but don't fail on missing answers)
+        self._validate_quiz_response(data, learned_topics, check_answers=False)
+
+        # Log if there are missing answers (for monitoring)
+        missing_answers_issues = self._check_missing_answers(data.get("questions", []))
+        if missing_answers_issues:
+            logger.warning(
+                "Quiz generated with missing answers",
+                title=data.get("title", "")[:50],
+                questions_count=len(data.get("questions", [])),
+                missing_count=len(missing_answers_issues),
+            )
+        else:
+            logger.info(
+                "Quiz generated successfully with all answers",
+                title=data.get("title", "")[:50],
+                questions_count=len(data.get("questions", [])),
+            )
+
+        return {
+            "type": "quiz",
+            "title": data.get("title", ""),
+            "greeting": data.get("greeting", {}),
+            "questions": data.get("questions", []),
+        }
+
     def _validate_quiz_response(
-        self, data: dict[str, Any], learned_topics: list[dict[str, str]]
+        self, data: dict[str, Any], learned_topics: list[dict[str, str]], check_answers: bool = True
     ) -> None:
         """Validate quiz response structure.
 
         Args:
             data: Parsed response data.
             learned_topics: Original learned topics for validation.
+            check_answers: Whether to validate that answers are present.
 
         Raises:
             LLMValidationError: If validation fails.
@@ -214,14 +174,15 @@ class QuizService:
 
         # Validate each question
         for i, question in enumerate(questions):
-            self._validate_question(question, i)
+            self._validate_question(question, i, check_answers=check_answers)
 
-    def _validate_question(self, question: dict[str, Any], index: int) -> None:
+    def _validate_question(self, question: dict[str, Any], index: int, check_answers: bool = True) -> None:
         """Validate a single quiz question.
 
         Args:
             question: Question data.
             index: Question index for error messages.
+            check_answers: Whether to validate that answers are present.
 
         Raises:
             LLMValidationError: If validation fails.
@@ -254,25 +215,26 @@ class QuizService:
                     details={"options": options},
                 )
 
-        # Validate answer(s)
-        if qtype == "single":
-            if "answer" not in question:
-                raise LLMValidationError(
-                    message=f"Single-choice question {index} missing answer",
-                    details={"question": question},
-                )
-        elif qtype == "multi":
-            if "answers" not in question and "answer" not in question:
-                raise LLMValidationError(
-                    message=f"Multi-choice question {index} missing answers",
-                    details={"question": question},
-                )
-        elif qtype == "boolean":
-            if "answer" not in question:
-                raise LLMValidationError(
-                    message=f"Boolean question {index} missing answer",
-                    details={"question": question},
-                )
+        # Validate answer(s) only if check_answers is True
+        if check_answers:
+            if qtype == "single":
+                if "answer" not in question:
+                    raise LLMValidationError(
+                        message=f"Single-choice question {index} missing answer",
+                        details={"question": question},
+                    )
+            elif qtype == "multi":
+                if "answers" not in question and "answer" not in question:
+                    raise LLMValidationError(
+                        message=f"Multi-choice question {index} missing answers",
+                        details={"question": question},
+                    )
+            elif qtype == "boolean":
+                if "answer" not in question:
+                    raise LLMValidationError(
+                        message=f"Boolean question {index} missing answer",
+                        details={"question": question},
+                    )
 
     def _check_missing_answers(self, questions: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Check if any questions are missing required answer fields.
@@ -321,6 +283,139 @@ class QuizService:
                 issues.append(issue)
 
         return issues
+
+    async def fill_missing_answers(
+        self,
+        questions: list[dict[str, Any]],
+        language: str,
+    ) -> list[dict[str, Any]]:
+        """Fill in missing answers for quiz questions.
+
+        This method calls LLM to generate ONLY the missing answers,
+        without regenerating the questions themselves.
+
+        Args:
+            questions: List of quiz questions (some may have missing answers).
+            language: Response language (en|zh).
+
+        Returns:
+            Updated list of questions with answers filled in.
+
+        Raises:
+            LLMValidationError: If LLM fails to generate valid answers.
+        """
+        # Find questions with missing answers
+        missing_issues = self._check_missing_answers(questions)
+        
+        if not missing_issues:
+            logger.info("No missing answers to fill")
+            return questions
+
+        logger.info(
+            "Filling missing answers",
+            missing_count=len(missing_issues),
+            total_questions=len(questions),
+        )
+
+        # Build a prompt that asks LLM to provide ONLY the answers
+        questions_needing_answers = []
+        for issue in missing_issues:
+            idx = issue["question_index"]
+            q = questions[idx]
+            questions_needing_answers.append({
+                "index": idx,
+                "qtype": q.get("qtype"),
+                "prompt": q.get("prompt"),
+                "options": q.get("options"),
+            })
+
+        prompt_text = f"""# Role
+You are a quiz answer generator. Your job is to provide ONLY the correct answers for the given questions.
+
+# Language
+{language}
+
+# Instructions
+For each question below, provide the correct answer(s) based on the question type:
+- For "single" type: provide one correct answer (string)
+- For "multi" type: provide an array of correct answers (array of strings)
+- For "boolean" type: provide "True" or "False" (string)
+
+# Questions Needing Answers
+{json.dumps(questions_needing_answers, ensure_ascii=False, indent=2)}
+
+# Output Format (STRICT JSON)
+Return a JSON object with answers for each question:
+{{
+  "answers": [
+    {{
+      "index": 0,
+      "answer": "correct answer" // for single/boolean
+    }},
+    {{
+      "index": 1,
+      "answers": ["answer1", "answer2"] // for multi
+    }}
+  ]
+}}
+
+IMPORTANT: Only provide the answers, do NOT regenerate the questions.
+"""
+
+        # Call LLM to get answers
+        response = await self.llm.complete(
+            prompt_name="quiz_fill_answers",
+            prompt_text=prompt_text,
+            output_format=OutputFormat.JSON,
+        )
+
+        # Parse response
+        data = response.parsed_data
+        if not isinstance(data, dict) or "answers" not in data:
+            raise LLMValidationError(
+                message="LLM returned invalid answer structure",
+                details={"raw_text": response.raw_text[:500]},
+            )
+
+        # Apply answers to questions
+        updated_questions = questions.copy()
+        answers_filled = 0
+        
+        for answer_item in data["answers"]:
+            idx = answer_item.get("index")
+            if idx is None or idx < 0 or idx >= len(updated_questions):
+                logger.warning(f"Invalid question index in answer: {idx}")
+                continue
+
+            question = updated_questions[idx]
+            qtype = question.get("qtype")
+
+            # Apply the answer based on question type
+            if qtype == "single" and "answer" in answer_item:
+                question["answer"] = answer_item["answer"]
+                answers_filled += 1
+            elif qtype == "multi" and "answers" in answer_item:
+                question["answers"] = answer_item["answers"]
+                answers_filled += 1
+            elif qtype == "boolean" and "answer" in answer_item:
+                question["answer"] = answer_item["answer"]
+                answers_filled += 1
+
+        logger.info(
+            "Filled missing answers",
+            answers_filled=answers_filled,
+            total_missing=len(missing_issues),
+        )
+
+        # Verify all answers are now present
+        remaining_issues = self._check_missing_answers(updated_questions)
+        if remaining_issues:
+            logger.warning(
+                "Still have missing answers after fill",
+                remaining_count=len(remaining_issues),
+            )
+
+        return updated_questions
 
     def _format_error_message_for_retry(self, error: LLMValidationError) -> str:
         """Format error message for LLM retry with specific guidance.

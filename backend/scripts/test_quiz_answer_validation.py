@@ -1,7 +1,8 @@
-"""Test script for quiz answer validation and retry mechanism.
+"""Test script for quiz answer validation and auto-fill mechanism.
 
-This script tests the enhanced quiz generation validation that checks
-for missing answers and retries with error feedback.
+This script tests the enhanced quiz generation that:
+1. Returns quiz immediately (even with missing answers)
+2. Fills missing answers asynchronously in background
 """
 
 import asyncio
