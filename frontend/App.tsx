@@ -3,7 +3,7 @@ import React, { Suspense, useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useAuth, initAuthListener } from './utils/AuthContext';
 import { storeInviteCode, processPendingInvite } from './utils/inviteHandler';
-import { getUserCourses } from './utils/api';
+import { getUserCourses, getActiveCourse, buildLearningPath } from './utils/api';
 import { useAppStore, resetAllStores } from './utils/stores';
 import { ROUTES } from './utils/routes';
 import SuccessFeedbackPill from './components/SuccessFeedbackPill';
@@ -199,9 +199,8 @@ const AppInternals: React.FC = () => {
 
 // Smart root redirect: check if user has courses, then decide where to go
 const RootRedirect: React.FC = () => {
-  const navigate = useNavigate();
   const [loading, setLoading] = React.useState(true);
-  const [hasCourses, setHasCourses] = React.useState(false);
+  const [redirectTo, setRedirectTo] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     const checkUserCourses = async () => {
@@ -210,8 +209,8 @@ const RootRedirect: React.FC = () => {
         const onboardingDone = useAppStore.getState().onboardingCompleted;
 
         if (onboardingDone) {
-          // User has completed onboarding before, go to courses
-          setHasCourses(true);
+          // User has completed onboarding before
+          setRedirectTo('ready');
           setLoading(false);
           return;
         }
@@ -220,17 +219,13 @@ const RootRedirect: React.FC = () => {
         const data = await getUserCourses();
 
         if (data.courses && data.courses.length > 0) {
-          // User has courses, mark onboarding as done and go to dashboard
+          // User has courses, mark onboarding as done
           useAppStore.getState().setOnboardingCompleted(true);
-          setHasCourses(true);
-        } else {
-          // New user, show onboarding
-          setHasCourses(false);
+          setRedirectTo('ready');
         }
       } catch (error) {
         console.error('Failed to check user courses:', error);
         // On error, assume new user and show onboarding
-        setHasCourses(false);
       } finally {
         setLoading(false);
       }
@@ -238,6 +233,21 @@ const RootRedirect: React.FC = () => {
 
     checkUserCourses();
   }, []);
+
+  React.useEffect(() => {
+    if (!loading && redirectTo === 'ready') {
+      // Resolve redirect target: need cid for knowledge-tree
+      getActiveCourse()
+        .then(({ course_map_id }) => {
+          if (course_map_id) {
+            setRedirectTo(buildLearningPath(ROUTES.KNOWLEDGE_TREE, { cid: course_map_id }));
+          } else {
+            setRedirectTo(ROUTES.COURSES);
+          }
+        })
+        .catch(() => setRedirectTo(ROUTES.COURSES));
+    }
+  }, [loading, redirectTo]);
 
   if (loading) {
     return (
@@ -247,8 +257,17 @@ const RootRedirect: React.FC = () => {
     );
   }
 
-  if (hasCourses) {
-    return <Navigate to={ROUTES.KNOWLEDGE_TREE} replace />;
+  // Still resolving redirect target (getActiveCourse in flight)
+  if (redirectTo === 'ready') {
+    return (
+      <div className="flex items-center justify-center h-screen bg-white">
+        <span className="inline-block w-10 h-10 border-4 border-gray-200 border-t-secondary rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (redirectTo) {
+    return <Navigate to={redirectTo} replace />;
   }
 
   return <WelcomeView />;
