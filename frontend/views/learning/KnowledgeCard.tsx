@@ -1,8 +1,9 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import mermaid from 'mermaid';
 import ClarificationSection, { QAItem } from './ClarificationSection';
 import RewardModal from '../../components/RewardModal';
 import {
@@ -45,14 +46,34 @@ interface ExpertTipData {
   content: string;
 }
 
+interface DiagramData {
+  drawing_type: string;
+  syntax: string;
+}
+
 type ContentSegment =
   | { type: 'markdown'; content: string }
   | { type: 'key_elements'; data: KeyElementsData }
-  | { type: 'expert_tip'; data: ExpertTipData };
+  | { type: 'expert_tip'; data: ExpertTipData }
+  | { type: 'diagram'; data: DiagramData };
 
 // ============================================================================
 // DSL Parser Functions
 // ============================================================================
+
+/**
+ * Decode HTML entities in a string (reverses html.escape() from Python backend)
+ */
+function decodeHtmlEntities(str: string): string {
+  return str
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&#10;/g, '\n')
+    .replace(/&#13;/g, '\r');
+}
 
 /**
  * Parse DSL tags from markdown content and return structured segments
@@ -60,8 +81,8 @@ type ContentSegment =
 function parseDSLContent(markdown: string): ContentSegment[] {
   const segments: ContentSegment[] = [];
 
-  // Combined regex to match all DSL tags
-  const dslPattern = /(<EVOBK_KEY_ELEMENTS\s+title="([^"]*)">([\s\S]*?)<\/EVOBK_KEY_ELEMENTS>)|(<EVOBK_EXPERT_TIP\s+title="([^"]*)">([\s\S]*?)<\/EVOBK_EXPERT_TIP>)/g;
+  // Combined regex to match all DSL tags (KEY_ELEMENTS, EXPERT_TIP, IMAGE)
+  const dslPattern = /(<EVOBK_KEY_ELEMENTS\s+title="([^"]*)">([\s\S]*?)<\/EVOBK_KEY_ELEMENTS>)|(<EVOBK_EXPERT_TIP\s+title="([^"]*)">([\s\S]*?)<\/EVOBK_EXPERT_TIP>)|(<EVOBK_IMAGE\s+drawing_type="([^"]*)"\s+syntax="([^"]*?)"\s*\/>)/g;
 
   let lastIndex = 0;
   let match;
@@ -91,6 +112,14 @@ function parseDSLContent(markdown: string): ContentSegment[] {
       segments.push({
         type: 'expert_tip',
         data: { title, content }
+      });
+    } else if (match[7]) {
+      // IMAGE / diagram block
+      const drawing_type = match[8];
+      const syntax = decodeHtmlEntities(match[9]);
+      segments.push({
+        type: 'diagram',
+        data: { drawing_type, syntax }
       });
     }
 
@@ -175,6 +204,64 @@ const ExpertTipBlock: React.FC<{ data: ExpertTipData }> = ({ data }) => {
         {data.content}
       </p>
     </div>
+  );
+};
+
+// Mermaid is initialized once globally
+mermaid.initialize({
+  startOnLoad: false,
+  theme: 'default',
+  securityLevel: 'loose',
+});
+
+let diagramCounter = 0;
+
+/**
+ * Diagram Block Component — renders a Mermaid diagram using mermaid.js
+ */
+const DiagramBlock: React.FC<{ data: DiagramData }> = ({ data }) => {
+  const [svgContent, setSvgContent] = useState<string>('');
+  const [renderError, setRenderError] = useState(false);
+
+  useEffect(() => {
+    if (!data.syntax) return;
+
+    let cancelled = false;
+    const id = `evobk-diagram-${++diagramCounter}`;
+
+    mermaid.render(id, data.syntax).then(({ svg }) => {
+      if (!cancelled) {
+        setSvgContent(svg);
+        setRenderError(false);
+      }
+    }).catch(() => {
+      if (!cancelled) setRenderError(true);
+    });
+
+    return () => { cancelled = true; };
+  }, [data.syntax]);
+
+  if (renderError) {
+    return (
+      <div className="bg-black/[0.02] dark:bg-white/[0.02] rounded-2xl p-5 border border-black/[0.03] dark:border-white/[0.03] my-6 flex items-center justify-center min-h-[80px]">
+        <span className="text-[13px] text-primary/40 dark:text-white/40 italic">Diagram unavailable</span>
+      </div>
+    );
+  }
+
+  if (!svgContent) {
+    return (
+      <div className="bg-black/[0.02] dark:bg-white/[0.02] rounded-2xl border border-black/[0.03] dark:border-white/[0.03] my-6 flex items-center justify-center min-h-[120px]">
+        <span className="text-[13px] text-primary/40 dark:text-white/40 animate-pulse">Loading diagram…</span>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="bg-white dark:bg-white/[0.03] rounded-2xl border border-black/[0.05] dark:border-white/[0.05] my-6 overflow-x-auto p-4"
+      dangerouslySetInnerHTML={{ __html: svgContent }}
+    />
   );
 };
 
@@ -320,6 +407,8 @@ const ContentSegmentRenderer: React.FC<{ segment: ContentSegment; index: number 
       return <KeyElementsBlock key={`ke-${index}`} data={segment.data} />;
     case 'expert_tip':
       return <ExpertTipBlock key={`et-${index}`} data={segment.data} />;
+    case 'diagram':
+      return <DiagramBlock key={`dg-${index}`} data={segment.data} />;
     default:
       return null;
   }

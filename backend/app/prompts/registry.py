@@ -18,6 +18,7 @@ class PromptName(str, Enum):
     CLARIFICATION = "clarification"
     QA_DETAIL = "qa_detail"
     QUIZ = "quiz"
+    IMAGE_PROMPT = "image_prompt"
 
 
 class PromptNotFoundError(Exception):
@@ -47,6 +48,7 @@ class PromptRegistry:
         PromptName.CLARIFICATION: "clarification.txt",
         PromptName.QA_DETAIL: "qa_detail.txt",
         PromptName.QUIZ: "quiz.txt",
+        PromptName.IMAGE_PROMPT: "image_prompt.txt",
     }
 
     _cache: dict[PromptName, str] = {}  # Cache loaded prompts

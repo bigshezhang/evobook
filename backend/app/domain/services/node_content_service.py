@@ -4,7 +4,9 @@ This module implements content generation for Knowledge Cards, Clarifications,
 and QA Details using LLM, with optional caching via the node_contents table.
 """
 
+import asyncio
 import hashlib
+import html
 import json
 from datetime import datetime, timezone
 from typing import Any
@@ -154,12 +156,17 @@ class NodeContentService:
             total_pages=data.get("totalPagesInCard"),
         )
 
+        # Enrich each page with a diagram tag (best-effort, concurrent)
+        enriched_markdown = await self._enrich_markdown_with_diagrams(
+            data.get("markdown", "")
+        )
+
         # Always use the request's node_id, not the LLM response
         response_data: dict[str, Any] = {
             "type": "knowledge_card",
             "node_id": node_id,
             "totalPagesInCard": data.get("totalPagesInCard", 2),
-            "markdown": data.get("markdown", ""),
+            "markdown": enriched_markdown,
             "yaml": data.get("yaml", ""),
         }
 
@@ -172,6 +179,81 @@ class NodeContentService:
         )
 
         return response_data
+
+    async def _enrich_markdown_with_diagrams(self, markdown: str) -> str:
+        """Split markdown by page breaks, add a diagram tag to each page concurrently.
+
+        Each page gets at most one <EVOBK_IMAGE /> tag appended. Pages for which
+        diagram generation fails or returns drawing_type=none are left unchanged.
+
+        Args:
+            markdown: Full KC markdown string containing page-break tags.
+
+        Returns:
+            Markdown string with EVOBK_IMAGE tags injected per page.
+        """
+        page_break = "<EVOBK_PAGE_BREAK />"
+        pages = markdown.split(page_break)
+
+        diagram_tags = await asyncio.gather(
+            *[self._generate_diagram_for_page(page) for page in pages],
+            return_exceptions=True,
+        )
+
+        enriched_pages: list[str] = []
+        for page, tag in zip(pages, diagram_tags):
+            if isinstance(tag, str) and tag:
+                enriched_pages.append(f"{page.rstrip()}\n\n{tag}")
+            else:
+                enriched_pages.append(page)
+
+        return page_break.join(enriched_pages)
+
+    async def _generate_diagram_for_page(self, page_markdown: str) -> str:
+        """Generate a Mermaid diagram tag for a single KC page.
+
+        Calls the LLM with the image_prompt template to select a diagram type
+        and produce Mermaid syntax. Returns an EVOBK_IMAGE XML tag on success,
+        or an empty string when the page doesn't suit a diagram or when the LLM
+        call fails (best-effort, non-blocking).
+
+        Args:
+            page_markdown: Markdown content of a single KC page.
+
+        Returns:
+            EVOBK_IMAGE tag string, or empty string.
+        """
+        try:
+            prompt_text = PromptRegistry.get_prompt(PromptName.IMAGE_PROMPT)
+            full_prompt = prompt_text.replace("{{PAGE_MARKDOWN}}", page_markdown)
+
+            response = await self.llm.complete(
+                prompt_name="image_prompt",
+                prompt_text=full_prompt,
+                output_format=OutputFormat.JSON,
+            )
+
+            data = response.parsed_data
+            if not isinstance(data, dict):
+                logger.warning("Diagram LLM returned non-dict response")
+                return ""
+
+            drawing_type = data.get("drawing_type", "none")
+            mermaid_syntax = data.get("mermaid_syntax", "")
+
+            if drawing_type == "none" or not mermaid_syntax:
+                return ""
+
+            # HTML-encode the syntax so it embeds safely inside an XML attribute
+            encoded_syntax = html.escape(mermaid_syntax, quote=True)
+            return f'<EVOBK_IMAGE drawing_type="{drawing_type}" syntax="{encoded_syntax}" />'
+
+        except Exception:
+            logger.warning(
+                "Diagram generation failed for page, skipping",
+                exc_info=True,
+            )
+            return ""
 
     def _build_knowledge_card_context(
         self,
