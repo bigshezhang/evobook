@@ -86,8 +86,14 @@ gantt
     Phase 3 :a3, after a2, 14d
 ```
 
+# Language Requirements
+- language: {{LANGUAGE}} (ISO 639-1 code: "en", "zh", "es", "fr", "ja", "de", etc.)
+- Write ALL node labels and edge labels in the language specified above
+- Exception: if the node label is a programming keyword, command, or code identifier (e.g. `git commit`, `SELECT`, `fn main()`), keep it in its original form regardless of language
+- Use the most appropriate variant for the language (e.g., Simplified Chinese for "zh", US English for "en")
+
 # Content Quality Rules
-- Node labels MUST be in English (same language as the KC content)
+- Node labels follow the language rule above (see Language Requirements)
 - Keep node text concise: ≤ 10 words per node
 - Max depth: 3 levels
 - Max nodes: 12
@@ -98,6 +104,8 @@ gantt
   - If layout is too tall, switch from TD to LR, or add horizontal branches
 
 # Input
+- language: {{LANGUAGE}}
+
 The following is a single Knowledge Card page in Markdown:
 
 <page_markdown>

@@ -158,7 +158,7 @@ class NodeContentService:
 
         # Enrich each page with a diagram tag (best-effort, concurrent)
         enriched_markdown = await self._enrich_markdown_with_diagrams(
-            data.get("markdown", "")
+            data.get("markdown", ""), language=language
         )
 
         # Always use the request's node_id, not the LLM response
@@ -180,7 +180,7 @@ class NodeContentService:
 
         return response_data
 
-    async def _enrich_markdown_with_diagrams(self, markdown: str) -> str:
+    async def _enrich_markdown_with_diagrams(self, markdown: str, language: str = "en") -> str:
         """Split markdown by page breaks, add a diagram tag to each page concurrently.
 
         Each page gets at most one <EVOBK_IMAGE /> tag appended. Pages for which
@@ -188,6 +188,7 @@ class NodeContentService:
 
         Args:
             markdown: Full KC markdown string containing page-break tags.
+            language: ISO 639-1 language code for diagram node labels.
 
         Returns:
             Markdown string with EVOBK_IMAGE tags injected per page.
@@ -196,7 +197,7 @@ class NodeContentService:
         pages = markdown.split(page_break)
 
         diagram_tags = await asyncio.gather(
-            *[self._generate_diagram_for_page(page) for page in pages],
+            *[self._generate_diagram_for_page(page, language=language) for page in pages],
             return_exceptions=True,
         )
 
@@ -209,7 +210,7 @@ class NodeContentService:
 
         return page_break.join(enriched_pages)
 
-    async def _generate_diagram_for_page(self, page_markdown: str) -> str:
+    async def _generate_diagram_for_page(self, page_markdown: str, language: str = "en") -> str:
         """Generate a Mermaid diagram tag for a single KC page.
 
         Calls the LLM with the image_prompt template to select a diagram type
@@ -219,13 +220,18 @@ class NodeContentService:
 
         Args:
             page_markdown: Markdown content of a single KC page.
+            language: ISO 639-1 language code for diagram node labels.
 
         Returns:
             EVOBK_IMAGE tag string, or empty string.
         """
         try:
             prompt_text = PromptRegistry.get_prompt(PromptName.IMAGE_PROMPT)
-            full_prompt = prompt_text.replace("{{PAGE_MARKDOWN}}", page_markdown)
+            full_prompt = (
+                prompt_text
+                .replace("{{LANGUAGE}}", language)
+                .replace("{{PAGE_MARKDOWN}}", page_markdown)
+            )
 
             response = await self.llm.complete(
                 prompt_name="image_prompt",
