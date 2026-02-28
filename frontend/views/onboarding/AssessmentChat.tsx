@@ -73,7 +73,7 @@ const AssessmentChat: React.FC = () => {
         thinking: '思考中...',
         customizingPath: '定制你的路径',
         craftingModule: '创建新模块',
-        selectOption: '从下方选择，或在输入框中输入你想学习的领域',
+        selectOption: '从下方选择，或在输入框中输入你的回答',
         enterAnswer: '输入你的答案...',
       };
     }
@@ -83,7 +83,7 @@ const AssessmentChat: React.FC = () => {
       thinking: 'Thinking...',
       customizingPath: 'Customizing your path',
       craftingModule: 'Crafting new module',
-      selectOption: "Pick an option, or type what you'd like to learn below",
+      selectOption: 'Pick an option, or type your answer below',
       enterAnswer: 'Enter your answer...',
     };
   };
