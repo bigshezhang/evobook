@@ -241,19 +241,19 @@ function fixSvgSize(svg: string, containerWidth: number): string {
   const vbH = parseFloat(parts[3]);
   if (vbW <= 0 || vbH <= 0) return svg;
 
-  svgEl.style.maxWidth = '';
-
   const scaleToFit = containerWidth / vbW;
   if (scaleToFit >= SCALE_THRESHOLD) {
-    // Scaling to fit keeps text >= 12px — let SVG be fully responsive.
+    // Scaling to fit keeps text >= 12px — responsive but capped at natural size (no upscaling).
     svgEl.setAttribute('width', '100%');
     svgEl.removeAttribute('height');
+    svgEl.style.maxWidth = `${vbW}px`;
   } else {
     // Scaling to fit would make text < 12px — pin to minimum readable size.
     const minW = Math.round(vbW * SCALE_THRESHOLD);
     const minH = Math.round(vbH * SCALE_THRESHOLD);
     svgEl.setAttribute('width', String(minW));
     svgEl.setAttribute('height', String(minH));
+    svgEl.style.maxWidth = '';
   }
 
   return new XMLSerializer().serializeToString(svgEl);
@@ -305,7 +305,7 @@ const DiagramBlock: React.FC<{ data: DiagramData }> = ({ data }) => {
   return (
     <div
       ref={containerRef}
-      className="bg-white dark:bg-white/[0.03] rounded-2xl border border-black/[0.05] dark:border-white/[0.05] my-6 overflow-x-auto p-4"
+      className="bg-white dark:bg-white/[0.03] rounded-2xl border border-black/[0.05] dark:border-white/[0.05] my-6 overflow-x-auto p-4 [&>svg]:mx-auto [&>svg]:block"
       dangerouslySetInnerHTML={{ __html: svgContent }}
     />
   );
