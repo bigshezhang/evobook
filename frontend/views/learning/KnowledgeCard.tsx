@@ -216,10 +216,54 @@ mermaid.initialize({
 
 let diagramCounter = 0;
 
+const MIN_FONT_PX = 9;
+const MERMAID_BASE_FONT_PX = 14;
+// If scaling SVG to fit the container would make text smaller than MIN_FONT_PX,
+// pin the SVG to a minimum pixel width instead and rely on overflow-x-auto.
+const SCALE_THRESHOLD = MIN_FONT_PX / MERMAID_BASE_FONT_PX; // ≈ 0.857
+
+/**
+ * Adjusts SVG dimensions based on available container width.
+ * - If the diagram can fit with text >= 12px: let it scale to 100% (no scrolling).
+ * - If scaling to fit would shrink text below 12px: pin SVG to the minimum
+ *   readable width so text stays at 12px, and let the container scroll.
+ */
+function fixSvgSize(svg: string, containerWidth: number): string {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(svg, 'image/svg+xml');
+  const svgEl = doc.querySelector('svg');
+  if (!svgEl) return svg;
+  const viewBox = svgEl.getAttribute('viewBox');
+  if (!viewBox) return svg;
+  const parts = viewBox.trim().split(/\s+/);
+  if (parts.length !== 4) return svg;
+  const vbW = parseFloat(parts[2]);
+  const vbH = parseFloat(parts[3]);
+  if (vbW <= 0 || vbH <= 0) return svg;
+
+  svgEl.style.maxWidth = '';
+
+  const scaleToFit = containerWidth / vbW;
+  if (scaleToFit >= SCALE_THRESHOLD) {
+    // Scaling to fit keeps text >= 12px — let SVG be fully responsive.
+    svgEl.setAttribute('width', '100%');
+    svgEl.removeAttribute('height');
+  } else {
+    // Scaling to fit would make text < 12px — pin to minimum readable size.
+    const minW = Math.round(vbW * SCALE_THRESHOLD);
+    const minH = Math.round(vbH * SCALE_THRESHOLD);
+    svgEl.setAttribute('width', String(minW));
+    svgEl.setAttribute('height', String(minH));
+  }
+
+  return new XMLSerializer().serializeToString(svgEl);
+}
+
 /**
  * Diagram Block Component — renders a Mermaid diagram using mermaid.js
  */
 const DiagramBlock: React.FC<{ data: DiagramData }> = ({ data }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
   const [svgContent, setSvgContent] = useState<string>('');
   const [renderError, setRenderError] = useState(false);
 
@@ -231,7 +275,8 @@ const DiagramBlock: React.FC<{ data: DiagramData }> = ({ data }) => {
 
     mermaid.render(id, data.syntax).then(({ svg }) => {
       if (!cancelled) {
-        setSvgContent(svg);
+        const containerWidth = containerRef.current?.clientWidth ?? 320;
+        setSvgContent(fixSvgSize(svg, containerWidth));
         setRenderError(false);
       }
     }).catch(() => {
@@ -243,7 +288,7 @@ const DiagramBlock: React.FC<{ data: DiagramData }> = ({ data }) => {
 
   if (renderError) {
     return (
-      <div className="bg-black/[0.02] dark:bg-white/[0.02] rounded-2xl p-5 border border-black/[0.03] dark:border-white/[0.03] my-6 flex items-center justify-center min-h-[80px]">
+      <div ref={containerRef} className="bg-black/[0.02] dark:bg-white/[0.02] rounded-2xl p-5 border border-black/[0.03] dark:border-white/[0.03] my-6 flex items-center justify-center min-h-[80px]">
         <span className="text-[13px] text-primary/40 dark:text-white/40 italic">Diagram unavailable</span>
       </div>
     );
@@ -251,7 +296,7 @@ const DiagramBlock: React.FC<{ data: DiagramData }> = ({ data }) => {
 
   if (!svgContent) {
     return (
-      <div className="bg-black/[0.02] dark:bg-white/[0.02] rounded-2xl border border-black/[0.03] dark:border-white/[0.03] my-6 flex items-center justify-center min-h-[120px]">
+      <div ref={containerRef} className="bg-black/[0.02] dark:bg-white/[0.02] rounded-2xl border border-black/[0.03] dark:border-white/[0.03] my-6 flex items-center justify-center min-h-[120px]">
         <span className="text-[13px] text-primary/40 dark:text-white/40 animate-pulse">Loading diagram…</span>
       </div>
     );
@@ -259,6 +304,7 @@ const DiagramBlock: React.FC<{ data: DiagramData }> = ({ data }) => {
 
   return (
     <div
+      ref={containerRef}
       className="bg-white dark:bg-white/[0.03] rounded-2xl border border-black/[0.05] dark:border-white/[0.05] my-6 overflow-x-auto p-4"
       dangerouslySetInnerHTML={{ __html: svgContent }}
     />
@@ -327,20 +373,20 @@ const markdownComponents = {
       );
     }
     return (
-      <code className="block bg-black/[0.03] dark:bg-white/[0.05] p-4 rounded-xl text-[13px] font-mono overflow-x-auto">
+      <code className="block bg-black/[0.03] dark:bg-white/[0.05] p-4 rounded-xl text-[13px] font-mono overflow-x-auto text-gray-900 dark:text-gray-100">
         {children}
       </code>
     );
   },
   pre: ({ children }: { children?: React.ReactNode }) => (
-    <pre className="bg-black/[0.03] dark:bg-white/[0.05] p-4 rounded-xl text-[13px] font-mono overflow-x-auto my-4">
+    <pre className="bg-black/[0.03] dark:bg-white/[0.05] p-4 rounded-xl text-[13px] font-mono overflow-x-auto my-4 text-gray-900 dark:text-gray-100">
       {children}
     </pre>
   ),
   // Tables
   table: ({ children }: { children?: React.ReactNode }) => (
-    <div className="overflow-hidden rounded-2xl border border-black/[0.05] dark:border-white/[0.05] my-6">
-      <table className="w-full text-[13px] text-left border-collapse m-0">
+    <div className="overflow-x-auto rounded-2xl border border-black/[0.05] dark:border-white/[0.05] my-6">
+      <table className="min-w-full text-[13px] text-left border-collapse m-0">
         {children}
       </table>
     </div>

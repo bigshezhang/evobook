@@ -96,9 +96,11 @@ gantt
 - Node labels follow the language rule above (see Language Requirements)
 - Keep node text concise: ≤ 10 words per node
 - Max depth: 3 levels
-- Max nodes: 12
+- Max nodes: 8 (mindmap) / 12 (other types)
 - Do NOT add explanatory prose — Mermaid syntax only in the `mermaid_syntax` field
 - Do NOT wrap the syntax in markdown fences (no triple backticks)
+- Mobile-first layout: prefer flowchart TD over LR to minimize diagram width;
+  only use LR when the concept is inherently sequential left-to-right (e.g. pipelines, request/response flows)
 - Aspect ratio: aim for roughly 4:3 to 3:4 content area
   - If layout is too wide, switch flowchart direction from LR to TD, or use subgraphs
   - If layout is too tall, switch from TD to LR, or add horizontal branches
