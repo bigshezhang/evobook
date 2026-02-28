@@ -40,7 +40,10 @@ class QuizGenerateRequest(BaseModel):
 
     language: str = Field(..., description="Response language (ISO 639-1 code)")
     mode: Literal["Deep", "Fast", "Light"] = Field(
-        ..., description="Learning mode (affects difficulty)"
+        ..., description="Learning mode (controls question count and coverage breadth)"
+    )
+    level: Literal["Novice", "Beginner", "Intermediate", "Advanced"] = Field(
+        default="Beginner", description="User's knowledge level (controls question difficulty)"
     )
     learned_topics: list[LearnedTopic] = Field(
         ..., min_length=1, description="List of learned topics with their content"
@@ -159,18 +162,11 @@ async def generate_quiz(
 ) -> dict[str, Any]:
     """Generate a quiz from learned topics.
 
-    This endpoint generates a quiz (~10 questions) based on the content
-    the user has learned. Question difficulty varies by mode:
-
-    - Light: mostly recall + simple application
-    - Fast: mix recall + application
-    - Deep: more reasoning + tricky misconceptions
-
-    All questions are generated based on the provided pages_markdown content
-    to ensure they are answerable from what the user has learned.
+    This endpoint generates a quiz based on the content the user has learned.
+    Question count is controlled by mode; difficulty is controlled by level.
 
     Args:
-        request: Quiz generation request with language, mode, and learned topics.
+        request: Quiz generation request with language, mode, level, and learned topics.
         llm_client: LLM client for generating the quiz.
         user_id: Optional authenticated user ID from JWT.
 
@@ -188,6 +184,7 @@ async def generate_quiz(
     result = await service.generate_quiz(
         language=request.language,
         mode=request.mode,
+        level=request.level,
         learned_topics=learned_topics_dicts,
         user_id=user_id,
     )

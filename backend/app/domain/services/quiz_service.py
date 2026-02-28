@@ -19,8 +19,8 @@ logger = get_logger(__name__)
 class QuizService:
     """Service for generating quizzes using LLM.
 
-    This service handles quiz generation based on learned topics
-    with questions varying in difficulty based on mode.
+    This service handles quiz generation based on learned topics.
+    Question count is controlled by mode; difficulty is controlled by level.
     """
 
     def __init__(self, llm_client: LLMClient) -> None:
@@ -36,6 +36,7 @@ class QuizService:
         language: str,
         mode: str,
         learned_topics: list[dict[str, str]],
+        level: str = "Beginner",
         user_id: UUID | None = None,
     ) -> dict[str, Any]:
         """Generate a quiz from learned topics.
@@ -45,9 +46,11 @@ class QuizService:
 
         Args:
             language: Response language (en|zh).
-            mode: Learning mode (Deep|Fast|Light) - affects difficulty.
+            mode: Learning mode (Deep|Fast|Light) - controls question count/breadth.
             learned_topics: List of topics with their page content.
                 Each item: {"topic_name": str, "pages_markdown": str}
+            level: User's knowledge level (Novice|Beginner|Intermediate|Advanced) -
+                controls question difficulty.
             user_id: Optional authenticated user ID (reserved for future use).
 
         Returns:
@@ -61,6 +64,7 @@ class QuizService:
             "Generating quiz",
             language=language,
             mode=mode,
+            level=level,
             topics_count=len(learned_topics),
         )
 
@@ -69,6 +73,7 @@ class QuizService:
         context = json.dumps({
             "language": language,
             "mode": mode,
+            "level": level,
             "learned_topics": learned_topics,
         }, ensure_ascii=False, indent=2)
         full_prompt = f"{prompt_text}\n\n# User Input\n{context}"

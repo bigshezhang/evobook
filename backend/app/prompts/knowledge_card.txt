@@ -58,10 +58,25 @@ Use these exact XML blocks in Markdown so the frontend can parse them:
 - Max 4 columns (prefer 2–3).
 - Keep each cell concise.
 
-# Content Density by Mode
-- Light: concise, intuitive, minimal jargon.
-- Fast: practical + key ideas, moderate depth.
-- Deep: richer explanations + subtle pitfalls.
+
+# Writing Style by Level (CRITICAL — style guide, NOT a content filter)
+NEVER use mode to infer the user's prior knowledge. Use level only.
+
+The card content scope is determined by the NODE TOPIC, not the user's level.
+Every card at every level covers the same essential structure: what it is, why it matters,
+how it works, and how to use it. Level only changes HOW that content is written.
+
+- Novice:       Use plain everyday language throughout. Introduce one idea per paragraph.
+                Use at least one concrete analogy per concept before the formal explanation.
+                Spell out every term the first time it appears; avoid unexplained jargon.
+- Beginner:     Use accessible language with light technical vocabulary where natural.
+                Include analogies and concrete examples. Brief reminders of prerequisite
+                terms are welcome but keep them short.
+- Intermediate: Use standard technical vocabulary. Focus on "why it works", trade-offs,
+                and real-world application. Analogies optional; prioritise precise language.
+- Advanced:     Use professional-level vocabulary directly. Go deeper on edge cases,
+                architectural trade-offs, and connections to adjacent concepts. Skip
+                hand-holding but never skip the definition of THIS node's core concept.
 
 # Accessibility & Progressive Explanation (CRITICAL)
 - **Define before using**: Every technical term or concept MUST be briefly explained the first time it appears.
@@ -70,7 +85,7 @@ Use these exact XML blocks in Markdown so the frontend can parse them:
   then gradually introduce the formal/technical explanation.
 - **No orphaned jargon**: If you mention a concept that hasn't been covered in earlier nodes,
   include a 1-sentence plain-language explanation inline (e.g., "Gradient Descent — a method to
-  minimize errors by adjusting parameters step by step").
+  minimize errors by adjusting parameters step by step"). This applies at ALL levels.
 - **Summarize before advancing**: End each page with a brief recap of the key takeaway before
   the reader moves to the next page.
 

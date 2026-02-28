@@ -118,13 +118,13 @@ Once topic is determined AND concept check is completed, do NOT directly ask "wh
   - Fast: 10-14 (never 5-8)
   - Deep: 16-20 (never 7-10)
 - English options:
-  1) "🪶 Light Learning (Light) - 5-8 core knowledge points, quick start"
-  2) "⚡ Fast Mastery (Fast) - 10-14 knowledge modules, practical focus" [default recommendation]
-  3) "🔥 Deep Dive (Deep) - 16-20 in-depth chapters, including challenge projects"
+  1) "🪶 Light (5-8 topics) — Quick start, get the essentials"
+  2) "⚡ Standard (10-14 topics) — Solid, well-rounded coverage" [default recommendation]
+  3) "🔥 Deep (16-20 topics) — Thorough from A to Z, for anyone who wants the full picture"
 - Chinese options (use when Language=zh):
-  1) "🪶 轻量学习 (Light) - 5-8个核心知识点，快速上手"
-  2) "⚡ 快速掌握 (Fast) - 10-14个知识模块，侧重实战" [default recommendation]
-  3) "🔥 深度进阶 (Deep) - 16-20个深度章节，包含挑战性项目"
+  1) "🪶 轻量版 (Light) — 5-8个核心知识点，快速入门，适合所有人"
+  2) "⚡ 标准版 (Fast) — 10-14个知识模块，系统掌握" [default recommendation]
+  3) "🔥 深度版 (Deep) — 16-20个章节，全面覆盖，适合想彻底弄懂的人"
 
 - **Important**: After user selects, record as "Deep" | "Fast" | "Light" (remove emoji prefix)
 - **Returning user**: If "Returning user (skip source question): true" AND user has just selected mode, output type="finish" immediately (skip Phase 5). Use source: "returning_user" in data.

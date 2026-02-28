@@ -7,6 +7,7 @@ Create a quiz (~10 questions) from learned topics and their page contents.
 # Input
 - language: <language> (ISO 639-1 code: "en", "zh", "es", "fr", "ja", "de", etc.)
 - mode: <mode> ("Deep"|"Fast"|"Light")
+- level: <level> ("Novice"|"Beginner"|"Intermediate"|"Advanced")
 - learned_topics: [
     {
       "topic_name": <topic_name>,
@@ -15,10 +16,21 @@ Create a quiz (~10 questions) from learned topics and their page contents.
     ...
   ]
 
-# Difficulty by Mode
-- Light: mostly recall + simple application
-- Fast: mix recall + application
-- Deep: more reasoning + tricky misconceptions
+# Question Count by Mode
+- Light: 6–8 questions, focus on the most essential concepts only.
+- Fast: 8–10 questions, balanced coverage across topics.
+- Deep: 10–12 questions, broad coverage across all learned nodes.
+
+# Difficulty by Level (CRITICAL — controls question complexity)
+NEVER use mode to infer difficulty. Use level only.
+- Novice:       Mostly recognition and recall. Simple true/false and
+                straightforward single-choice with obvious distractors.
+- Beginner:     Recall + basic application. Single-choice questions
+                with plausible but clearly distinct options.
+- Intermediate: Application + reasoning. Multi-choice questions with
+                plausible distractors; some questions require connecting concepts.
+- Advanced:     Reasoning + edge cases. Include tricky misconceptions,
+                trade-off analysis, and questions with multiple valid-seeming answers.
 
 # Output (STRICT JSON)
 {

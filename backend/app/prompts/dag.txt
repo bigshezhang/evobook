@@ -28,7 +28,10 @@ Receive user profile data and output a DAG suitable for front-end rendering:
 # Hard Rules (Structure & Time)
 1) DAG is Acyclic — dependencies are one-directional; no cycles allowed.
 2) Must have branches and merges:
-   - Layer 1: 1 Root (zero-barrier entry)
+   - Layer 1: 1 Root node — MUST be a panoramic overview of the ENTIRE subject.
+     This node gives the learner a mental map: what the field is, what major areas it covers,
+     how they connect, and what they will be able to do by the end of the course.
+     It must NOT dive into any specific sub-topic. Every user regardless of level starts here.
    - Layer 2: At least 2 parallel branch nodes
    - Layer 3+: At least 1 merge node (depends on multiple branches)
 3) Time rules:
@@ -40,6 +43,22 @@ Receive user profile data and output a DAG suitable for front-end rendering:
    - Fast: MUST have 10-14 nodes (no more, no less)
    - Deep: MUST have 16-20 nodes (no more, no less)
    - This is a HARD CONSTRAINT, not a suggestion. If your generated DAG does not meet this requirement, it will be rejected.
+
+# Dimension Separation (CRITICAL — NEVER conflate these two)
+- **mode** controls NODE COUNT only. It says nothing about the user's prior knowledge.
+  A Novice can pick Deep mode and still needs to start from zero. A Deep-mode Novice
+  course should have 16-20 nodes, ALL written for someone with no prior knowledge.
+- **level** controls DAG structure depth AND content sophistication:
+  - Novice:       Layer 2 MUST be shared foundational concepts (core vocabulary, mental models,
+                  and basic mechanics common to ALL branches) — do NOT branch into specific
+                  interested_concepts yet. Branching into specific areas starts at Layer 3+.
+                  Node language must be plain and jargon-free.
+  - Beginner:     Layer 2 may have light foundations + early branching. Specific interested_concepts
+                  can appear from Layer 2 onward if foundations are minimal. Language stays accessible.
+  - Intermediate: May branch into interested_concepts from Layer 2. Descriptions focus on
+                  "how it works", practical trade-offs, and real-world scenarios.
+  - Advanced:     May branch into specific topics immediately after the panoramic root.
+                  Descriptions reference technical depth, edge cases, and professional nuance.
 5) Reward multiplier (reward_multiplier):
    - Every node must have reward_multiplier (float, range 1.0 - 3.0)
    - Regular learn nodes: 1.0 - 1.2
@@ -48,20 +67,32 @@ Receive user profile data and output a DAG suitable for front-end rendering:
    - Key merge nodes at path end or final quiz: 2.0 - 3.0 (high reward)
    - Multiplier should reflect the node's importance and difficulty
 
+# Course Name Rule
+- course_name MUST be a synthesized, journey-oriented title that reflects the full learning path.
+- When interested_concepts are provided, derive course_name from a synthesis of those concepts —
+  do NOT simply copy the topic field or focus field verbatim.
+  - Example: topic="机器学习", interested_concepts=["NLP","计算机视觉","强化学习"]
+    → course_name = "机器学习三大方向全景探索" (NOT "机器学习")
+  - Example: topic="Python", interested_concepts=["Web Scraping","Data Analysis","Automation"]
+    → course_name = "Python Practical Skills: Data, Web & Automation" (NOT "Python")
+- When interested_concepts are absent, still avoid a bare copy of topic; add a qualifier that
+  reflects the level and focus (e.g., "Python 编程入门之旅", "Advanced Python Mastery").
+- Keep it concise: 4–14 characters for zh, 3–8 words for en. Engaging and action-oriented.
+
 # Experience Guidelines
 1) Gamified naming: Verb + Noun, but accurately aligned with topic and focus.
 2) Strong relevance: Every branch must serve the focus.
 3) Difficulty alignment: Respect level and verified_concept.
-4) **Foundation First (CRITICAL)**: The Root node and early Layer nodes MUST introduce foundational concepts
-   and terminology before diving into advanced topics, even if the user has some prior knowledge.
-   - For Novice/Beginner: Start with "What is X?" and core vocabulary definitions.
-   - For Intermediate: Start with a concise review of key foundations, then build up.
-   - For Advanced: Start with a quick recap, then focus on depth.
-   - NEVER assume the user can understand advanced content without proper groundwork.
+4) **Panorama Before Depth (CRITICAL)**: Layer 1 is always a full-field overview (see Hard Rule #2).
+   Never open the course with a specific sub-topic — the learner needs a mental map first.
+   - For Novice/Beginner: After the panorama, Layer 2 must cover shared foundations
+     (core vocabulary and mental models) before any branching into specific areas.
+   - For Intermediate/Advanced: After the panorama, may branch into specific areas sooner,
+     but foundational node descriptions must still orient the learner.
 5) **Progressive Complexity**: Nodes must follow a clear learning progression:
-   Layer 1 → Basic concepts & definitions
-   Layer 2 → Core principles & how things work
-   Layer 3+ → Applications, advanced techniques, and synthesis
+   Layer 1 → Panoramic overview of the entire subject
+   Layer 2 → Shared foundations (for Novice/Beginner) OR early specific branches (Intermediate/Advanced)
+   Layer 3+ → Specific areas, applications, advanced techniques, and synthesis
 6) **Interested Concepts Handling**: If interested_concepts are provided in the input:
    - Every interested_concept MUST have at least one corresponding learning node in the DAG.
    - Integrate all user-selected areas into a coherent, connected learning path.
