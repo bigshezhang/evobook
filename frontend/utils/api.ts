@@ -379,7 +379,7 @@ export async function getDiscoveryCourses(category?: string): Promise<DiscoveryL
 }
 
 /**
- * Start a discovery course (increments start_count)
+ * Start a discovery course (increments start_count, legacy — kept for compatibility)
  */
 export async function startDiscoveryCourse(presetId: string): Promise<void> {
   const headers = await getAuthHeaders();
@@ -389,6 +389,26 @@ export async function startDiscoveryCourse(presetId: string): Promise<void> {
   });
 
   await handleApiResponse(response);
+}
+
+export interface JoinDiscoveryCourseResponse {
+  course_map_id: string;
+  message: string;
+}
+
+/**
+ * Join a discovery course — clones the full pre-built course (nodes + content)
+ * to the current user's account without any AI generation.
+ * Returns the new course_map_id to navigate directly to the learning page.
+ */
+export async function joinDiscoveryCourse(presetId: string): Promise<JoinDiscoveryCourseResponse> {
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${API_BASE_URL}/api/v1/discovery/courses/${presetId}/join`, {
+    method: 'POST',
+    headers,
+  });
+
+  return handleApiResponse<JoinDiscoveryCourseResponse>(response);
 }
 
 /**

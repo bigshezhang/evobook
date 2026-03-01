@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import BottomNav from '../../components/BottomNav';
-import { buildLearningPath, getUserCourses, CourseListItem, getLearningActivities, getStoredCourseMapId, getDiscoveryCourses, startDiscoveryCourse, type DiscoveryCourse } from '../../utils/api';
+import { buildLearningPath, getUserCourses, CourseListItem, getLearningActivities, getStoredCourseMapId, getDiscoveryCourses, joinDiscoveryCourse, type DiscoveryCourse } from '../../utils/api';
 import { aggregateActivitiesToHeatmap, DayActivity } from '../../utils/activityAggregator';
 import { getSelectedCharacter } from '../../utils/mascotUtils';
 import { CHARACTER_MAPPING } from '../../utils/mascotConfig';
@@ -150,9 +150,19 @@ const CoursesDashboard: React.FC = () => {
     ]
   };
 
-  const handleAddCourse = (presetId: string) => {
-    // 跳转到 onboarding（assessment）并传递 preset_id
-    navigate(`${ROUTES.ASSESSMENT}?preset=${presetId}`);
+  const [joiningPresetId, setJoiningPresetId] = useState<string | null>(null);
+
+  const handleAddCourse = async (presetId: string) => {
+    if (joiningPresetId) return;
+    setJoiningPresetId(presetId);
+    try {
+      const result = await joinDiscoveryCourse(presetId);
+      navigate(`${ROUTES.COURSES}?tab=mine&joined=${result.course_map_id}`);
+    } catch (err) {
+      console.error('Failed to join discovery course:', err);
+    } finally {
+      setJoiningPresetId(null);
+    }
   };
 
   // Fixed CourseCard type definition to allow 'key' prop in maps
@@ -187,9 +197,14 @@ const CoursesDashboard: React.FC = () => {
         </div>
         <button
           onClick={() => handleAddCourse(course.preset_id)}
-          className="w-8 h-8 min-w-[32px] bg-black rounded-full flex items-center justify-center shadow-md active:scale-90 transition-transform cursor-pointer"
+          disabled={joiningPresetId === course.preset_id}
+          className="w-8 h-8 min-w-[32px] bg-black rounded-full flex items-center justify-center shadow-md active:scale-90 transition-transform cursor-pointer disabled:opacity-50"
         >
-          <span className="material-symbols-rounded text-white text-[18px]">add</span>
+          {joiningPresetId === course.preset_id ? (
+            <span className="material-symbols-rounded text-white text-[18px] animate-spin">progress_activity</span>
+          ) : (
+            <span className="material-symbols-rounded text-white text-[18px]">add</span>
+          )}
         </button>
       </div>
     </div>

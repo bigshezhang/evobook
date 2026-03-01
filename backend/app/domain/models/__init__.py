@@ -9,6 +9,7 @@ from app.domain.models.node_progress import NodeProgress
 from app.domain.models.onboarding import OnboardingSession
 from app.domain.models.profile import Profile
 from app.domain.models.prompt_run import PromptRun
+from app.domain.models.prompt_test import PromptTestResult, PromptTestRun
 from app.domain.models.quiz_attempt import QuizAttempt
 from app.domain.models.shop_item import ShopItem
 from app.domain.models.user_inventory import UserInventory
@@ -24,6 +25,8 @@ __all__ = [
     "OnboardingSession",
     "Profile",
     "PromptRun",
+    "PromptTestResult",
+    "PromptTestRun",
     "QuizAttempt",
     "ShopItem",
     "UserInventory",

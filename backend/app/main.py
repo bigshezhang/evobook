@@ -7,6 +7,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1 import router as v1_router
+from app.api.v1.admin_discovery import router as admin_discovery_router
+from app.api.v1.admin_prompt_test import router as admin_router
 from app.api.v1.health import router as health_router
 from app.config import get_settings
 from app.core.logging import setup_logging
@@ -114,6 +116,9 @@ def create_app() -> FastAPI:
     app.include_router(health_router, tags=["health"])
     # API v1 routes
     app.include_router(v1_router)
+    # Admin routes (internal dashboard)
+    app.include_router(admin_router)
+    app.include_router(admin_discovery_router)
 
     return app
 

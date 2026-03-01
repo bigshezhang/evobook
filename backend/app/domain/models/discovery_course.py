@@ -55,7 +55,7 @@ class DiscoveryCourse(Base):
     category: Mapped[str] = mapped_column(
         Text,
         nullable=False,
-        comment="Category: 'recommended', 'popular', 'friends'",
+        comment="Category: 'recommended', 'popular', 'hot'",
     )
     display_order: Mapped[int] = mapped_column(
         Integer,
@@ -74,6 +74,26 @@ class DiscoveryCourse(Base):
         JSONB,
         nullable=False,
         comment="Onboarding seed context: topic, suggested_level, key_concepts, focus",
+    )
+    nodes: Mapped[list[dict[str, Any]] | None] = mapped_column(
+        JSONB,
+        nullable=True,
+        comment="Full DAG nodes array copied from source course_map (used for join clone)",
+    )
+    map_meta: Mapped[dict[str, Any] | None] = mapped_column(
+        JSONB,
+        nullable=True,
+        comment="Course metadata copied from source course_map (course_name, strategy_rationale, etc.)",
+    )
+    source_course_map_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        nullable=True,
+        comment="Source course_map UUID for traceability and node_contents cloning (no FK constraint)",
+    )
+    tags: Mapped[list[str] | None] = mapped_column(
+        JSONB,
+        nullable=True,
+        comment="Display tags, e.g. ['适合新手', '无需基础']",
     )
     is_active: Mapped[bool] = mapped_column(
         Boolean,

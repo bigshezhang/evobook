@@ -51,6 +51,12 @@ class Settings(BaseSettings):
         description="Supabase project URL (e.g. https://xxxx.supabase.co)",
     )
 
+    # Admin API key for dashboard access (simple shared secret)
+    admin_api_key: str = Field(
+        default="",
+        description="Shared secret for /api/admin/* endpoints (X-Admin-Key header). Empty = no auth check.",
+    )
+
     # Frontend/App Base URL for invite links
     app_base_url: str = Field(
         default="https://evobook.app",

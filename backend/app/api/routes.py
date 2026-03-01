@@ -21,6 +21,9 @@ INVENTORY_PREFIX = "/inventory"
 INVITE_PREFIX = "/invite"
 DISCOVERY_PREFIX = "/discovery"
 
+# Admin (internal dashboard) prefix
+ADMIN_PREFIX = "/api/admin"
+
 # Full Paths (for reference, computed from prefixes)
 PROFILE_PATH = f"{API_V1_PREFIX}{PROFILE_PREFIX}"
 ONBOARDING_PATH = f"{API_V1_PREFIX}{ONBOARDING_PREFIX}"

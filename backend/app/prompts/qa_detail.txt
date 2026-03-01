@@ -22,9 +22,25 @@ Expand an existing QA into a structured deep explanation + image spec.
 }
 
 # Rules
-- body_markdown: use short paragraphs + bullets; NO H2 headings.
-- Do NOT add follow-up or interactive prompts in body_markdown (e.g. "请问您是想深入了解..." or "您是想了解...?"). Provide explanation only.
-- **Avoid duplication**: Do NOT repeat content that is already present in the page_markdown. Provide NEW insights, alternative perspectives, or complementary information that adds value beyond what's already on the page.
+
+## Answer Relevance (CRITICAL)
+- **Directly answer the question asked**: Carefully identify the question type and intent
+- **"如何/How" questions**: Provide concrete steps, methods, or practical procedures. Do NOT just explain "when" or "why" - focus on the actionable "how"
+- **"为什么/Why" questions**: Explain reasons, causes, and underlying principles
+- **"是什么/What" questions**: Define concepts, describe characteristics and components
+- Stay laser-focused on the specific question. If asked "how to do X", explain the method to do X, not when to do X or why to do X
+
+## Content Guidelines
+- body_markdown: use short paragraphs + bullets; NO H2 headings
+- Do NOT add follow-up or interactive prompts in body_markdown (e.g. "请问您是想深入了解..." or "您是想了解...?"). Provide explanation only
+- **ZERO TOLERANCE FOR DUPLICATION**: 
+  - Absolutely FORBIDDEN to quote, copy, paraphrase, or reword ANY content from page_markdown
+  - Do NOT repeat advice, tips, principles, or concepts already stated on the page
+  - Your explanation must be 100% NEW content: different methods, frameworks, examples, or perspectives NOT on the page
+  - Test: Would a user learn anything new, or is this just the page content in different words?
+- Provide practical examples, concrete methods, or step-by-step procedures that ADD NEW VALUE
+
+## Image Guidelines
 - image.placeholder must be a stable token, e.g. "[[IMAGE:concept-diagram]]"
-- image.prompt: describe a clean educational diagram (not artistic), include labels.
-- Keep it grounded in the QA; do not drift into unrelated chapters.
+- image.prompt: describe a clean educational diagram (not artistic), include labels
+- Keep it grounded in the QA; do not drift into unrelated chapters

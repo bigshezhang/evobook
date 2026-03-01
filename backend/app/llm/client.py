@@ -30,6 +30,9 @@ class LLMResponse:
     retries: int
     latency_ms: int
     model: str
+    input_tokens: int = 0
+    output_tokens: int = 0
+    total_tokens: int = 0
 
 
 class LLMClient:
@@ -78,6 +81,7 @@ class LLMClient:
         retries = 0
         last_error: Exception | None = None
         raw_text = ""
+        usage = {}
 
         # Try up to max_retries + 1 times (initial + retries)
         max_attempts = self._settings.llm_max_retries + 1
@@ -88,8 +92,9 @@ class LLMClient:
                     # Extract session_id from prompt_text for onboarding
                     session_id = self._extract_session_id_from_prompt(prompt_text)
                     raw_text = self._get_mock_response(prompt_name, output_format, session_id)
+                    usage = {}  # Mock mode doesn't have real usage
                 else:
-                    raw_text = await self._call_llm(prompt_text, system_message)
+                    raw_text, usage = await self._call_llm(prompt_text, system_message)
 
                 # Validate output
                 parsed_data = self._validate_output(raw_text, output_format)
@@ -106,6 +111,9 @@ class LLMClient:
                     retries=retries,
                     latency_ms=latency_ms,
                     model=self._settings.litellm_model,
+                    input_tokens=usage.get("input_tokens", 0),
+                    output_tokens=usage.get("output_tokens", 0),
+                    total_tokens=usage.get("total_tokens", 0),
                 )
 
                 self._log_completion(response)
@@ -154,6 +162,9 @@ class LLMClient:
             retries=retries,
             latency_ms=latency_ms,
             model=self._settings.litellm_model,
+            input_tokens=usage.get("input_tokens", 0),
+            output_tokens=usage.get("output_tokens", 0),
+            total_tokens=usage.get("total_tokens", 0),
         )
 
         self._log_completion(response)
@@ -200,7 +211,7 @@ class LLMClient:
 
         return None
 
-    async def _call_llm(self, prompt_text: str, system_message: str | None) -> str:
+    async def _call_llm(self, prompt_text: str, system_message: str | None) -> tuple[str, dict]:
         """Make actual LLM API call.
 
         Args:
@@ -208,7 +219,7 @@ class LLMClient:
             system_message: Optional system message.
 
         Returns:
-            Raw response text.
+            Tuple of (raw response text, usage dict with token counts).
 
         Raises:
             LLMError: If API call fails.
@@ -234,7 +245,17 @@ class LLMClient:
                     message="LLM returned empty content",
                     details=None,
                 )
-            return content
+            
+            # Extract token usage from response
+            usage = {}
+            if hasattr(response, 'usage') and response.usage:
+                usage = {
+                    "input_tokens": getattr(response.usage, 'prompt_tokens', 0),
+                    "output_tokens": getattr(response.usage, 'completion_tokens', 0),
+                    "total_tokens": getattr(response.usage, 'total_tokens', 0),
+                }
+            
+            return content, usage
 
         except litellm.exceptions.Timeout as e:
             raise LLMError(
@@ -658,4 +679,7 @@ You can check a variable's type using the `type()` function."""
             retries=response.retries,
             latency_ms=response.latency_ms,
             success=response.success,
+            input_tokens=response.input_tokens,
+            output_tokens=response.output_tokens,
+            total_tokens=response.total_tokens,
         )

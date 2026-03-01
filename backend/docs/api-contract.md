@@ -260,7 +260,10 @@
 {
   "language": "zh",
   "qa_title": "什么是 Python 变量？",
-  "qa_short_answer": "变量是程序中用于存储数据的容器..."
+  "qa_short_answer": "变量是程序中用于存储数据的容器...",
+  "page_markdown": "# Python 基础\n\n本页介绍了 Python 的基本概念...",
+  "course_map_id": "uuid-string (可选)",
+  "node_id": 1
 }
 ```
 

@@ -2,7 +2,7 @@
 
 from uuid import UUID
 
-from sqlalchemy import select, update
+from sqlalchemy import desc, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.models.discovery_course import DiscoveryCourse
@@ -34,10 +34,14 @@ class DiscoveryCourseRepository(BaseRepository[DiscoveryCourse]):
         stmt = select(DiscoveryCourse).where(DiscoveryCourse.is_active == True)  # noqa: E712
         if category:
             stmt = stmt.where(DiscoveryCourse.category == category)
-        stmt = stmt.order_by(
-            DiscoveryCourse.category,
-            DiscoveryCourse.display_order,
-        )
+        # Hot category is ranked by popularity; others use manual display_order
+        if category == "hot":
+            stmt = stmt.order_by(desc(DiscoveryCourse.start_count))
+        else:
+            stmt = stmt.order_by(
+                DiscoveryCourse.category,
+                DiscoveryCourse.display_order,
+            )
         result = await self.db.execute(stmt)
         return list(result.scalars().all())
 

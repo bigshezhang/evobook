@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import Header from '../../components/Header';
 import BottomNav from '../../components/BottomNav';
-import { getDiscoveryCourses, startDiscoveryCourse, type DiscoveryCourse } from '../../utils/api';
+import { getDiscoveryCourses, joinDiscoveryCourse, type DiscoveryCourse } from '../../utils/api';
 import { ROUTES } from '../../utils/routes';
 import { useThemeColor, PAGE_THEME_COLORS } from '../../utils/themeColor';
 
@@ -16,6 +16,7 @@ const DiscoveryList: React.FC = () => {
   const [courses, setCourses] = useState<DiscoveryCourse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [joiningId, setJoiningId] = useState<string | null>(null);
 
   const titleMap: Record<string, string> = {
     recommended: 'Recommended',
@@ -45,16 +46,18 @@ const DiscoveryList: React.FC = () => {
   };
 
   const handleAddCourse = async (presetId: string) => {
+    if (joiningId) return;
+    setJoiningId(presetId);
     try {
-      // 调用后端 API 记录启动统计
-      await startDiscoveryCourse(presetId);
+      const result = await joinDiscoveryCourse(presetId);
+      // Navigate directly to the courses page (the new course_map will appear there)
+      navigate(`${ROUTES.COURSES}?tab=mine&joined=${result.course_map_id}`);
     } catch (err) {
-      console.error('Failed to start discovery course:', err);
-      // 即使失败也继续跳转
+      console.error('Failed to join discovery course:', err);
+      setError('Failed to join course. Please try again.');
+    } finally {
+      setJoiningId(null);
     }
-
-    // 跳转到 onboarding（assessment）并传递 preset_id
-    navigate(`${ROUTES.ASSESSMENT}?preset=${presetId}`);
   };
 
   return (
@@ -98,9 +101,14 @@ const DiscoveryList: React.FC = () => {
                   </div>
                   <button
                     onClick={() => handleAddCourse(item.preset_id)}
-                    className="w-8 h-8 min-w-[32px] bg-black rounded-full flex items-center justify-center shadow-md active:scale-90 transition-transform cursor-pointer"
+                    disabled={joiningId === item.preset_id}
+                    className="w-8 h-8 min-w-[32px] bg-black rounded-full flex items-center justify-center shadow-md active:scale-90 transition-transform cursor-pointer disabled:opacity-50"
                   >
-                    <span className="material-symbols-rounded text-white text-[20px]">add</span>
+                    {joiningId === item.preset_id ? (
+                      <span className="material-symbols-rounded text-white text-[20px] animate-spin">progress_activity</span>
+                    ) : (
+                      <span className="material-symbols-rounded text-white text-[20px]">add</span>
+                    )}
                   </button>
                 </div>
               </div>
