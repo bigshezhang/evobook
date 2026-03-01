@@ -64,3 +64,6 @@ htmlcov/
 # Misc
 .backup/
 *.bak
+
+# Dashboard is a separate repository
+dashboard/
