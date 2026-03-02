@@ -67,6 +67,8 @@ const GuideOverlay: React.FC<GuideOverlayProps> = ({
   const [ready, setReady] = useState(false);
   // Enable CSS transitions only after the first position is painted
   const [animate, setAnimate] = useState(false);
+  // Safari 下偶发内容透明不恢复，记录兜底定时器
+  const contentRevealFallbackRef = useRef<number | null>(null);
 
   const tooltipRef = useRef<HTMLDivElement>(null);
   const prevStepRef = useRef<number>(-1);
@@ -221,6 +223,25 @@ const GuideOverlay: React.FC<GuideOverlayProps> = ({
     };
   }, [measure]);
 
+  // Safari 兜底：内容长时间不可见时强制恢复，避免出现“白框内空白”
+  useEffect(() => {
+    if (!ready || contentVisible) return;
+    if (contentRevealFallbackRef.current) {
+      window.clearTimeout(contentRevealFallbackRef.current);
+    }
+    contentRevealFallbackRef.current = window.setTimeout(() => {
+      setContentVisible(true);
+      contentRevealFallbackRef.current = null;
+    }, DURATION + 250);
+
+    return () => {
+      if (contentRevealFallbackRef.current) {
+        window.clearTimeout(contentRevealFallbackRef.current);
+        contentRevealFallbackRef.current = null;
+      }
+    };
+  }, [ready, contentVisible]);
+
   if (!step) return null;
 
   const handlePrimaryAction = () => {
@@ -360,17 +381,7 @@ const GuideOverlay: React.FC<GuideOverlayProps> = ({
           </div>
 
           {/* Actions */}
-          <div className={`flex items-center gap-3 ${isLast ? 'justify-end' : 'justify-between'}`}>
-            {/* Hide Skip button on the last step */}
-            {!isLast && (
-              <button
-                onClick={onSkip}
-                className="text-sm text-slate-500 hover:text-slate-700 font-medium transition-colors"
-              >
-                Skip
-              </button>
-            )}
-
+          <div className="flex items-center gap-3 justify-end">
             <div className="flex items-center gap-2">
               {!isFirst && !step.actions?.secondary && (
                 <button
@@ -400,6 +411,16 @@ const GuideOverlay: React.FC<GuideOverlayProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Skip 按钮放在白框外，避免被内容淡入逻辑影响 */}
+      {!isLast && (
+        <button
+          onClick={onSkip}
+          className="fixed top-6 right-6 z-[10000] text-sm text-white/90 hover:text-white font-semibold px-3 py-1.5 rounded-full bg-black/35 hover:bg-black/45 backdrop-blur-sm transition-colors"
+        >
+          Skip
+        </button>
+      )}
     </div>
   );
 };
