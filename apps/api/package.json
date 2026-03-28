@@ -1,0 +1,37 @@
+{
+  "name": "@evobook/api",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch --env-file=.env src/index.ts",
+    "build": "tsup src/index.ts --format esm --dts",
+    "start": "node dist/index.js",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:push": "drizzle-kit push",
+    "db:introspect": "drizzle-kit introspect",
+    "db:studio": "drizzle-kit studio",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@ai-sdk/openai": "^3.0.48",
+    "@hono/node-server": "^1",
+    "@hono/trpc-server": "^0.4",
+    "@supabase/supabase-js": "^2",
+    "@trpc/server": "^11",
+    "ai": "^6.0.141",
+    "drizzle-orm": "^0.44",
+    "hono": "^4",
+    "jose": "^6",
+    "postgres": "^3",
+    "zod": "^3"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "drizzle-kit": "^0.31",
+    "tsup": "^8",
+    "tsx": "^4",
+    "typescript": "~5.8"
+  }
+}

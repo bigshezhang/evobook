@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../utils/AuthContext';
 import Header from '../../components/Header';
 import BottomNav from '../../components/BottomNav';
-import { getProfileStats, ProfileStats, getInviteCode, InviteCodeData, getUserCourses, CourseListItem, getProfile, updateProfile, Profile, getActiveCourse } from '../../utils/api';
+import { trpc } from '../../utils/trpc/client';
 import { getSelectedCharacter } from '../../utils/mascotUtils';
 import { CHARACTER_MAPPING } from '../../utils/mascotConfig';
 import { resetAllStores } from '../../utils/stores';
@@ -19,19 +19,24 @@ const ProfileView: React.FC = () => {
   // 设置页面主题色（状态栏颜色）
   useThemeColor(PAGE_THEME_COLORS.WHITE);
 
+  // tRPC 查询
+  const { data: profile } = trpc.profile.get.useQuery();
+  const { data: stats, isLoading: loading } = trpc.profile.getStats.useQuery();
+  const { data: inviteData, isLoading: loadingInvite } = trpc.invite.getInviteCode.useQuery();
+  const { data: coursesData } = trpc.courseMap.list.useQuery();
+  const { data: activeCourseData } = trpc.profile.getActiveCourse.useQuery();
+  const updateProfileMutation = trpc.profile.update.useMutation();
+  const utils = trpc.useUtils();
+
+  const recentCourses = coursesData?.courses?.slice(0, 3) ?? [];
+
   const [showInvite, setShowInvite] = useState(false);
-  const [stats, setStats] = useState<ProfileStats | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [inviteData, setInviteData] = useState<InviteCodeData | null>(null);
-  const [loadingInvite, setLoadingInvite] = useState(false);
-  const [recentCourses, setRecentCourses] = useState<CourseListItem[]>([]);
   const [isSmallScreen, setIsSmallScreen] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info'; visible: boolean }>({
     message: '',
     type: 'success',
     visible: false
   });
-  const [profile, setProfile] = useState<Profile | null>(null);
   const [showEditNickname, setShowEditNickname] = useState(false);
   const [editingNickname, setEditingNickname] = useState('');
   const [savingNickname, setSavingNickname] = useState(false);
@@ -82,10 +87,9 @@ const ProfileView: React.FC = () => {
   // The high-fidelity mascot image for the poster
   const POSTER_MASCOT = "https://lh3.googleusercontent.com/aida-public/AB6AXuA46trIZajUdPDtcb5Mve4AANhBVcFPf7hD1VJlypb0dFYRxS2hXKwdShsNFVNhbqxXKQFSjVVMsE3mxGpTikZ_57rFFad-Wac1TeLu7mkLVUcNcXHe1dMp94PSQWv0zRukZyCVX_0DBZ2YWtZ3z95XJoYIk-kHHf_jOtCXVxwOascf_uy1-xN9B6LDuY7LUnDzKY4Em18_6PP7pnkilqsGpMh1-4xyIUGnBpFdw5egLxog1wDMZwcwvb0tgobqJaobQeIGVn7VCUfO";
 
-  // Get display name - prioritize profile.display_name, fallback to email prefix
   const getDisplayName = (): string => {
-    if (profile?.display_name) {
-      return profile.display_name;
+    if (profile?.displayName) {
+      return profile.displayName;
     }
     if (user?.email) {
       const atIndex = user.email.indexOf('@');
@@ -94,13 +98,11 @@ const ProfileView: React.FC = () => {
     return 'Loading...';
   };
 
-  // Handle edit nickname
   const handleEditNickname = () => {
-    setEditingNickname(profile?.display_name || '');
+    setEditingNickname(profile?.displayName || '');
     setShowEditNickname(true);
   };
 
-  // Handle save nickname
   const handleSaveNickname = async () => {
     const trimmedNickname = editingNickname.trim();
 
@@ -116,8 +118,8 @@ const ProfileView: React.FC = () => {
 
     setSavingNickname(true);
     try {
-      const updatedProfile = await updateProfile({ display_name: trimmedNickname });
-      setProfile(updatedProfile);
+      await updateProfileMutation.mutateAsync({ displayName: trimmedNickname });
+      await utils.profile.get.invalidate();
       setShowEditNickname(false);
       showToast('Nickname updated successfully!');
     } catch (error) {
@@ -160,7 +162,7 @@ const ProfileView: React.FC = () => {
         await navigator.share({
           files: [file],
           title: 'Join me on EvoBook!',
-          text: `Use code ${inviteData?.formatted_code} to get +500 XP!`,
+          text: `Use code ${inviteData?.formattedCode} to get +500 XP!`,
         });
         showToast('Invite shared successfully!');
       } else {
@@ -176,7 +178,7 @@ const ProfileView: React.FC = () => {
   const handleDownload = async () => {
     try {
       const blob = await generatePosterBlob();
-      const file = new File([blob], `evobook-invite-${inviteData?.invite_code || 'poster'}.png`, { type: 'image/png' });
+      const file = new File([blob], `evobook-invite-${inviteData?.inviteCode || 'poster'}.png`, { type: 'image/png' });
 
       // 在移动设备上优先使用 Web Share API（更好的用户体验）
       // iOS Safari 全屏模式下，分享可以直接保存到照片，而下载会弹窗预览
@@ -203,7 +205,7 @@ const ProfileView: React.FC = () => {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `evobook-invite-${inviteData?.invite_code || 'poster'}.png`;
+      a.download = `evobook-invite-${inviteData?.inviteCode || 'poster'}.png`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -215,30 +217,16 @@ const ProfileView: React.FC = () => {
     }
   };
 
-  // Get invite link with configured domain
+  // 根据邀请码构造邀请链接
   const getInviteLinkWithDomain = (): string => {
-    if (!inviteData?.invite_url) return '';
-
+    if (!inviteData?.inviteCode) return '';
     const appUrl = import.meta.env.VITE_APP_URL || window.location.origin;
-
-    try {
-      const url = new URL(inviteData.invite_url);
-      const configuredUrl = new URL(appUrl);
-
-      // Replace protocol and host with configured domain
-      url.protocol = configuredUrl.protocol;
-      url.host = configuredUrl.host;
-
-      return url.toString();
-    } catch (error) {
-      console.error('Failed to parse invite URL:', error);
-      return inviteData.invite_url;
-    }
+    return `${appUrl}?invite=${inviteData.inviteCode}`;
   };
 
   // Handle copy invite link
   const handleCopyLink = async () => {
-    if (!inviteData?.invite_url) return;
+    if (!inviteData?.inviteCode) return;
 
     const inviteLink = getInviteLinkWithDomain();
 
@@ -266,25 +254,23 @@ const ProfileView: React.FC = () => {
     }
   };
 
-  // Handle restart tutorial
   const handleRestartTutorial = async () => {
     try {
       setStartingTutorial(true);
 
-      // Remove 'knowledge_tree' from guides_completed
-      if (profile?.guides_completed) {
-        const updatedGuides = profile.guides_completed.filter(
+      // 从 guidesCompleted 中移除 'knowledge_tree'
+      if (profile?.guidesCompleted) {
+        const updatedGuides = profile.guidesCompleted.filter(
           (guideId) => guideId !== 'knowledge_tree'
         );
-        await updateProfile({
-          guides_completed: updatedGuides,
+        await updateProfileMutation.mutateAsync({
+          guidesCompleted: updatedGuides,
         });
       }
 
-      // Get active/current course and navigate to it with showGuide parameter
-      const activeCourse = await getActiveCourse();
-      if (activeCourse.course_map_id) {
-        navigate(`${ROUTES.KNOWLEDGE_TREE}?cid=${activeCourse.course_map_id}&showGuide=true`);
+      // 导航到当前活跃课程的知识树，并显示引导
+      if (activeCourseData?.courseMapId) {
+        navigate(`${ROUTES.KNOWLEDGE_TREE}?cid=${activeCourseData.courseMapId}&showGuide=true`);
       } else {
         showToast('No courses found. Complete onboarding first.', 'error');
       }
@@ -297,73 +283,25 @@ const ProfileView: React.FC = () => {
   };
 
 
-  // Load profile stats and invite code from API
+  // 监听心跳的学习时长更新，乐观更新 tRPC 缓存
   useEffect(() => {
-    const loadProfile = async () => {
-      try {
-        const data = await getProfile();
-        setProfile(data);
-      } catch (error) {
-        console.error('Failed to load profile:', error);
-      }
-    };
-
-    const loadStats = async () => {
-      try {
-        const data = await getProfileStats();
-        setStats(data);
-      } catch (error) {
-        console.error('Failed to load profile stats:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    const loadInviteCode = async () => {
-      try {
-        setLoadingInvite(true);
-        const data = await getInviteCode();
-        setInviteData(data);
-      } catch (error) {
-        console.error('Failed to load invite code:', error);
-      } finally {
-        setLoadingInvite(false);
-      }
-    };
-
-    const loadCourses = async () => {
-      try {
-        const data = await getUserCourses();
-        // 取前三个课程
-        setRecentCourses(data.courses.slice(0, 3));
-      } catch (error) {
-        console.error('Failed to load courses:', error);
-      }
-    };
-
-    loadProfile();
-    loadStats();
-    loadInviteCode();
-    loadCourses();
-
-    // Listen for study time updates from heartbeat
     const handleStudyTimeUpdate = (event: CustomEvent) => {
-      if (stats) {
-        const newSeconds = event.detail.total_study_seconds;
-        setStats({
-          ...stats,
-          total_study_seconds: newSeconds,
-          total_study_hours: Math.ceil(newSeconds / 3600),
-        });
-      }
+      const newSeconds = event.detail.total_study_seconds;
+      utils.profile.getStats.setData(undefined, (old) => {
+        if (!old) return old;
+        return {
+          ...old,
+          totalStudySeconds: newSeconds,
+          totalStudyHours: Math.ceil(newSeconds / 3600),
+        };
+      });
     };
 
     window.addEventListener('study-time-updated', handleStudyTimeUpdate as EventListener);
-
     return () => {
       window.removeEventListener('study-time-updated', handleStudyTimeUpdate as EventListener);
     };
-  }, []);
+  }, [utils]);
 
   return (
     <div className="flex flex-col min-h-screen bg-[#F8F9FB] pb-32 overflow-x-hidden font-sans">
@@ -412,8 +350,8 @@ const ProfileView: React.FC = () => {
             </button>
           </div>
           <p className="text-slate-400 text-sm font-bold opacity-80">
-            {loading ? 'Loading...' : (stats?.joined_date ? (() => {
-              const date = new Date(stats.joined_date);
+            {loading ? 'Loading...' : (stats?.joinedDate ? (() => {
+              const date = new Date(stats.joinedDate);
               const year = date.getFullYear();
               const month = date.toLocaleDateString('en-US', { month: 'long' });
               return `Joined ${month} ${year}`;
@@ -429,7 +367,7 @@ const ProfileView: React.FC = () => {
             </div>
             <span className="text-xl font-black text-slate-900 leading-none">
               {loading ? '...' : (() => {
-                const seconds = stats?.total_study_seconds || 0;
+                const seconds = stats?.totalStudySeconds || 0;
                 const minutes = Math.floor(seconds / 60);
                 const hours = Math.ceil(seconds / 3600);
                 return minutes < 120 ? minutes : hours;
@@ -437,7 +375,7 @@ const ProfileView: React.FC = () => {
             </span>
             <span className="text-[10px] font-black text-slate-400 mt-1 uppercase tracking-wider">
               {loading ? 'Study Time' : (() => {
-                const seconds = stats?.total_study_seconds || 0;
+                const seconds = stats?.totalStudySeconds || 0;
                 const minutes = Math.floor(seconds / 60);
                 return minutes < 120 ? 'Study Mins' : 'Study Hrs';
               })()}
@@ -448,7 +386,7 @@ const ProfileView: React.FC = () => {
               <span className="material-symbols-outlined text-orange-500 text-xl">workspace_premium</span>
             </div>
             <span className="text-xl font-black text-slate-900 leading-none">
-              {loading ? '...' : stats?.completed_courses_count || 0}
+              {loading ? '...' : stats?.completedCoursesCount || 0}
             </span>
             <span className="text-[10px] font-black text-slate-400 mt-1 uppercase tracking-wider">Mastered</span>
           </div>
@@ -457,7 +395,7 @@ const ProfileView: React.FC = () => {
               <span className="material-symbols-outlined text-purple-500 text-xl">leaderboard</span>
             </div>
             <span className="text-xl font-black text-slate-900 leading-none">
-              {loading ? '...' : (stats?.global_rank != null ? `#${stats.global_rank}` : 'N/A')}
+              {loading ? '...' : (stats?.globalRank != null ? `#${stats.globalRank}` : 'N/A')}
             </span>
             <span className="text-[10px] font-black text-slate-400 mt-1 uppercase tracking-wider">Global Rank</span>
           </div>
@@ -471,7 +409,7 @@ const ProfileView: React.FC = () => {
                 <span className="text-base font-black tracking-tight text-slate-900">Invite Friends</span>
                 <span className="text-[10px] font-black bg-white text-primary border border-primary/20 px-2 py-0.5 rounded-lg">+500 XP</span>
               </div>
-              <span className="text-xs font-bold text-slate-500">Code: <span className="text-slate-900 font-black">{loadingInvite ? 'Loading...' : (inviteData?.formatted_code || 'N/A')}</span></span>
+              <span className="text-xs font-bold text-slate-500">Code: <span className="text-slate-900 font-black">{loadingInvite ? 'Loading...' : (inviteData?.formattedCode || 'N/A')}</span></span>
             </div>
             <button
               onClick={() => setShowInvite(true)}
@@ -610,12 +548,12 @@ const ProfileView: React.FC = () => {
               {recentCourses.length > 0 ? (
                 <div className={isSmallScreen ? 'space-y-2' : 'space-y-3'}>
                   {recentCourses.slice(0, 3).map((course, index) => (
-                    <div key={course.course_map_id} className={`flex items-center ${isSmallScreen ? 'gap-2 p-2.5' : 'gap-3 p-3.5'} bg-slate-50/80 rounded-xl border border-slate-100`}>
+                    <div key={course.courseMapId} className={`flex items-center ${isSmallScreen ? 'gap-2 p-2.5' : 'gap-3 p-3.5'} bg-slate-50/80 rounded-xl border border-slate-100`}>
                       <div className={`${isSmallScreen ? 'w-7 h-7' : 'w-9 h-9'} bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0`}>
                         <span className={`${isSmallScreen ? 'text-xs' : 'text-sm'} font-black text-primary`}>#{index + 1}</span>
                       </div>
                       <p className={`${isSmallScreen ? 'text-[12px]' : 'text-[14px]'} font-bold text-slate-700 leading-tight flex-1 overflow-hidden text-ellipsis whitespace-nowrap`}>
-                        {course.map_meta.course_name}
+                        {(course.mapMeta as Record<string, unknown>)?.courseName as string}
                       </p>
                     </div>
                   ))}

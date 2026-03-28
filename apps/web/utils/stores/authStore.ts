@@ -9,7 +9,7 @@
 
 import { create } from 'zustand';
 import { supabase } from '../supabase';
-import { getProfile } from '../api';
+import { trpcVanilla } from '../trpc/vanilla';
 import { useMascotStore } from './mascotStore';
 import { identifyUser } from '../umami';
 import type { MascotOutfit } from '../mascotConfig';
@@ -72,12 +72,12 @@ export function initAuthListener(): void {
    */
   const syncUserProfile = async (user: User) => {
     try {
-      const profile = await getProfile();
+      const profile = await trpcVanilla.profile.get.query();
       if (profile.mascot) {
         useMascotStore.getState().setCharacter(profile.mascot as any);
       }
-      if (profile.current_outfit) {
-        useMascotStore.getState().setOutfit(profile.current_outfit as MascotOutfit);
+      if (profile.currentOutfit) {
+        useMascotStore.getState().setOutfit(profile.currentOutfit as MascotOutfit);
       }
     } catch (error) {
       // Ignore errors during profile sync (user might not have profile yet)

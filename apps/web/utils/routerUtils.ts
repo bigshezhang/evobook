@@ -22,7 +22,7 @@
  *    - `import { ROUTES } from './routes';`
  *    - `navigate(ROUTES.COURSES)` instead of `navigate('/courses')`
  *
- * 4. Use `buildLearningPath()` from `utils/api.ts` for routes with query params:
+ * 4. Use `buildLearningPath()` from `utils/helpers.ts` for routes with query params:
  *    - `navigate(buildLearningPath(ROUTES.KNOWLEDGE_CARD, { cid: 'abc', nid: 1 }))`
  */
 

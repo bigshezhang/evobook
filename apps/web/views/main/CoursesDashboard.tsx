@@ -2,7 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import BottomNav from '../../components/BottomNav';
-import { buildLearningPath, getUserCourses, CourseListItem, getLearningActivities, getStoredCourseMapId, getDiscoveryCourses, joinDiscoveryCourse, type DiscoveryCourse } from '../../utils/api';
+import { trpc } from '../../utils/trpc/client';
+import { buildLearningPath } from '../../utils/helpers';
 import { aggregateActivitiesToHeatmap, DayActivity } from '../../utils/activityAggregator';
 import { getSelectedCharacter } from '../../utils/mascotUtils';
 import { CHARACTER_MAPPING } from '../../utils/mascotConfig';
@@ -17,109 +18,62 @@ const CoursesDashboard: React.FC = () => {
 
   const activeTab = searchParams.get('tab') || 'mine';
   const [statusFilter, setStatusFilter] = useState<'all' | 'progress' | 'tolearn'>('all');
-  const [userCourses, setUserCourses] = useState<CourseListItem[]>([]);
-  const [isLoadingCourses, setIsLoadingCourses] = useState(true);
-  const [coursesError, setCoursesError] = useState<string | null>(null);
-  const [heatmapData, setHeatmapData] = useState<DayActivity[]>([]);
-  const [isLoadingActivity, setIsLoadingActivity] = useState(true);
   const [hoveredDay, setHoveredDay] = useState<{ day: DayActivity; x: number; y: number } | null>(null);
   const [clickedDay, setClickedDay] = useState<{ day: DayActivity; x: number; y: number } | null>(null);
 
-  // Discovery courses state
-  const [discoveryCoursesData, setDiscoveryCoursesData] = useState<{
-    recommended: DiscoveryCourse[];
-    popular: DiscoveryCourse[];
-  }>({ recommended: [], popular: [] });
-  const [isLoadingDiscovery, setIsLoadingDiscovery] = useState(false);
+  // 使用 tRPC query 获取用户课程列表
+  const {
+    data: coursesData,
+    isLoading: isLoadingCourses,
+    error: coursesQueryError,
+    refetch: refetchCourses,
+  } = trpc.courseMap.list.useQuery(undefined, {
+    enabled: activeTab === 'mine',
+  });
+  const userCourses = coursesData?.courses ?? [];
+  const coursesError = coursesQueryError?.message ?? null;
 
-  // Load user courses from backend
+  // 使用 tRPC query 获取学习活动（热力图）
+  const {
+    data: activityData,
+    isLoading: isLoadingActivity,
+    refetch: refetchActivity,
+  } = trpc.profile.getLearningActivities.useQuery(
+    { days: 180 },
+    { enabled: activeTab === 'mine' },
+  );
+  const heatmapData = activityData
+    ? aggregateActivitiesToHeatmap(activityData.activities, 36)
+    : [];
+
+  // 使用 tRPC query 获取 discovery 课程
+  const { data: recommendedData, isLoading: isLoadingRecommended } =
+    trpc.discovery.listCourses.useQuery(
+      { category: 'recommended' },
+      { enabled: activeTab === 'discovery' },
+    );
+  const { data: popularData, isLoading: isLoadingPopular } =
+    trpc.discovery.listCourses.useQuery(
+      { category: 'popular' },
+      { enabled: activeTab === 'discovery' },
+    );
+  const isLoadingDiscovery = isLoadingRecommended || isLoadingPopular;
+  const discoveryCoursesData = {
+    recommended: (recommendedData?.courses ?? []).slice(0, 4),
+    popular: (popularData?.courses ?? []).slice(0, 4),
+  };
+
+  // 页面可见时刷新活动数据
   useEffect(() => {
-    const loadUserCourses = async () => {
-      try {
-        setIsLoadingCourses(true);
-        setCoursesError(null);
-        const data = await getUserCourses();
-        setUserCourses(data.courses);
-      } catch (error) {
-        console.error('Failed to load user courses:', error);
-        setCoursesError(error instanceof Error ? error.message : 'Failed to load courses');
-      } finally {
-        setIsLoadingCourses(false);
-      }
-    };
-
-    if (activeTab === 'mine') {
-      loadUserCourses();
-    }
-  }, [activeTab]);
-
-  // Load discovery courses
-  useEffect(() => {
-    const loadDiscovery = async () => {
-      if (activeTab !== 'discovery') return;
-
-      try {
-        setIsLoadingDiscovery(true);
-        const [recommended, popular] = await Promise.all([
-          getDiscoveryCourses('recommended'),
-          getDiscoveryCourses('popular'),
-        ]);
-
-        setDiscoveryCoursesData({
-          recommended: recommended.courses.slice(0, 4),
-          popular: popular.courses.slice(0, 4),
-        });
-      } catch (error) {
-        console.error('Failed to load discovery courses:', error);
-      } finally {
-        setIsLoadingDiscovery(false);
-      }
-    };
-
-    loadDiscovery();
-  }, [activeTab]);
-
-  // Load learning activity data for heatmap
-  useEffect(() => {
-    const loadActivityData = async () => {
-      try {
-        setIsLoadingActivity(true);
-        const data = await getLearningActivities(180); // Get 6 months of data
-
-        // Aggregate into 36-day heatmap
-        const heatmap = aggregateActivitiesToHeatmap(data.activities, 36);
-        setHeatmapData(heatmap);
-      } catch (error) {
-        console.error('Failed to load activity data:', error);
-        // Silently fail and show empty heatmap
-        setHeatmapData([]);
-      } finally {
-        setIsLoadingActivity(false);
-      }
-    };
-
-    if (activeTab === 'mine') {
-      loadActivityData();
-    }
-  }, [activeTab]);
-
-  // Reload activity data when page becomes visible (user returns from other pages)
-  useEffect(() => {
-    const handleVisibilityChange = async () => {
+    const handleVisibilityChange = () => {
       if (!document.hidden && activeTab === 'mine') {
-        try {
-          const data = await getLearningActivities(180);
-          const heatmap = aggregateActivitiesToHeatmap(data.activities, 36);
-          setHeatmapData(heatmap);
-        } catch (error) {
-          console.error('Failed to reload activity data:', error);
-        }
+        refetchActivity();
       }
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [activeTab]);
+  }, [activeTab, refetchActivity]);
 
   // Close tooltip when clicking outside
   useEffect(() => {
@@ -151,13 +105,14 @@ const CoursesDashboard: React.FC = () => {
   };
 
   const [joiningPresetId, setJoiningPresetId] = useState<string | null>(null);
+  const joinCourseMutation = trpc.discovery.joinCourse.useMutation();
 
   const handleAddCourse = async (presetId: string) => {
     if (joiningPresetId) return;
     setJoiningPresetId(presetId);
     try {
-      const result = await joinDiscoveryCourse(presetId);
-      navigate(`${ROUTES.COURSES}?tab=mine&joined=${result.course_map_id}`);
+      const result = await joinCourseMutation.mutateAsync({ presetId });
+      navigate(`${ROUTES.COURSES}?tab=mine&joined=${result.courseMapId}`);
     } catch (err) {
       console.error('Failed to join discovery course:', err);
     } finally {
@@ -172,7 +127,7 @@ const CoursesDashboard: React.FC = () => {
         <img
           alt={course.title}
           className="w-full h-full object-cover mix-blend-multiply opacity-90"
-          src={course.image_url || ''}
+          src={course.imageUrl || ''}
           loading="lazy"
         />
         {/* Friends Avatars Overlay if applicable */}
@@ -196,11 +151,11 @@ const CoursesDashboard: React.FC = () => {
           </div>
         </div>
         <button
-          onClick={() => handleAddCourse(course.preset_id)}
-          disabled={joiningPresetId === course.preset_id}
+          onClick={() => handleAddCourse(course.presetId)}
+          disabled={joiningPresetId === course.presetId}
           className="w-8 h-8 min-w-[32px] bg-black rounded-full flex items-center justify-center shadow-md active:scale-90 transition-transform cursor-pointer disabled:opacity-50"
         >
-          {joiningPresetId === course.preset_id ? (
+          {joiningPresetId === course.presetId ? (
             <span className="material-symbols-rounded text-white text-[18px] animate-spin">progress_activity</span>
           ) : (
             <span className="material-symbols-rounded text-white text-[18px]">add</span>
@@ -425,14 +380,14 @@ const CoursesDashboard: React.FC = () => {
                   {userCourses
                     .filter(course => {
                       if (statusFilter === 'all') return true;
-                      if (statusFilter === 'progress') return course.progress_percentage > 0 && course.progress_percentage < 100;
-                      if (statusFilter === 'tolearn') return course.progress_percentage === 0;
+                      if (statusFilter === 'progress') return course.progressPercentage > 0 && course.progressPercentage < 100;
+                      if (statusFilter === 'tolearn') return course.progressPercentage === 0;
                       return true;
                     })
                     .map((course) => (
                     <div
-                      key={course.course_map_id}
-                      onClick={() => navigate(buildLearningPath(ROUTES.COURSE_DETAIL, { cid: course.course_map_id }))}
+                      key={course.courseMapId}
+                      onClick={() => navigate(buildLearningPath(ROUTES.COURSE_DETAIL, { cid: course.courseMapId }))}
                       className="relative flex items-center gap-4 p-5 bg-white rounded-[2.5rem] border border-slate-50 shadow-soft group active:scale-[0.98] transition-all cursor-pointer overflow-hidden"
                     >
                       <div className="w-14 h-14 bg-lavender-pale rounded-2xl flex-shrink-0 flex items-center justify-center shadow-inner">
@@ -445,23 +400,22 @@ const CoursesDashboard: React.FC = () => {
                           <span className="text-slate-300">•</span>
                           <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wide">{course.mode}</span>
                         </div>
-                        {/* Progress bar with percentage */}
                         <div className="flex items-center gap-2 mt-3">
                           <div className="flex-1 h-[6px] bg-[#F3F4F6] rounded-full overflow-hidden">
                             <div
                               className="bg-secondary h-full rounded-full shadow-[0_0_8px_rgba(124,58,237,0.3)] transition-all duration-500"
-                              style={{ width: `${course.progress_percentage}%` }}
+                              style={{ width: `${course.progressPercentage}%` }}
                             ></div>
                           </div>
                           <span className="text-[11px] font-bold text-slate-400 min-w-[35px] text-right">
-                            {Math.round(course.progress_percentage)}%
+                            {Math.round(course.progressPercentage)}%
                           </span>
                         </div>
                       </div>
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          navigate(buildLearningPath(ROUTES.KNOWLEDGE_TREE, { cid: course.course_map_id }));
+                          navigate(buildLearningPath(ROUTES.KNOWLEDGE_TREE, { cid: course.courseMapId }));
                         }}
                         className="h-10 px-6 bg-black text-white rounded-full flex-shrink-0 flex items-center justify-center shadow-lg active:scale-95 transition-all"
                       >

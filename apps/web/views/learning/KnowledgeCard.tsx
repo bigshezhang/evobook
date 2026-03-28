@@ -6,19 +6,10 @@ import remarkGfm from 'remark-gfm';
 import mermaid from 'mermaid';
 import ClarificationSection, { QAItem } from './ClarificationSection';
 import RewardModal from '../../components/RewardModal';
-import {
-  getClarification,
-  getKnowledgeCard,
-  getCourseDetail,
-  updateNodeProgress,
-  earnExp,
-  KnowledgeCardRequest,
-  Language,
-  buildLearningPath,
-  DAGNode,
-  MapMeta,
-  STORAGE_KEYS,
-} from '../../utils/api';
+import { trpc } from '../../utils/trpc/client';
+import type { DAGNode, MapMeta, Language } from '../../utils/helpers';
+import { buildLearningPath } from '../../utils/helpers';
+import { STORAGE_KEYS } from '../../utils/constants';
 import { heartbeatManager } from '../../utils/learningHeartbeat';
 import { useLanguage } from '../../utils/LanguageContext';
 import { ROUTES } from '../../utils/routes';
@@ -522,6 +513,16 @@ const KnowledgeCard: React.FC = () => {
   // Language for API calls
   const language = useLanguage();
 
+  // tRPC mutations
+  const knowledgeCardMutation = trpc.nodeContent.getKnowledgeCard.useMutation();
+  const courseDetailQuery = trpc.courseMap.getDetail.useQuery(
+    { courseMapId: cidFromUrl! },
+    { enabled: false }, // 手动触发，因为有 sessionStorage 缓存逻辑
+  );
+  const updateProgressMutation = trpc.nodeProgress.update.useMutation();
+  const earnExpMutation = trpc.game.earnExp.useMutation();
+  const clarificationMutation = trpc.nodeContent.getClarification.useMutation();
+
   // Split markdown content into pages
   const pages = useMemo(() => {
     if (!markdownContent) return [];
@@ -566,16 +567,13 @@ const KnowledgeCard: React.FC = () => {
     };
   }, [courseMapId, currentNodeId]);
 
-  // Load course data from backend API and fetch knowledge card
+  // 从后端加载课程数据并获取知识卡片
   useEffect(() => {
-    // ==========================================
     // 【关键优化】立即同步设置 loading 状态，避免闪烁
-    // ==========================================
     setIsLoading(true);
     setError(null);
 
-    // 使用 abort controller 来取消过期的请求
-    const abortController = new AbortController();
+    let cancelled = false;
 
     const loadData = async () => {
       if (!cidFromUrl) {
@@ -607,7 +605,6 @@ const KnowledgeCard: React.FC = () => {
             completedNodes: number;
           };
 
-          // 批量更新所有状态（React 18 会自动批处理）
           setMarkdownContent(cached.markdown);
           setTotalPagesInCard(cached.totalPagesInCard || 1);
           setCurrentPage(1);
@@ -628,12 +625,10 @@ const KnowledgeCard: React.FC = () => {
           return;
         }
       } catch {
-        // Corrupted cache — ignore and re-fetch
         sessionStorage.removeItem(cacheKey);
       }
 
       // 没有缓存，需要加载数据
-      // 清空旧内容（但 isLoading 已经在函数开头设置了）
       setMarkdownContent('');
       setCurrentPage(1);
       setTotalPagesInCard(1);
@@ -643,21 +638,21 @@ const KnowledgeCard: React.FC = () => {
       setInputValue('');
 
       try {
-        // Load course data from backend
-        const courseData = await getCourseDetail(cidFromUrl);
-
-        if (abortController.signal.aborted) return;
+        // 通过 tRPC query refetch 加载课程数据
+        const courseResult = await courseDetailQuery.refetch();
+        if (cancelled) return;
+        const courseData = courseResult.data;
+        if (!courseData) throw new Error('Failed to load course data');
 
         const courseMapData = {
-          course_map_id: courseData.course_map_id,
+          courseMapId: courseData.courseMapId,
           topic: courseData.topic,
           level: courseData.level,
           mode: courseData.mode,
-          map_meta: courseData.map_meta as MapMeta,
+          mapMeta: courseData.mapMeta as any,
           nodes: courseData.nodes as DAGNode[],
         };
 
-        // Find current node by URL parameter
         const currentNode = courseMapData.nodes.find(n => n.id === targetNodeId);
         if (!currentNode) {
           setError('Node not found');
@@ -665,17 +660,17 @@ const KnowledgeCard: React.FC = () => {
           return;
         }
 
-        const courseNameValue = (courseMapData.map_meta as any).course_name || courseMapData.topic;
+        const courseNameValue = courseMapData.mapMeta?.courseName || courseMapData.topic;
         const moduleInfoValue = `Module ${String(currentNode.layer).padStart(2, '0')}`;
         const completedCountValue = courseMapData.nodes.filter(n => n.layer < currentNode.layer).length;
 
-        // Fetch knowledge card from API
-        const request: KnowledgeCardRequest = {
-          language: language,
-          course_map_id: courseMapData.course_map_id,
+        // 通过 tRPC mutation 获取知识卡片（可能触发 LLM 生成）
+        const response = await knowledgeCardMutation.mutateAsync({
+          language,
+          courseMapId: courseMapData.courseMapId,
           course: {
-            course_name: courseNameValue,
-            course_context: (courseMapData.map_meta as any).strategy_rationale || '',
+            courseName: courseNameValue,
+            courseContext: courseMapData.mapMeta?.strategyRationale || '',
             topic: courseMapData.topic,
             level: courseMapData.level,
             mode: courseMapData.mode,
@@ -685,22 +680,19 @@ const KnowledgeCard: React.FC = () => {
             title: currentNode.title,
             description: currentNode.description,
             type: currentNode.type as 'learn',
-            estimated_minutes: currentNode.estimated_minutes,
+            estimatedMinutes: currentNode.estimated_minutes,
           },
-        };
+        });
 
-        const response = await getKnowledgeCard(request);
+        if (cancelled) return;
 
-        if (abortController.signal.aborted) return;
-
-        // 批量更新所有状态（一次性完成，减少渲染）
         setMarkdownContent(response.markdown);
         setTotalPagesInCard(response.totalPagesInCard || 1);
         setCurrentPage(1);
         setCourseName(courseNameValue);
-        setCourseContext((courseMapData.map_meta as any).strategy_rationale || '');
+        setCourseContext(courseMapData.mapMeta?.strategyRationale || '');
         setTotalNodes(courseMapData.nodes.length);
-        setCourseMapId(courseMapData.course_map_id);
+        setCourseMapId(courseMapData.courseMapId);
         setCurrentNodeId(currentNode.id);
         setNodeTitle(currentNode.title);
         setNodeDescription(currentNode.description);
@@ -708,24 +700,22 @@ const KnowledgeCard: React.FC = () => {
         setCompletedNodes(completedCountValue);
         setIsLoading(false);
 
-        // Save to sessionStorage with all metadata
         try {
           sessionStorage.setItem(cacheKey, JSON.stringify({
             markdown: response.markdown,
             totalPagesInCard: response.totalPagesInCard || 1,
             nodeTitle: currentNode.title,
-            courseMapId: courseMapData.course_map_id,
+            courseMapId: courseMapData.courseMapId,
             courseName: courseNameValue,
             moduleInfo: moduleInfoValue,
             totalNodes: courseMapData.nodes.length,
             completedNodes: completedCountValue,
           }));
         } catch {
-          // sessionStorage quota exceeded — non-critical, just skip
+          // sessionStorage 配额超限 — 非关键操作，跳过
         }
       } catch (err) {
-        if (abortController.signal.aborted) return;
-
+        if (cancelled) return;
         console.error('Failed to load course data:', err);
         setError(err instanceof Error ? err.message : 'Failed to load course');
         setIsLoading(false);
@@ -734,9 +724,8 @@ const KnowledgeCard: React.FC = () => {
 
     loadData();
 
-    // Cleanup: abort any pending requests when component unmounts or deps change
     return () => {
-      abortController.abort();
+      cancelled = true;
     };
   }, [cidFromUrl, nidFromUrl]);
 
@@ -756,44 +745,44 @@ const KnowledgeCard: React.FC = () => {
   }, [currentNodeId]);
 
   /**
-   * Mark the current node as completed using backend API and fetch rewards.
+   * 标记当前节点为已完成并获取奖励
    */
   const handleNodeCompletion = async () => {
     if (!courseMapId || !currentNodeId) return;
 
     try {
-      // Mark current node as completed
-      await updateNodeProgress(courseMapId, currentNodeId, 'completed');
+      await updateProgressMutation.mutateAsync({
+        courseMapId,
+        nodeId: currentNodeId,
+        status: 'completed',
+      });
       console.log('Node progress updated successfully');
 
-      // Fetch rewards from backend (base: 50 EXP + 10 gold + 2 dice per learn node)
-      const expResponse = await earnExp({
-        exp_amount: 50,
-        gold_reward: 10,
-        dice_reward: 2,
+      const expResponse = await earnExpMutation.mutateAsync({
+        expAmount: 50,
+        goldReward: 10,
+        diceReward: 2,
         source: 'learning_reward',
-        source_details: {
-          course_map_id: courseMapId,
-          node_id: currentNodeId,
-          activity_type: 'knowledge_card_complete',
+        sourceDetails: {
+          courseMapId,
+          nodeId: currentNodeId,
+          activityType: 'knowledge_card_complete',
         },
       });
 
-      // Update reward data with actual backend response
       setRewardData({
-        diceRolls: expResponse.rewards.dice_rolls,
-        expEarned: expResponse.exp_earned,
+        diceRolls: expResponse.rewards.diceRolls,
+        expEarned: expResponse.expEarned,
         goldEarned: expResponse.rewards.gold,
-        levelUp: expResponse.level_up,
+        levelUp: expResponse.levelUp,
       });
 
-      // Dispatch events for GameHeader to update display
       window.dispatchEvent(new CustomEvent('exp-changed', {
         detail: {
-          newExp: expResponse.current_exp,
-          levelUp: expResponse.level_up,
-          newLevel: expResponse.current_level,
-          expToNextLevel: 100 + 50 * (expResponse.current_level - 1),
+          newExp: expResponse.currentExp,
+          levelUp: expResponse.levelUp,
+          newLevel: expResponse.currentLevel,
+          expToNextLevel: 100 + 50 * (expResponse.currentLevel - 1),
         }
       }));
 
@@ -806,7 +795,6 @@ const KnowledgeCard: React.FC = () => {
       console.log('Rewards earned:', expResponse);
     } catch (error) {
       console.error('Failed to update node progress or earn rewards:', error);
-      // Still show completion UI with default rewards even if API call fails
     }
   };
 
@@ -857,11 +845,9 @@ const KnowledgeCard: React.FC = () => {
     if (!inputValue.trim()) return;
 
     const question = inputValue.trim();
-    // Add to pending questions for loading UI
     setDynamicQuestions(prev => [...prev, question]);
     setInputValue('');
 
-    // Auto-scroll to bottom
     setTimeout(() => {
       if (mainRef.current) {
         mainRef.current.scrollTo({
@@ -871,33 +857,28 @@ const KnowledgeCard: React.FC = () => {
       }
     }, 100);
 
-    // Call API to get clarification
     try {
-      // Use current page content as context
       const pageMarkdown = currentPageContent || `${nodeTitle}: Learning content about ${courseName}`;
 
-      const response = await getClarification({
+      const response = await clarificationMutation.mutateAsync({
         language,
-        user_question_raw: question,
-        page_markdown: pageMarkdown,
-        course_map_id: courseMapId,
-        node_id: currentNodeId || undefined,
+        userQuestionRaw: question,
+        pageMarkdown,
+        courseMapId,
+        nodeId: currentNodeId || undefined,
       });
 
-      // Create new QA item
       const newQA: QAItem = {
         id: Date.now(),
-        question: response.corrected_title || question,
-        answer: response.short_answer,
-        detail: null  // Will be fetched when user clicks "Details"
+        question: response.correctedTitle || question,
+        answer: response.shortAnswer,
+        detail: null,
       };
 
-      // Remove from pending and add to answered list
       setDynamicQuestions(prev => prev.filter(q => q !== question));
       setQaList(prev => [...prev, newQA]);
     } catch (error) {
       console.error('Failed to get clarification:', error);
-      // Remove from pending on error
       setDynamicQuestions(prev => prev.filter(q => q !== question));
     }
   };

@@ -47,7 +47,7 @@ Start-Sleep -Seconds 3
 
 Write-Host "`n=== 启动前端 (port 3000) ===" -ForegroundColor Green
 $frontendJob = Start-Process -FilePath "cmd.exe" `
-    -ArgumentList "/c cd /d `"$PSScriptRoot\frontend`" && npm run dev" `
+    -ArgumentList "/c cd /d `"$PSScriptRoot\apps\web`" && pnpm run dev" `
     -PassThru -NoNewWindow
 
 Write-Host "  Frontend PID: $($frontendJob.Id)"

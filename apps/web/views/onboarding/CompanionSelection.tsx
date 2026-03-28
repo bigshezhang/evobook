@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MascotCharacter, setSelectedCharacter } from '../../utils/mascotUtils';
 import Mascot from '../../components/Mascot';
-import { updateProfile } from '../../utils/api';
+import { trpc } from '../../utils/trpc/client';
 import { ROUTES } from '../../utils/routes';
 import { useThemeColor, PAGE_THEME_COLORS } from '../../utils/themeColor';
 
@@ -21,11 +21,13 @@ const CompanionSelection: React.FC = () => {
   const [selected, setSelected] = useState(companions[0]);
   const [isLoading, setIsLoading] = useState(false);
 
+  const updateProfileMutation = trpc.profile.update.useMutation();
+
   const handleContinue = async () => {
     setIsLoading(true);
     try {
       // 1. 保存选中的角色到后端
-      await updateProfile({ mascot: selected.id });
+      await updateProfileMutation.mutateAsync({ mascot: selected.id });
 
       // 2. 同步到本地存储
       setSelectedCharacter(selected.id);

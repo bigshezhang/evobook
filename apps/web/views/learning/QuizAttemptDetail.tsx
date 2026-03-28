@@ -1,12 +1,9 @@
 
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import Header from '../../components/Header';
-import {
-  getQuizAttemptDetail,
-  QuizAttemptDetail as QuizAttemptDetailType,
-  QuizQuestion,
-} from '../../utils/api';
+import { trpc } from '../../utils/trpc/client';
+import type { QuizQuestion } from '../../utils/helpers';
 
 interface UserAnswer {
   questionIdx: number;
@@ -18,31 +15,21 @@ const QuizAttemptDetail: React.FC = () => {
   const [searchParams] = useSearchParams();
   const attemptId = searchParams.get('aid');
 
-  const [attemptData, setAttemptData] = useState<QuizAttemptDetailType | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const {
+    data: attemptData,
+    isLoading: loading,
+    error: queryError,
+  } = trpc.quiz.getAttemptDetail.useQuery(
+    { attemptId: attemptId! },
+    { enabled: !!attemptId },
+  );
 
-  useEffect(() => {
-    const loadAttempt = async () => {
-      if (!attemptId) {
-        setError('Missing attempt ID');
-        setLoading(false);
-        return;
-      }
-
-      try {
-        const data = await getQuizAttemptDetail(attemptId);
-        setAttemptData(data);
-      } catch (err) {
-        console.error('Failed to load quiz attempt:', err);
-        setError(err instanceof Error ? err.message : 'Failed to load attempt');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadAttempt();
-  }, [attemptId]);
+  const error =
+    !attemptId
+      ? 'Missing attempt ID'
+      : queryError
+        ? queryError.message
+        : null;
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -122,8 +109,8 @@ const QuizAttemptDetail: React.FC = () => {
     );
   }
 
-  const questions = attemptData.quiz_json.questions as QuizQuestion[];
-  const userAnswers = attemptData.quiz_json.user_answers as UserAnswer[];
+  const questions = attemptData.quizJson.questions as QuizQuestion[];
+  const userAnswers = attemptData.quizJson.userAnswers as UserAnswer[];
 
   return (
     <div className="flex flex-col h-screen bg-white font-display overflow-hidden">
@@ -138,7 +125,7 @@ const QuizAttemptDetail: React.FC = () => {
         <div className="bg-slate-50 rounded-3xl p-5 mb-6">
           <div className="flex items-center gap-3 mb-2">
             <span className="material-symbols-rounded text-slate-400">event</span>
-            <span className="text-sm text-slate-600 font-medium">{formatDate(attemptData.created_at)}</span>
+            <span className="text-sm text-slate-600 font-medium">{formatDate(attemptData.createdAt)}</span>
           </div>
           <div className="flex items-center gap-3">
             <span className="material-symbols-rounded text-slate-400">assessment</span>

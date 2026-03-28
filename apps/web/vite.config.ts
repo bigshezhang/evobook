@@ -40,6 +40,11 @@ export default defineConfig(({ mode }) => {
         changeOrigin: true,
         secure: false,
       },
+      '/trpc': {
+        target: backendUrl,
+        changeOrigin: true,
+        secure: false,
+      },
     };
     return {
       // 开发服务器配置
@@ -80,7 +85,7 @@ export default defineConfig(({ mode }) => {
                 return 'react-vendor';
               }
               // Shared utilities (only for statically-imported modules)
-              if (id.includes('/utils/api') || id.includes('/utils/mascotUtils') || id.includes('/utils/mascotConfig')) {
+              if (id.includes('/utils/helpers') || id.includes('/utils/mascotUtils') || id.includes('/utils/mascotConfig')) {
                 return 'utils';
               }
               // Let dynamic imports (lazy routes) produce their own chunks

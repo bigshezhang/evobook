@@ -3,8 +3,8 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Mascot from '../../components/Mascot';
 import SuccessFeedbackPill from '../../components/SuccessFeedbackPill';
-import { buildLearningPath, getActiveCourse, getCurrency, rollDice, claimReward, claimGiftReward } from '../../utils/api';
-import type { ClaimGiftResponse } from '../../utils/api';
+import { buildLearningPath } from '../../utils/helpers';
+import { trpc } from '../../utils/trpc/client';
 import { ROUTES } from '../../utils/routes';
 
 type TileType = 'gold' | 'xp' | 'roll' | 'normal' | 'star' | 'gift' | 'map';
@@ -19,6 +19,17 @@ interface TileData {
 
 const TravelBoard: React.FC = () => {
   const navigate = useNavigate();
+
+  // tRPC 查询和 mutation
+  const { data: activeCourseData } = trpc.profile.getActiveCourse.useQuery();
+  const { data: currencyData } = trpc.game.getCurrency.useQuery();
+  const rollDiceMutation = trpc.game.rollDice.useMutation();
+  const claimRewardMutation = trpc.game.claimReward.useMutation();
+  const claimGiftMutation = trpc.game.claimGift.useMutation();
+  const utils = trpc.useUtils();
+
+  const activeCourseId = activeCourseData?.courseMapId ?? null;
+
   const [isRolling, setIsRolling] = useState(false);
   const [rollResult, setRollResult] = useState<number | null>(null);
   const [isMoving, setIsMoving] = useState(false);
@@ -29,9 +40,8 @@ const TravelBoard: React.FC = () => {
     title: string;
     desc: string;
     reward?: number;
-    giftItem?: { name: string; item_type: string; image_path: string; rarity: string } | null;
+    giftItem?: { name: string; itemType: string; imagePath: string; rarity: string } | null;
   } | null>(null);
-  const [activeCourseId, setActiveCourseId] = useState<string | null>(null);
 
   // Toast state
   const [showToast, setShowToast] = useState(false);
@@ -50,29 +60,16 @@ const TravelBoard: React.FC = () => {
   const GAP = 40;
   const STEP_UNIT = TILE_H + GAP;
 
+  // 从 tRPC 查询同步骰子数量
+  useEffect(() => {
+    if (currencyData?.diceRollsCount != null) {
+      setRollsLeft(currencyData.diceRollsCount);
+    }
+  }, [currencyData?.diceRollsCount]);
+
   useEffect(() => {
     generateMoreTiles(50);
-    loadActiveCourse();
-    loadCurrency();
   }, []);
-
-  const loadActiveCourse = async () => {
-    try {
-      const { course_map_id } = await getActiveCourse();
-      setActiveCourseId(course_map_id);
-    } catch (error) {
-      console.error('Failed to load active course:', error);
-    }
-  };
-
-  const loadCurrency = async () => {
-    try {
-      const data = await getCurrency();
-      setRollsLeft(data.dice_rolls_count);
-    } catch (error) {
-      console.error('Failed to load currency:', error);
-    }
-  };
 
   const generateMoreTiles = (count: number) => {
     // 奖励类型和权重配置
@@ -137,22 +134,21 @@ const TravelBoard: React.FC = () => {
       setRollResult(null);
 
       try {
-        // 调用后端 API 掷骰子
-        const response = await rollDice({
-          course_map_id: activeCourseId,
-          current_position: currentStep,
+        const response = await rollDiceMutation.mutateAsync({
+          courseMapId: activeCourseId,
+          currentPosition: currentStep,
         });
 
         // 用后端真实值同步骰子数量（修正乐观更新的偏差）
-        setRollsLeft(response.dice_rolls_remaining);
+        setRollsLeft(response.diceRollsRemaining);
 
         // 显示掷骰结果
         setTimeout(() => {
-          setRollResult(response.dice_result);
+          setRollResult(response.diceResult);
 
           setTimeout(() => {
             setIsRolling(false);
-            startTravel(response.dice_result);
+            startTravel(response.diceResult);
           }, 1200);
         }, 1000);
       } catch (error: any) {
@@ -164,7 +160,7 @@ const TravelBoard: React.FC = () => {
 
         // 显示错误提示
         setToastType('error');
-        if (error.code === 'INSUFFICIENT_DICE') {
+        if (error.data?.code === 'BAD_REQUEST') {
           setToastMessage('Insufficient dice!');
           setShowToast(true);
         } else {
@@ -226,15 +222,15 @@ const TravelBoard: React.FC = () => {
         case 'gift':
           if (activeCourseId) {
             try {
-              const giftResult: ClaimGiftResponse = await claimGiftReward({
-                source_details: {
+              const giftResult = await claimGiftMutation.mutateAsync({
+                sourceDetails: {
                   course_map_id: activeCourseId,
                   tile_position: currentStep + steps,
                   tile_type: 'gift',
                 },
               });
 
-              if (giftResult.reward_type === 'item' && giftResult.item) {
+              if (giftResult.rewardType === 'item' && giftResult.item) {
                 setEventModal({
                   type: 'gift',
                   title: 'New Item!',
@@ -242,16 +238,14 @@ const TravelBoard: React.FC = () => {
                   giftItem: giftResult.item,
                 });
               } else {
-                // Fallback: all items owned, got gold instead
                 setEventModal({
                   type: 'gold',
                   title: 'Bonus Gold!',
-                  desc: `You own everything! +${giftResult.gold_amount} Gold`,
-                  reward: giftResult.gold_amount ?? 0,
+                  desc: `You own everything! +${giftResult.goldAmount} Gold`,
+                  reward: giftResult.goldAmount ?? 0,
                 });
-                // Update gold display
                 setTimeout(() => {
-                  window.dispatchEvent(new CustomEvent('gold-changed', { detail: { amount: giftResult.gold_amount } }));
+                  window.dispatchEvent(new CustomEvent('gold-changed', { detail: { amount: giftResult.goldAmount } }));
                 }, 200);
               }
             } catch (error) {
@@ -422,7 +416,7 @@ const TravelBoard: React.FC = () => {
             {/* Gift 类型展示物品图片，其他类型展示 icon */}
             {eventModal.type === 'gift' && eventModal.giftItem ? (
               <div className="w-28 h-28 rounded-[28px] flex items-center justify-center mb-6 bg-pink-50 shadow-inner overflow-hidden">
-                {eventModal.giftItem.item_type === 'clothes' ? (
+                {eventModal.giftItem.itemType === 'clothes' ? (
                   eventModal.giftItem.name === 'default' ? (
                     <span className="material-symbols-outlined text-[64px] text-pink-400" style={{ fontVariationSettings: "'FILL' 1" }}>checkroom</span>
                   ) : (
@@ -434,7 +428,7 @@ const TravelBoard: React.FC = () => {
                   )
                 ) : (
                   <img
-                    src={`/compressed_output/furniture/${eventModal.giftItem.image_path}`}
+                    src={`/compressed_output/furniture/${eventModal.giftItem.imagePath}`}
                     alt={eventModal.giftItem.name}
                     className="w-full h-full object-contain p-2"
                   />
@@ -471,37 +465,33 @@ const TravelBoard: React.FC = () => {
                 if (modal && activeCourseId) {
                   try {
                     if (modal.type === 'gold' && modal.reward) {
-                      // 调用后端 API 领取金币
-                      await claimReward({
-                        reward_type: 'gold',
+                      await claimRewardMutation.mutateAsync({
+                        rewardType: 'gold',
                         amount: modal.reward,
                         source: 'tile_reward',
-                        source_details: {
+                        sourceDetails: {
                           course_map_id: activeCourseId,
                           tile_position: currentStep,
                           tile_type: 'gold',
                         },
                       });
 
-                      // 延迟触发动画
                       setTimeout(() => {
                         window.dispatchEvent(new CustomEvent('gold-changed', { detail: { amount: modal.reward } }));
                         console.log('💰 Dispatched gold-changed event after modal closed:', modal.reward);
                       }, 200);
                     } else if (modal.type === 'roll' && modal.reward) {
-                      // 调用后端 API 领取骰子
-                      await claimReward({
-                        reward_type: 'dice',
+                      await claimRewardMutation.mutateAsync({
+                        rewardType: 'dice',
                         amount: modal.reward,
                         source: 'tile_reward',
-                        source_details: {
+                        sourceDetails: {
                           course_map_id: activeCourseId,
                           tile_position: currentStep,
                           tile_type: 'roll',
                         },
                       });
 
-                      // 延迟触发动画
                       setTimeout(() => {
                         setRollsLeft(prev => prev + modal.reward);
                         setShowRollChange(modal.reward);

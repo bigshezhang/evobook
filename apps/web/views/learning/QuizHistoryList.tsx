@@ -1,12 +1,9 @@
 
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import Header from '../../components/Header';
-import {
-  getQuizHistory,
-  QuizAttemptSummary,
-  buildLearningPath,
-} from '../../utils/api';
+import { buildLearningPath } from '../../utils/helpers';
+import { trpc } from '../../utils/trpc/client';
 import { ROUTES } from '../../utils/routes';
 
 const QuizHistoryList: React.FC = () => {
@@ -16,31 +13,22 @@ const QuizHistoryList: React.FC = () => {
   const nodeIdStr = searchParams.get('nid');
   const nodeId = nodeIdStr ? parseInt(nodeIdStr) : null;
 
-  const [attempts, setAttempts] = useState<QuizAttemptSummary[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const {
+    data: historyData,
+    isLoading: loading,
+    error: queryError,
+  } = trpc.quiz.getHistory.useQuery(
+    { courseMapId: courseMapId!, nodeId: nodeId! },
+    { enabled: !!courseMapId && nodeId != null },
+  );
 
-  useEffect(() => {
-    const loadHistory = async () => {
-      if (!courseMapId || !nodeId) {
-        setError('Missing course or node ID');
-        setLoading(false);
-        return;
-      }
-
-      try {
-        const response = await getQuizHistory(courseMapId, nodeId);
-        setAttempts(response.attempts);
-      } catch (err) {
-        console.error('Failed to load quiz history:', err);
-        setError(err instanceof Error ? err.message : 'Failed to load history');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadHistory();
-  }, [courseMapId, nodeId]);
+  const attempts = historyData?.attempts ?? [];
+  const error =
+    !courseMapId || nodeId == null
+      ? 'Missing course or node ID'
+      : queryError
+        ? queryError.message
+        : null;
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -139,7 +127,7 @@ const QuizHistoryList: React.FC = () => {
                         {attempt.score !== null ? `${attempt.score}%` : 'N/A'}
                       </p>
                       <p className="text-xs text-slate-500 font-medium">
-                        {attempt.total_questions} question{attempt.total_questions !== 1 ? 's' : ''}
+                        {attempt.totalQuestions} question{attempt.totalQuestions !== 1 ? 's' : ''}
                       </p>
                     </div>
                   </div>
@@ -148,7 +136,7 @@ const QuizHistoryList: React.FC = () => {
 
                 <div className="flex items-center gap-2 text-xs text-slate-400 font-medium">
                   <span className="material-symbols-rounded text-sm">schedule</span>
-                  <span>{formatDate(attempt.created_at)}</span>
+                  <span>{formatDate(attempt.createdAt)}</span>
                 </div>
               </div>
             ))}

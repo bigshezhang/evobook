@@ -2,7 +2,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import QADetailModal from './QADetailModal';
 import DeleteConfirmationModal from '../../components/DeleteConfirmationModal';
-import { getClarification, getQADetail, Language, STORAGE_KEYS } from '../../utils/api';
+import { trpc } from '../../utils/trpc/client';
+import { STORAGE_KEYS } from '../../utils/constants';
+import type { Language } from '../../utils/helpers';
 
 // ============================================================================
 // localStorage persistence helpers for Q&A history
@@ -106,6 +108,8 @@ const ClarificationSection: React.FC<ClarificationSectionProps> = ({
 
   const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null);
 
+  const qaDetailMutation = trpc.nodeContent.getQADetail.useMutation();
+
   // -------------------------------------------------------------------
   // Restore Q&A history from localStorage on mount / when node changes
   // -------------------------------------------------------------------
@@ -158,31 +162,29 @@ const ClarificationSection: React.FC<ClarificationSectionProps> = ({
     [courseMapId, nodeId],
   );
 
-  // Handle clicking "Details" button - fetch detail from API if not cached
+  // 点击"详情"按钮时，如果没有缓存则从 API 获取
   const handleShowDetail = async (item: QAItem) => {
     if (item.detail) {
       setSelectedQA(item.detail);
       return;
     }
 
-    // Fetch detail from API
     setLoadingDetail(item.id);
     try {
-      const response = await getQADetail({
+      const response = await qaDetailMutation.mutateAsync({
         language,
-        qa_title: item.question,
-        qa_short_answer: item.answer,
-        course_map_id: courseMapId,
-        node_id: nodeId,
+        qaTitle: item.question,
+        qaShortAnswer: item.answer,
+        courseMapId,
+        nodeId,
       });
 
       const detail = {
         title: response.title,
-        content: response.body_markdown.split('\n\n').filter(p => p.trim()),
+        content: response.bodyMarkdown.split('\n\n').filter((p: string) => p.trim()),
         visualLabel: response.image?.placeholder || 'Detailed Explanation'
       };
 
-      // Update qaList with fetched detail and persist
       setQaList(prev => {
         const updated = prev.map(q =>
           q.id === item.id ? { ...q, detail } : q

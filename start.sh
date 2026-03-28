@@ -22,8 +22,8 @@ BACKEND_WORKERS=1
 # 路径 (自动推导，一般不用改)
 # ============================================================
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BACKEND_DIR="$SCRIPT_DIR/backend"
-FRONTEND_DIR="$SCRIPT_DIR/frontend"
+BACKEND_DIR="$SCRIPT_DIR/apps/api"
+FRONTEND_DIR="$SCRIPT_DIR/apps/web"
 
 SCREEN_BACKEND="evobook-be"
 SCREEN_FRONTEND="evobook-fe"
@@ -90,16 +90,7 @@ do_start() {
     require_cmd node
     require_cmd npm
 
-    # 确保 uv 在 PATH 中
-    if ! command -v uv &>/dev/null; then
-        # 尝试常见的安装位置
-        if [ -f "$HOME/.local/bin/uv" ]; then
-            export PATH="$HOME/.local/bin:$PATH"
-        elif [ -f "$HOME/.cargo/bin/uv" ]; then
-            export PATH="$HOME/.cargo/bin:$PATH"
-        fi
-    fi
-    require_cmd uv
+    require_cmd pnpm
 
     # 检查 .env
     if [ ! -f "$BACKEND_DIR/.env" ]; then
@@ -118,40 +109,13 @@ do_start() {
         sleep 1
     fi
 
-    # 0. 检查并初始化后端虚拟环境
-    log_step "Checking backend virtual environment..."
-    cd "$BACKEND_DIR"
-    if [ ! -d ".venv" ]; then
-        log_warn "Virtual environment not found, creating..."
-        uv venv
-        log_info "Virtual environment created"
-    fi
-
-    # 检查并同步依赖
-    if [ ! -f ".venv/.synced" ] || [ "pyproject.toml" -nt ".venv/.synced" ]; then
-        log_step "Syncing backend dependencies..."
-        uv sync
-        touch .venv/.synced
-        log_info "Dependencies synced"
-    else
-        log_info "Dependencies up to date"
-    fi
-    echo ""
-
-    # 1. 运行数据库迁移
-    log_step "Running database migrations..."
-    if .venv/bin/alembic upgrade head 2>&1 | tail -3; then
-        log_info "Database migrations completed"
-    else
-        log_warn "Migration may have issues, check logs"
-    fi
-
-    # 1.1 Seed shop items (idempotent — skips existing items)
-    log_step "Seeding shop items..."
-    if .venv/bin/python3 scripts/seed_shop_items.py 2>&1 | tail -3; then
-        log_info "Shop items seeding completed"
-    else
-        log_warn "Shop items seeding may have issues, check logs"
+    # 0. 检查并安装后端依赖 (TypeScript API)
+    log_step "Checking API dependencies..."
+    cd "$SCRIPT_DIR"
+    if [ ! -d "node_modules" ]; then
+        log_warn "node_modules not found, installing..."
+        pnpm install
+        log_info "Dependencies installed"
     fi
     echo ""
 
@@ -190,39 +154,17 @@ do_start() {
     fi
     echo ""
 
-    # 3. 检查并安装前端依赖（必须在构建前完成）
-    log_step "Checking frontend dependencies..."
-    if [ ! -d "$FRONTEND_DIR/node_modules" ]; then
-        log_warn "node_modules not found, installing dependencies..."
-        (
-            cd "$FRONTEND_DIR"
-            npm install
-        )
-        log_info "Dependencies installed"
-    elif [ "$FRONTEND_DIR/package.json" -nt "$FRONTEND_DIR/node_modules" ]; then
-        log_warn "package.json changed, updating dependencies..."
-        (
-            cd "$FRONTEND_DIR"
-            npm install
-        )
-        log_info "Dependencies updated"
-    else
-        log_info "Dependencies up to date"
-    fi
+    # 3. 前端依赖已在步骤 0 通过 pnpm install 统一安装
+    log_info "Frontend dependencies up to date (managed by pnpm workspace)"
 
     # 4. 并行启动：后端 + 前端构建
     log_step "Starting services in parallel..."
 
-    # 4.1 启动后端（后台）
+    # 4.1 启动后端（TypeScript API）
     log_info "Launching backend..."
     screen -dmS "$SCREEN_BACKEND" bash -c "
         cd $BACKEND_DIR
-        exec .venv/bin/uvicorn app.main:app \
-            --host 0.0.0.0 \
-            --port $BACKEND_PORT \
-            --workers $BACKEND_WORKERS \
-            --log-level info \
-            --access-log
+        exec npx tsx --env-file=.env src/index.ts
     "
 
     # 4.2 构建前端（并行，始终全量构建）
@@ -230,7 +172,7 @@ do_start() {
     (
         export BACKEND_URL="http://localhost:${BACKEND_PORT}"
         cd "$FRONTEND_DIR"
-        npx vite build 2>&1 | tail -5
+        pnpm build 2>&1 | tail -5
     ) &
     BUILD_PID=$!
 
@@ -244,7 +186,7 @@ do_start() {
 
         export BACKEND_URL=\"http://localhost:${BACKEND_PORT}\"
         cd $FRONTEND_DIR
-        exec npx vite preview --host 0.0.0.0 --port $FRONTEND_PORT
+        exec pnpm preview --host 0.0.0.0 --port $FRONTEND_PORT
     "
 
     # 6. 并行等待服务就绪

@@ -1,9 +1,9 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Mascot from '../../components/Mascot';
 import SuccessFeedbackPill from '../../components/SuccessFeedbackPill';
 import { MascotOutfit, setSelectedOutfit, getSelectedOutfit } from '../../utils/mascotUtils';
-import { getShopItems, purchaseItem, getUserInventory, equipItem } from '../../utils/api';
+import { trpc } from '../../utils/trpc/client';
 
 interface Item {
   id: string;
@@ -19,8 +19,6 @@ const OutfitView: React.FC = () => {
   const [category, setCategory] = useState('Clothes');
   const [activeSubTab, setActiveSubTab] = useState<'Mine' | 'Shop'>('Shop');
   const [selectedItem, setSelectedItem] = useState<Item | null>(null);
-  const [items, setItems] = useState<Item[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [isPurchasing, setIsPurchasing] = useState(false);
 
   // Toast state
@@ -31,6 +29,46 @@ const OutfitView: React.FC = () => {
   // 获取当前穿着的服装（响应式）
   const [currentOutfit, setCurrentOutfit] = useState<MascotOutfit>(getSelectedOutfit());
 
+  // tRPC mutations
+  const purchaseMutation = trpc.shop.purchase.useMutation();
+  const equipMutation = trpc.inventory.equip.useMutation();
+  const utils = trpc.useUtils();
+
+  const itemType = category === 'Clothes' ? 'clothes' as const : 'furniture' as const;
+
+  // tRPC 查询：商店商品和用户库存
+  const { data: shopData, isLoading: shopLoading } = trpc.shop.getItems.useQuery(
+    { itemType },
+    { enabled: activeSubTab === 'Shop' },
+  );
+  const { data: inventoryData, isLoading: inventoryLoading } = trpc.inventory.list.useQuery(
+    { itemType },
+    { enabled: activeSubTab === 'Mine' },
+  );
+
+  const isLoading = activeSubTab === 'Shop' ? shopLoading : inventoryLoading;
+
+  // 将 tRPC 数据映射为组件内部 Item 格式
+  const items: Item[] = activeSubTab === 'Shop'
+    ? (shopData?.items ?? []).map(item => ({
+        id: item.id,
+        name: item.name,
+        price: item.price,
+        owned: item.owned,
+        outfit: itemType === 'clothes' ? (item.name as MascotOutfit) : undefined,
+        image: item.imagePath,
+        equipped: item.isEquipped,
+      }))
+    : (inventoryData?.inventory ?? []).map(item => ({
+        id: item.itemId,
+        name: item.name,
+        price: 0,
+        owned: true,
+        outfit: itemType === 'clothes' ? (item.name as MascotOutfit) : undefined,
+        image: item.imagePath,
+        equipped: item.isEquipped,
+      }));
+
   useEffect(() => {
     const handleOutfitChange = () => {
       setCurrentOutfit(getSelectedOutfit());
@@ -39,86 +77,30 @@ const OutfitView: React.FC = () => {
     return () => window.removeEventListener('mascot-outfit-changed', handleOutfitChange);
   }, []);
 
-  // 初始化时从后端同步当前装备
+  // 从库存数据同步当前装备到 localStorage
   useEffect(() => {
-    const syncCurrentOutfit = async () => {
-      try {
-        const response = await getUserInventory('clothes');
-        const equippedItem = response.inventory.find(item => item.is_equipped);
-        if (equippedItem) {
-          const outfit = equippedItem.name as MascotOutfit;
-          setSelectedOutfit(outfit);
-          setCurrentOutfit(outfit);
-        }
-      } catch (error) {
-        console.error('Failed to sync current outfit:', error);
+    if (inventoryData && itemType === 'clothes') {
+      const equippedItem = inventoryData.inventory.find(item => item.isEquipped);
+      if (equippedItem) {
+        const outfit = equippedItem.name as MascotOutfit;
+        setSelectedOutfit(outfit);
+        setCurrentOutfit(outfit);
       }
-    };
-    syncCurrentOutfit();
-  }, []);
+    }
+  }, [inventoryData, itemType]);
 
   const categories = ['Clothes', 'Furniture'];
 
-  // 从后端加载商品数据
-  useEffect(() => {
-    loadItems();
-  }, [category, activeSubTab]);
-
-  const loadItems = async () => {
-    setIsLoading(true);
-    try {
-      const itemType = category === 'Clothes' ? 'clothes' : 'furniture';
-
-      if (activeSubTab === 'Shop') {
-        // 加载商店商品
-        const response = await getShopItems(itemType);
-        setItems(response.items.map(item => ({
-          id: item.id,
-          name: item.name,
-          price: item.price,
-          owned: item.owned,
-          // 假设衣服的 name 就是 outfit 标识符（如 'oliver_wizard', 'default' 等）
-          outfit: itemType === 'clothes' ? (item.name as MascotOutfit) : undefined,
-          image: item.image_path,
-          equipped: item.is_equipped,
-        })));
-      } else {
-        // 加载用户库存
-        const response = await getUserInventory(itemType);
-        setItems(response.inventory.map(item => ({
-          id: item.item_id,
-          name: item.name,
-          price: 0, // Already owned, no price needed
-          owned: true,
-          // 假设衣服的 name 就是 outfit 标识符（如 'oliver_wizard', 'default' 等）
-          outfit: itemType === 'clothes' ? (item.name as MascotOutfit) : undefined,
-          image: item.image_path,
-          equipped: item.is_equipped, // 保存装备状态
-        })));
-
-        // 同步已装备的服装到 localStorage
-        if (itemType === 'clothes') {
-          const equippedItem = response.inventory.find(item => item.is_equipped);
-          if (equippedItem) {
-            const outfit = equippedItem.name as MascotOutfit;
-            setSelectedOutfit(outfit);
-            setCurrentOutfit(outfit);
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Failed to load items:', error);
-      // Fallback to empty list on error
-      setItems([]);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  // 刷新商品和库存数据
+  const refreshItems = useCallback(() => {
+    utils.shop.getItems.invalidate({ itemType });
+    utils.inventory.list.invalidate({ itemType });
+  }, [utils, itemType]);
 
   const handlePurchase = async (itemId: string, outfit?: MascotOutfit) => {
     setIsPurchasing(true);
     try {
-      await purchaseItem({ item_id: itemId });
+      await purchaseMutation.mutateAsync({ itemId });
 
       // 触发金币减少动画
       const item = items.find(i => i.id === itemId);
@@ -131,7 +113,7 @@ const OutfitView: React.FC = () => {
       // 购买成功后自动装备（如果是服装）
       if (outfit) {
         try {
-          await equipItem({ item_id: itemId, equip: true });
+          await equipMutation.mutateAsync({ itemId, equip: true });
           setSelectedOutfit(outfit);
           setCurrentOutfit(outfit);
         } catch (equipError) {
@@ -139,8 +121,7 @@ const OutfitView: React.FC = () => {
         }
       }
 
-      // 刷新商品列表
-      await loadItems();
+      refreshItems();
 
       setToastMessage('Purchase successful!');
       setToastType('success');
@@ -148,7 +129,7 @@ const OutfitView: React.FC = () => {
     } catch (error: any) {
       console.error('Failed to purchase item:', error);
       setToastType('error');
-      if (error.code === 'INSUFFICIENT_GOLD') {
+      if (error.data?.code === 'BAD_REQUEST') {
         setToastMessage('Insufficient gold!');
         setShowToast(true);
       } else {
@@ -162,8 +143,7 @@ const OutfitView: React.FC = () => {
 
   const handleEquip = async (itemId: string, outfit?: MascotOutfit) => {
     try {
-      // 调用后端 API 装备
-      await equipItem({ item_id: itemId, equip: true });
+      await equipMutation.mutateAsync({ itemId, equip: true });
 
       // 同步到 localStorage（触发 Mascot 组件更新）
       if (outfit) {
@@ -171,8 +151,7 @@ const OutfitView: React.FC = () => {
         setCurrentOutfit(outfit);
       }
 
-      // 刷新库存列表
-      await loadItems();
+      refreshItems();
     } catch (error) {
       console.error('Failed to equip item:', error);
       setToastType('error');

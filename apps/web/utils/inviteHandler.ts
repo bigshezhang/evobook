@@ -4,8 +4,8 @@
  * Manages storing and processing invite codes from URL parameters.
  */
 
-import { bindInviteCode } from './api';
 import { STORAGE_KEYS } from './constants';
+import { trpcVanilla } from './trpc/vanilla';
 
 const STORAGE_KEY = STORAGE_KEYS.PENDING_INVITE_CODE;
 
@@ -46,7 +46,7 @@ export async function processPendingInvite(): Promise<{ success: boolean; messag
   }
 
   try {
-    const result = await bindInviteCode(code);
+    const result = await trpcVanilla.invite.bindInvite.mutate({ inviteCode: code });
     clearPendingInviteCode();
     return {
       success: true,

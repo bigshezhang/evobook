@@ -4,19 +4,9 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import Header from '../../components/Header';
 import BottomNav from '../../components/BottomNav';
 import KnowledgeTreeGuide from '../../components/Guide/KnowledgeTreeGuide';
-import {
-  getCourseDetail,
-  getNodeProgress,
-  updateNodeProgress,
-  getUserCourses,
-  getGenerationProgress,
-  DAGNode,
-  buildLearningPath,
-  MapMeta,
-  NodeProgressItem,
-  CourseListItem,
-  NodeGenerationStatus,
-} from '../../utils/api';
+import { trpc } from '../../utils/trpc/client';
+import type { DAGNode, MapMeta } from '../../utils/helpers';
+import { buildLearningPath } from '../../utils/helpers';
 import { NODE_STATUS } from '../../utils/constants';
 import { ROUTES } from '../../utils/routes';
 import { useThemeColor, PAGE_THEME_COLORS } from '../../utils/themeColor';
@@ -30,8 +20,8 @@ interface NodePosition {
 }
 
 interface CourseData {
-  course_map_id: string;
-  map_meta: MapMeta;
+  courseMapId: string;
+  mapMeta: MapMeta;
   nodes: DAGNode[];
 }
 
@@ -43,21 +33,8 @@ const KnowledgeTree: React.FC = () => {
 
   const cidFromUrl = searchParams.get('cid');
 
-  // Load course data from backend
-  const [courseData, setCourseData] = useState<CourseData | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [nodeProgress, setNodeProgress] = useState<NodeProgressItem[]>([]);
   const [nodePositions, setNodePositions] = useState<NodePosition[]>([]);
   const nodeRefs = useRef<Map<number, HTMLButtonElement>>(new Map());
-  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
-
-  // Generation progress state
-  const [nodeGenerationStatus, setNodeGenerationStatus] = useState<NodeGenerationStatus[]>([]);
-
-  // Course navigation state
-  const [allCourses, setAllCourses] = useState<CourseListItem[]>([]);
-  const [currentCourseIndex, setCurrentCourseIndex] = useState<number>(0);
 
   // Guide state
   const [showGuide, setShowGuide] = useState(false);
@@ -68,63 +45,68 @@ const KnowledgeTree: React.FC = () => {
     visible: false,
   });
 
-  useEffect(() => {
-    const loadCourseData = async () => {
-      if (!cidFromUrl) {
-        setError('No course ID provided');
-        setIsLoading(false);
-        return;
-      }
+  // tRPC 并行查询
+  const {
+    data: coursesData,
+    isLoading: coursesLoading,
+  } = trpc.courseMap.list.useQuery(undefined, { enabled: !!cidFromUrl });
 
-      try {
-        setIsLoading(true);
+  const {
+    data: courseDetailData,
+    isLoading: detailLoading,
+    error: detailError,
+  } = trpc.courseMap.getDetail.useQuery(
+    { courseMapId: cidFromUrl! },
+    { enabled: !!cidFromUrl },
+  );
 
-        // Fire all independent API calls in parallel
-        const [coursesData, courseDetailData, progressData, genProgressData] =
-          await Promise.all([
-            getUserCourses(),
-            getCourseDetail(cidFromUrl),
-            getNodeProgress(cidFromUrl),
-            getGenerationProgress(cidFromUrl).catch((genErr) => {
-              console.warn('Failed to load generation progress:', genErr);
-              return null; // Don't fail the whole load if generation progress fails
-            }),
-          ]);
+  const {
+    data: progressQueryData,
+    isLoading: progressLoading,
+  } = trpc.nodeProgress.get.useQuery(
+    { courseMapId: cidFromUrl! },
+    { enabled: !!cidFromUrl },
+  );
 
-        // Process courses navigation data
-        setAllCourses(coursesData.courses);
-        const currentIndex = coursesData.courses.findIndex(
-          (c) => c.course_map_id === cidFromUrl
-        );
-        if (currentIndex !== -1) {
-          setCurrentCourseIndex(currentIndex);
-        }
+  const {
+    data: genProgressData,
+  } = trpc.courseMap.getGenerationProgress.useQuery(
+    { courseMapId: cidFromUrl! },
+    { enabled: !!cidFromUrl },
+  );
 
-        // Process course detail
-        setCourseData({
-          course_map_id: courseDetailData.course_map_id,
-          map_meta: courseDetailData.map_meta as MapMeta,
-          nodes: courseDetailData.nodes as DAGNode[],
-        });
+  const isLoading = coursesLoading || detailLoading || progressLoading;
+  const error = !cidFromUrl
+    ? 'No course ID provided'
+    : detailError
+      ? detailError.message
+      : null;
 
-        // Process node progress
-        setNodeProgress(progressData.progress);
+  // 从 tRPC 数据计算派生状态
+  const allCourses = coursesData?.courses ?? [];
+  const currentCourseIndex = useMemo(
+    () => allCourses.findIndex((c: any) => c.courseMapId === cidFromUrl),
+    [allCourses, cidFromUrl],
+  );
 
-        // Process generation progress (may be null if fetch failed)
-        if (genProgressData) {
-          setNodeGenerationStatus(genProgressData.nodes_status);
-        }
-
-      } catch (e) {
-        console.error('Failed to load course data:', e);
-        setError(e instanceof Error ? e.message : 'Failed to load course');
-      } finally {
-        setIsLoading(false);
-      }
+  const courseData: CourseData | null = useMemo(() => {
+    if (!courseDetailData) return null;
+    return {
+      courseMapId: courseDetailData.courseMapId,
+      mapMeta: courseDetailData.mapMeta as unknown as MapMeta,
+      nodes: courseDetailData.nodes as DAGNode[],
     };
+  }, [courseDetailData]);
 
-    loadCourseData();
-  }, [cidFromUrl]);
+  const nodeProgress = progressQueryData?.progress ?? [];
+  const [nodeGenerationStatus, setNodeGenerationStatus] = useState<any[]>([]);
+
+  // 同步初始 generation status
+  useEffect(() => {
+    if (genProgressData?.nodesStatus) {
+      setNodeGenerationStatus(genProgressData.nodesStatus);
+    }
+  }, [genProgressData]);
 
   // Toast auto-hide
   useEffect(() => {
@@ -158,61 +140,28 @@ const KnowledgeTree: React.FC = () => {
     return () => clearTimeout(timer);
   }, [isLoading, error, courseData, searchParams]);
 
-  // Poll generation progress for nodes that are still generating
+  // 使用 tRPC 的 refetchInterval 进行生成进度轮询
+  const hasGeneratingNodes = nodeGenerationStatus.some(
+    (s: any) => s.status === 'generating' || s.status === 'pending'
+  );
+
+  const { data: pollingGenData } = trpc.courseMap.getGenerationProgress.useQuery(
+    { courseMapId: cidFromUrl! },
+    {
+      enabled: !!cidFromUrl && hasGeneratingNodes,
+      refetchInterval: hasGeneratingNodes ? 2000 : false,
+    },
+  );
+
+  // 更新轮询得到的 generation status
   useEffect(() => {
-    if (!cidFromUrl) return;
-
-    const startPolling = () => {
-      // Clear existing interval if any
-      if (pollingIntervalRef.current) {
-        clearInterval(pollingIntervalRef.current);
-        pollingIntervalRef.current = null;
+    if (pollingGenData?.nodesStatus) {
+      setNodeGenerationStatus(pollingGenData.nodesStatus);
+      if (pollingGenData.overallStatus === 'completed') {
+        console.log('[KnowledgeTree] All nodes completed, polling stopped');
       }
-
-      // Check if any nodes are still generating or pending
-      const hasGeneratingNodes = nodeGenerationStatus.some(
-        (s) => s.status === 'generating' || s.status === 'pending'
-      );
-
-      if (!hasGeneratingNodes) {
-        console.log('[KnowledgeTree] No generating nodes, polling not needed');
-        return;
-      }
-
-      console.log('[KnowledgeTree] Starting polling for generation progress');
-
-      // Poll every 2 seconds
-      pollingIntervalRef.current = setInterval(async () => {
-        try {
-          const progressData = await getGenerationProgress(cidFromUrl);
-
-          // Update node generation status
-          setNodeGenerationStatus(progressData.nodes_status);
-
-          // If all completed, stop polling
-          if (progressData.overall_status === 'completed') {
-            console.log('[KnowledgeTree] All nodes completed, stopping polling');
-            if (pollingIntervalRef.current) {
-              clearInterval(pollingIntervalRef.current);
-              pollingIntervalRef.current = null;
-            }
-          }
-        } catch (err) {
-          console.error('Failed to fetch generation progress:', err);
-        }
-      }, 2000);
-    };
-
-    startPolling();
-
-    return () => {
-      console.log('[KnowledgeTree] Cleaning up polling interval');
-      if (pollingIntervalRef.current) {
-        clearInterval(pollingIntervalRef.current);
-        pollingIntervalRef.current = null;
-      }
-    };
-  }, [cidFromUrl, nodeGenerationStatus]);
+    }
+  }, [pollingGenData]);
 
   // Group nodes by layer for DAG rendering
   const nodesByLayer = useMemo(() => {
@@ -227,8 +176,7 @@ const KnowledgeTree: React.FC = () => {
 
   const layers = useMemo(() => Object.keys(nodesByLayer).map(Number).sort((a, b) => a - b), [nodesByLayer]);
 
-  // Calculate progress
-  const completedCount = nodeProgress.filter(p => p.status === NODE_STATUS.COMPLETED).length;
+  const completedCount = nodeProgress.filter((p: any) => p.status === NODE_STATUS.COMPLETED).length;
   const totalCount = courseData?.nodes.length || 1;
   const progressPercent = Math.round((completedCount / totalCount) * 100);
 
@@ -276,37 +224,33 @@ const KnowledgeTree: React.FC = () => {
     };
   }, [courseData, layers, nodeProgress]);
 
-  // Get course name from map_meta
-  const courseName = courseData?.map_meta.course_name || 'Loading...';
+  const courseName = (courseData?.mapMeta as any)?.courseName || 'Loading...';
 
   // Color for banner
   const bannerColor = "bg-secondary";
 
   const getNodeState = (nodeId: number): 'completed' | 'current' | 'locked' | 'generating' => {
-    const progress = nodeProgress.find(p => p.node_id === nodeId);
+    const progress = nodeProgress.find((p: any) => p.nodeId === nodeId);
 
-    // Map backend status to frontend state
     if (progress?.status === NODE_STATUS.COMPLETED) return 'completed';
     if (progress?.status === NODE_STATUS.IN_PROGRESS || progress?.status === NODE_STATUS.UNLOCKED) return 'current';
 
-    // Check if node is still being generated
-    const genStatus = nodeGenerationStatus.find(s => s.node_id === nodeId);
+    const genStatus = nodeGenerationStatus.find((s: any) => s.nodeId === nodeId);
     if (genStatus && (genStatus.status === 'generating' || genStatus.status === 'pending')) {
       return 'generating';
     }
 
-    // If no progress record, check if locked or available based on prerequisites
     const node = courseData?.nodes.find(n => n.id === nodeId);
     if (!node) return 'locked';
 
     const prereqsCompleted = node.pre_requisites.every(prereqId =>
-      nodeProgress.find(p => p.node_id === prereqId)?.status === NODE_STATUS.COMPLETED
+      nodeProgress.find((p: any) => p.nodeId === prereqId)?.status === NODE_STATUS.COMPLETED
     );
 
     return prereqsCompleted ? 'current' : 'locked';
   };
 
-  const cid = courseData?.course_map_id || cidFromUrl;
+  const cid = courseData?.courseMapId || cidFromUrl;
 
   const handleNodeClick = (node: DAGNode) => {
     const state = getNodeState(node.id);
@@ -319,18 +263,17 @@ const KnowledgeTree: React.FC = () => {
     }
   };
 
-  // Course navigation handlers
   const handlePreviousCourse = () => {
     if (currentCourseIndex > 0 && allCourses.length > 0) {
       const prevCourse = allCourses[currentCourseIndex - 1];
-      navigate(buildLearningPath(ROUTES.KNOWLEDGE_TREE, { cid: prevCourse.course_map_id }));
+      navigate(buildLearningPath(ROUTES.KNOWLEDGE_TREE, { cid: (prevCourse as any).courseMapId }));
     }
   };
 
   const handleNextCourse = () => {
     if (currentCourseIndex < allCourses.length - 1 && allCourses.length > 0) {
       const nextCourse = allCourses[currentCourseIndex + 1];
-      navigate(buildLearningPath(ROUTES.KNOWLEDGE_TREE, { cid: nextCourse.course_map_id }));
+      navigate(buildLearningPath(ROUTES.KNOWLEDGE_TREE, { cid: (nextCourse as any).courseMapId }));
     }
   };
 
@@ -453,9 +396,8 @@ const KnowledgeTree: React.FC = () => {
           return;
         }
 
-        // Check if both nodes are completed
-        const sourceCompleted = nodeProgress.find(p => p.node_id === prereqId)?.status === 'completed';
-        const targetCompleted = nodeProgress.find(p => p.node_id === node.id)?.status === 'completed';
+        const sourceCompleted = nodeProgress.find((p: any) => p.nodeId === prereqId)?.status === 'completed';
+        const targetCompleted = nodeProgress.find((p: any) => p.nodeId === node.id)?.status === 'completed';
         const isPathCompleted = sourceCompleted && targetCompleted;
 
         // Calculate path (from bottom of source to top of target)

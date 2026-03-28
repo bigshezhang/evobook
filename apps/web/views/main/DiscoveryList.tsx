@@ -1,9 +1,8 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import Header from '../../components/Header';
 import BottomNav from '../../components/BottomNav';
-import { getDiscoveryCourses, joinDiscoveryCourse, type DiscoveryCourse } from '../../utils/api';
+import { trpc } from '../../utils/trpc/client';
 import { ROUTES } from '../../utils/routes';
 import { useThemeColor, PAGE_THEME_COLORS } from '../../utils/themeColor';
 
@@ -13,33 +12,21 @@ const DiscoveryList: React.FC = () => {
   // 设置页面主题色（状态栏颜色）
   useThemeColor(PAGE_THEME_COLORS.WHITE);
 
-  const [courses, setCourses] = useState<DiscoveryCourse[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [joiningId, setJoiningId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  // 使用 tRPC query 获取 discovery 课程列表
+  const { data: coursesData, isLoading: loading } = trpc.discovery.listCourses.useQuery(
+    { category },
+  );
+  const courses = coursesData?.courses ?? [];
+
+  const joinCourseMutation = trpc.discovery.joinCourse.useMutation();
 
   const titleMap: Record<string, string> = {
     recommended: 'Recommended',
     popular: 'Popular Courses'
   };
-
-  useEffect(() => {
-    const loadCourses = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const data = await getDiscoveryCourses(category);
-        setCourses(data.courses);
-      } catch (err) {
-        console.error('Failed to load discovery courses:', err);
-        setError('Failed to load courses');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadCourses();
-  }, [category]);
 
   const handleBack = () => {
     navigate(`${ROUTES.COURSES}?tab=discovery`);
@@ -49,9 +36,8 @@ const DiscoveryList: React.FC = () => {
     if (joiningId) return;
     setJoiningId(presetId);
     try {
-      const result = await joinDiscoveryCourse(presetId);
-      // Navigate directly to the courses page (the new course_map will appear there)
-      navigate(`${ROUTES.COURSES}?tab=mine&joined=${result.course_map_id}`);
+      const result = await joinCourseMutation.mutateAsync({ presetId });
+      navigate(`${ROUTES.COURSES}?tab=mine&joined=${result.courseMapId}`);
     } catch (err) {
       console.error('Failed to join discovery course:', err);
       setError('Failed to join course. Please try again.');
@@ -88,7 +74,7 @@ const DiscoveryList: React.FC = () => {
             {courses.map(item => (
               <div key={item.id} className="flex flex-col gap-2.5">
                 <div className="aspect-[4/3] clay-img overflow-hidden relative group">
-                  <img alt={item.title} className="w-full h-full object-cover opacity-95 mix-blend-multiply" src={item.image_url || ''} loading="lazy"/>
+                  <img alt={item.title} className="w-full h-full object-cover opacity-95 mix-blend-multiply" src={item.imageUrl || ''} loading="lazy"/>
                   <div className="absolute inset-0 bg-gradient-to-tr from-indigo-100/30 to-transparent"></div>
                 </div>
                 <div className="flex justify-between items-start gap-1">
@@ -100,11 +86,11 @@ const DiscoveryList: React.FC = () => {
                     </div>
                   </div>
                   <button
-                    onClick={() => handleAddCourse(item.preset_id)}
-                    disabled={joiningId === item.preset_id}
+                    onClick={() => handleAddCourse(item.presetId)}
+                    disabled={joiningId === item.presetId}
                     className="w-8 h-8 min-w-[32px] bg-black rounded-full flex items-center justify-center shadow-md active:scale-90 transition-transform cursor-pointer disabled:opacity-50"
                   >
-                    {joiningId === item.preset_id ? (
+                    {joiningId === item.presetId ? (
                       <span className="material-symbols-rounded text-white text-[20px] animate-spin">progress_activity</span>
                     ) : (
                       <span className="material-symbols-rounded text-white text-[20px]">add</span>

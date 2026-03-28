@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { generateCourseMap, BUSINESS_CONFIG, FinishData, Mode, buildLearningPath } from '../../utils/api';
+import { trpc } from '../../utils/trpc/client';
+import { BUSINESS_CONFIG, buildLearningPath } from '../../utils/helpers';
 import { useAppStore } from '../../utils/stores';
 import { ROUTES } from '../../utils/routes';
 import { useThemeColor, PAGE_THEME_COLORS } from '../../utils/themeColor';
@@ -15,6 +16,8 @@ const GeneratingCourse: React.FC = () => {
   const navigate = useNavigate();
   // 设置页面主题色（状态栏颜色）
   useThemeColor(PAGE_THEME_COLORS.LIGHT_BLUE_GRAY);
+
+  const generateMutation = trpc.courseMap.generate.useMutation();
 
   const [state, setState] = useState<GenerationState>({
     status: 'loading',
@@ -49,41 +52,30 @@ const GeneratingCourse: React.FC = () => {
         // Animate progress
         setState({ status: 'loading', progress: BUSINESS_CONFIG.INITIAL_PROGRESS_PERCENT });
 
-        // Use mode from onboarding data (user selected during onboarding)
-        const mode: Mode = onboardingData.mode;
+        const mode = onboardingData.mode;
         const totalCommitmentMinutes = BUSINESS_CONFIG.DEFAULT_COMMITMENT_MINUTES;
 
-        // Check if aborted before API call
         if (abortController.signal.aborted) return;
 
-        // Call the API
-        const response = await generateCourseMap({
+        // 调用 tRPC mutation 生成课程路径
+        const response = await generateMutation.mutateAsync({
           topic: onboardingData.topic,
           level: onboardingData.level,
           focus: onboardingData.focus,
-          verified_concept: onboardingData.verified_concept,
+          verifiedConcept: onboardingData.verified_concept,
           mode,
-          total_commitment_minutes: totalCommitmentMinutes,
-          interested_concepts: onboardingData.interested_concepts,
+          totalCommitmentMinutes,
+          interestedConcepts: onboardingData.interested_concepts,
         });
 
-        // Check if aborted before updating state
         if (abortController.signal.aborted) return;
 
-        // Animate progress to 80%
         setState({ status: 'loading', progress: 80 });
-
-        // Note: Course is now saved in backend, no need for localStorage
-        // Only keep onboarding data in localStorage for reference
-
-        // Animate progress to 100%
         setState({ status: 'success', progress: 100 });
 
-        // Mark onboarding as completed
         useAppStore.getState().setOnboardingCompleted(true);
 
-        // Navigate to knowledge tree after brief delay
-        setTimeout(() => navigate(buildLearningPath(ROUTES.KNOWLEDGE_TREE, { cid: response.course_map_id })), 800);
+        setTimeout(() => navigate(buildLearningPath(ROUTES.KNOWLEDGE_TREE, { cid: response.courseMapId })), 800);
       } catch (error) {
         if (abortController.signal.aborted) return;
         console.error('Failed to generate course map:', error);

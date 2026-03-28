@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { onboardingNext, isChatResponse, isFinishResponse, isConceptListCheckResponse, type OnboardingResponse } from '../../utils/api';
+import { trpc } from '../../utils/trpc/client';
 import { getSelectedCharacter, type MascotCharacter } from '../../utils/mascotUtils';
 import { useAppStore } from '../../utils/stores';
 import { ROUTES } from '../../utils/routes';
@@ -14,11 +14,23 @@ interface Message {
   content: string;
 }
 
+// onboarding.next 返回类型
+type OnboardingResult = {
+  type: 'chat' | 'finish' | 'concept_list_check';
+  message: string;
+  options?: string[];
+  data?: any;
+  concepts?: string[];
+  sessionId?: string;
+};
+
 const AssessmentChat: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   // 设置页面主题色（状态栏颜色）- 浅蓝灰色
   useThemeColor('#F8F9FD');
+
+  const onboardingNextMutation = trpc.onboarding.next.useMutation();
 
   // Get language from context
   const language = useLanguage();
@@ -188,19 +200,18 @@ const AssessmentChat: React.FC = () => {
         return;
       }
 
-      // Has pre-selected topic or discovery preset: call API (Phase 1 is skipped)
+      // 有预选主题或 discovery preset：调 API（跳过 Phase 1）
       setLoading(true);
       setError(null);
       try {
-        const response = await onboardingNext({
-          initial_topic: topic || undefined,
-          discovery_preset_id: discoveryPresetId || undefined,
+        const response = await onboardingNextMutation.mutateAsync({
+          initialTopic: topic || undefined,
+          discoveryPresetId: discoveryPresetId || undefined,
         });
 
-        // Check if component was unmounted during the request
         if (abortController.signal.aborted) return;
 
-        handleResponse(response, true);
+        handleResponse(response as OnboardingResult, true);
       } catch (err) {
         if (!abortController.signal.aborted) {
           console.error('Failed to init session:', err);
@@ -220,49 +231,42 @@ const AssessmentChat: React.FC = () => {
     };
   }, []);
 
-  const handleFinishResponse = (response: OnboardingResponse) => {
-    if (isFinishResponse(response)) {
-      // Add LLM-generated final message before navigation
+  const handleFinishResponse = (response: OnboardingResult) => {
+    if (response.type === 'finish') {
       setMessages(prev => [...prev, {
         role: 'assistant',
         content: response.message
       }]);
 
-      // Save data and navigate after a brief delay
       setTimeout(() => {
         useAppStore.getState().setOnboardingData(response.data);
-        // Clear the selected topic as it's no longer needed
         useAppStore.getState().setSelectedTopic(null);
 
-        // Check if user has completed onboarding before
-        // If yes, skip companion setup and go straight to generating
         const hasCompletedOnboarding = useAppStore.getState().onboardingCompleted;
 
         if (hasCompletedOnboarding) {
-          // Returning user: skip personal setup, go straight to course generation
           navigate(ROUTES.GENERATING);
         } else {
-          // First-time user: go directly to companion selection (skip nickname)
           navigate(ROUTES.COMPANION);
         }
       }, 1500);
     }
   };
 
-  const handleResponse = (response: OnboardingResponse, isInit = false) => {
-    if (isChatResponse(response)) {
-      setSessionId(response.session_id);
+  const handleResponse = (response: OnboardingResult, isInit = false) => {
+    if (response.type === 'chat') {
+      setSessionId(response.sessionId ?? null);
       if (isInit) {
         setMessages([{ role: 'assistant', content: response.message }]);
       }
-      setOptions(response.options);
-    } else if (isFinishResponse(response)) {
+      setOptions(response.options ?? []);
+    } else if (response.type === 'finish') {
       handleFinishResponse(response);
-    } else if (isConceptListCheckResponse(response)) {
-      setSessionId(response.session_id);
+    } else if (response.type === 'concept_list_check') {
+      setSessionId(response.sessionId ?? null);
       setConceptCheck({
         message: response.message,
-        concepts: response.concepts,
+        concepts: response.concepts ?? [],
         selected: new Set(),
       });
       setOptions([]);
@@ -282,30 +286,29 @@ const AssessmentChat: React.FC = () => {
     setInput('');
 
     try {
-      // When sessionId is null this is the first interaction (from preset).
-      // Send the user's choice as initial_topic so the backend creates a
-      // new session and skips Phase 1 directly into Phase 2 (calibration).
-      const response = sessionId
-        ? await onboardingNext({
-            session_id: sessionId,
-            user_message: userChoice ? null : messageContent,
-            user_choice: userChoice || null,
+      // sessionId 为 null 时是首次交互（来自 preset），
+      // 将用户选择作为 initialTopic 发送，后端跳过 Phase 1 直接进入 Phase 2
+      const response = (sessionId
+        ? await onboardingNextMutation.mutateAsync({
+            sessionId,
+            userMessage: userChoice ? undefined : messageContent,
+            userChoice: userChoice || undefined,
           })
-        : await onboardingNext({
-            initial_topic: messageContent,
-          });
+        : await onboardingNextMutation.mutateAsync({
+            initialTopic: messageContent,
+          })) as OnboardingResult;
 
-      if (isChatResponse(response)) {
-        setSessionId(response.session_id);
+      if (response.type === 'chat') {
+        setSessionId(response.sessionId ?? null);
         setMessages(prev => [...prev, { role: 'assistant', content: response.message }]);
-        setOptions(response.options);
-      } else if (isFinishResponse(response)) {
+        setOptions(response.options ?? []);
+      } else if (response.type === 'finish') {
         handleFinishResponse(response);
-      } else if (isConceptListCheckResponse(response)) {
-        setSessionId(response.session_id);
+      } else if (response.type === 'concept_list_check') {
+        setSessionId(response.sessionId ?? null);
         setConceptCheck({
           message: response.message,
-          concepts: response.concepts,
+          concepts: response.concepts ?? [],
           selected: new Set(),
         });
         setOptions([]);
@@ -313,7 +316,6 @@ const AssessmentChat: React.FC = () => {
     } catch (err) {
       console.error('API error:', err);
       setError(text.sendError);
-      // Restore options if there were any
     } finally {
       setLoading(false);
     }
@@ -468,20 +470,20 @@ const AssessmentChat: React.FC = () => {
                 setLoading(true);
                 
                 try {
-                  const response = await onboardingNext({
-                    session_id: sessionId,
-                    user_message: JSON.stringify({ interested_concepts: selectedConcepts }),
-                  });
+                  const response = await onboardingNextMutation.mutateAsync({
+                    sessionId: sessionId ?? undefined,
+                    userMessage: JSON.stringify({ interested_concepts: selectedConcepts }),
+                  }) as OnboardingResult;
                   
-                  if (isChatResponse(response)) {
+                  if (response.type === 'chat') {
                     setMessages(prev => [...prev, { role: 'assistant', content: response.message }]);
-                    setOptions(response.options);
-                  } else if (isFinishResponse(response)) {
+                    setOptions(response.options ?? []);
+                  } else if (response.type === 'finish') {
                     handleFinishResponse(response);
-                  } else if (isConceptListCheckResponse(response)) {
+                  } else if (response.type === 'concept_list_check') {
                     setConceptCheck({
                       message: response.message,
-                      concepts: response.concepts,
+                      concepts: response.concepts ?? [],
                       selected: new Set(),
                     });
                     setOptions([]);

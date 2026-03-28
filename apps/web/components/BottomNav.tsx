@@ -1,7 +1,8 @@
 
 import React, { useState, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { buildLearningPath, getActiveCourse } from '../utils/api';
+import { buildLearningPath } from '../utils/helpers';
+import { trpc } from '../utils/trpc/client';
 import { ROUTES, ROUTE_GROUPS } from '../utils/routes';
 
 interface BottomNavProps {
@@ -13,6 +14,8 @@ const BottomNav: React.FC<BottomNavProps> = ({ activeTab }) => {
   const location = useLocation();
   const [learningLoading, setLearningLoading] = useState(false);
 
+  const { data: activeCourseData } = trpc.profile.getActiveCourse.useQuery();
+
   const getActiveTab = () => {
     const path = location.pathname;
     if ((ROUTE_GROUPS.COURSES_TAB as readonly string[]).includes(path)) return 'courses';
@@ -21,16 +24,15 @@ const BottomNav: React.FC<BottomNavProps> = ({ activeTab }) => {
     return activeTab || 'courses';
   };
 
-  const handleLearningClick = useCallback(async () => {
-    // Already on a learning tab page — no need to re-fetch
+  const handleLearningClick = useCallback(() => {
     if ((ROUTE_GROUPS.LEARNING_TAB as readonly string[]).includes(location.pathname)) return;
 
     setLearningLoading(true);
     try {
-      const { course_map_id } = await getActiveCourse();
+      const courseMapId = activeCourseData?.courseMapId;
 
-      if (course_map_id) {
-        navigate(buildLearningPath(ROUTES.KNOWLEDGE_TREE, { cid: course_map_id }));
+      if (courseMapId) {
+        navigate(buildLearningPath(ROUTES.KNOWLEDGE_TREE, { cid: courseMapId }));
       } else {
         navigate(ROUTES.COURSES);
       }
@@ -40,7 +42,7 @@ const BottomNav: React.FC<BottomNavProps> = ({ activeTab }) => {
     } finally {
       setLearningLoading(false);
     }
-  }, [location.pathname, navigate]);
+  }, [location.pathname, navigate, activeCourseData]);
 
   const current = getActiveTab();
 

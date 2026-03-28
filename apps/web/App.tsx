@@ -3,11 +3,13 @@ import React, { Suspense, useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useAuth, initAuthListener } from './utils/AuthContext';
 import { storeInviteCode, processPendingInvite } from './utils/inviteHandler';
-import { getUserCourses, getActiveCourse, buildLearningPath } from './utils/api';
+import { buildLearningPath } from './utils/helpers';
+import { trpc } from './utils/trpc/client';
 import { useAppStore, resetAllStores } from './utils/stores';
 import { ROUTES } from './utils/routes';
 import SuccessFeedbackPill from './components/SuccessFeedbackPill';
 import { lazyWithPreload } from './utils/lazyImport';
+import { TRPCProvider } from './utils/trpc/provider';
 
 // ── Lazy-loaded view components ─────────────────────────
 // Auth
@@ -197,59 +199,34 @@ const AppInternals: React.FC = () => {
   );
 };
 
-// Smart root redirect: check if user has courses, then decide where to go
+// 智能根路径重定向：检查用户是否有课程，决定跳转目标
 const RootRedirect: React.FC = () => {
-  const [loading, setLoading] = React.useState(true);
-  const [redirectTo, setRedirectTo] = React.useState<string | null>(null);
+  const onboardingDone = useAppStore((s) => s.onboardingCompleted);
 
+  // 仅在 onboarding 未完成时查询后端课程列表（处理跨设备登录）
+  const { data: coursesData, isLoading: isLoadingCourses, isError: coursesError } =
+    trpc.courseMap.list.useQuery(undefined, {
+      enabled: !onboardingDone,
+    });
+
+  // 判断用户是否有课程（来自 store 或后端查询结果）
+  const hasCourses = onboardingDone || (coursesData?.courses && coursesData.courses.length > 0);
+
+  // 如果后端查询到有课程，同步标记 onboarding 完成
   React.useEffect(() => {
-    const checkUserCourses = async () => {
-      try {
-        // Check store first for quick decision
-        const onboardingDone = useAppStore.getState().onboardingCompleted;
-
-        if (onboardingDone) {
-          // User has completed onboarding before
-          setRedirectTo('ready');
-          setLoading(false);
-          return;
-        }
-
-        // Check backend for courses (handles cross-device login)
-        const data = await getUserCourses();
-
-        if (data.courses && data.courses.length > 0) {
-          // User has courses, mark onboarding as done
-          useAppStore.getState().setOnboardingCompleted(true);
-          setRedirectTo('ready');
-        }
-      } catch (error) {
-        console.error('Failed to check user courses:', error);
-        // On error, assume new user and show onboarding
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    checkUserCourses();
-  }, []);
-
-  React.useEffect(() => {
-    if (!loading && redirectTo === 'ready') {
-      // Resolve redirect target: need cid for knowledge-tree
-      getActiveCourse()
-        .then(({ course_map_id }) => {
-          if (course_map_id) {
-            setRedirectTo(buildLearningPath(ROUTES.KNOWLEDGE_TREE, { cid: course_map_id }));
-          } else {
-            setRedirectTo(ROUTES.COURSES);
-          }
-        })
-        .catch(() => setRedirectTo(ROUTES.COURSES));
+    if (!onboardingDone && coursesData?.courses && coursesData.courses.length > 0) {
+      useAppStore.getState().setOnboardingCompleted(true);
     }
-  }, [loading, redirectTo]);
+  }, [onboardingDone, coursesData]);
 
-  if (loading) {
+  // 仅在确认有课程时获取活跃课程 ID
+  const { data: activeData, isLoading: isLoadingActive } =
+    trpc.profile.getActiveCourse.useQuery(undefined, {
+      enabled: !!hasCourses,
+    });
+
+  // 仍在加载中
+  if (!onboardingDone && isLoadingCourses) {
     return (
       <div className="flex items-center justify-center h-screen bg-white">
         <span className="inline-block w-10 h-10 border-4 border-gray-200 border-t-secondary rounded-full animate-spin" />
@@ -257,8 +234,13 @@ const RootRedirect: React.FC = () => {
     );
   }
 
-  // Still resolving redirect target (getActiveCourse in flight)
-  if (redirectTo === 'ready') {
+  // 没有课程且不是 onboarding 完成状态 → 显示 Welcome
+  if (!hasCourses) {
+    return <WelcomeView />;
+  }
+
+  // 有课程但还在获取活跃课程 ID
+  if (isLoadingActive) {
     return (
       <div className="flex items-center justify-center h-screen bg-white">
         <span className="inline-block w-10 h-10 border-4 border-gray-200 border-t-secondary rounded-full animate-spin" />
@@ -266,11 +248,13 @@ const RootRedirect: React.FC = () => {
     );
   }
 
-  if (redirectTo) {
-    return <Navigate to={redirectTo} replace />;
+  // 有活跃课程 → 跳转知识树
+  if (activeData?.courseMapId) {
+    return <Navigate to={buildLearningPath(ROUTES.KNOWLEDGE_TREE, { cid: activeData.courseMapId })} replace />;
   }
 
-  return <WelcomeView />;
+  // 有课程但无活跃课程 → 跳转课程列表
+  return <Navigate to={ROUTES.COURSES} replace />;
 };
 
 const App: React.FC = () => {
@@ -319,11 +303,13 @@ const App: React.FC = () => {
   }, []);
 
   return (
-    <BrowserRouter>
-      <div className="max-w-lg mx-auto min-h-screen bg-white shadow-xl relative overflow-x-hidden">
-        <AppInternals />
-      </div>
-    </BrowserRouter>
+    <TRPCProvider>
+      <BrowserRouter>
+        <div className="max-w-lg mx-auto min-h-screen bg-white shadow-xl relative overflow-x-hidden">
+          <AppInternals />
+        </div>
+      </BrowserRouter>
+    </TRPCProvider>
   );
 };
 

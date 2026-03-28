@@ -4,20 +4,9 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import Header from '../../components/Header';
 import RewardModal from '../../components/RewardModal';
 import Mascot from '../../components/Mascot';
-import {
-  generateQuiz,
-  getCourseDetail,
-  getNodeProgress,
-  updateNodeProgress,
-  submitQuizAttempt,
-  saveQuizDraft,
-  getQuizDraft,
-  earnExp,
-  QuizGenerateResponse,
-  QuizQuestion,
-  buildLearningPath,
-  DAGNode,
-} from '../../utils/api';
+import { trpc } from '../../utils/trpc/client';
+import type { QuizGenerateResponse, QuizQuestion, DAGNode } from '../../utils/helpers';
+import { buildLearningPath } from '../../utils/helpers';
 import { heartbeatManager } from '../../utils/learningHeartbeat';
 import { useLanguage } from '../../utils/LanguageContext';
 
@@ -52,19 +41,108 @@ const QuizView: React.FC = () => {
   }>({ diceRolls: 2, expEarned: 50, goldEarned: 0 });
 
   // Loading states
-  const [initialLoading, setInitialLoading] = useState(true); // Loading course data
-  const [generatingQuiz, setGeneratingQuiz] = useState(false); // Generating quiz
+  const [generatingQuiz, setGeneratingQuiz] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // Course and topics data (loaded initially)
-  const [courseData, setCourseData] = useState<any>(null);
-  const [completedTopics, setCompletedTopics] = useState<Array<{ topic_name: string; pages_markdown: string }>>([]);
 
   // Quiz data from API (loaded after clicking start or from draft)
   const [quizData, setQuizData] = useState<QuizGenerateResponse | null>(null);
   const [userAnswers, setUserAnswers] = useState<UserAnswer[]>([]);
   const [draftAttemptId, setDraftAttemptId] = useState<string | null>(null);
   const draftSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // tRPC queries: 课程详情 + 节点进度
+  const {
+    data: courseDetailData,
+    isLoading: courseLoading,
+    error: courseError,
+  } = trpc.courseMap.getDetail.useQuery(
+    { courseMapId: cidFromUrl! },
+    { enabled: !!cidFromUrl },
+  );
+
+  const {
+    data: progressData,
+    isLoading: progressLoading,
+    error: progressError,
+  } = trpc.nodeProgress.get.useQuery(
+    { courseMapId: cidFromUrl! },
+    { enabled: !!cidFromUrl },
+  );
+
+  // 从 tRPC 返回值计算派生状态
+  const courseData = courseDetailData ?? null;
+  const initialLoading = courseLoading || progressLoading;
+
+  // 当 courseDetailData 加载完成时同步 courseMapId
+  useEffect(() => {
+    if (courseDetailData?.courseMapId) {
+      setCourseMapId(courseDetailData.courseMapId);
+    }
+  }, [courseDetailData]);
+
+  // 从完成的节点计算 completedTopics
+  const completedTopics = React.useMemo(() => {
+    if (!courseDetailData || !progressData) return [];
+    const completedNodeIds = progressData.progress
+      .filter((p: any) => p.status === 'completed')
+      .map((p: any) => p.nodeId);
+    if (completedNodeIds.length === 0) return [];
+    return (courseDetailData.nodes as DAGNode[])
+      .filter(node => completedNodeIds.includes(node.id))
+      .map(node => ({
+        topic_name: node.title,
+        pages_markdown: node.description,
+      }));
+  }, [courseDetailData, progressData]);
+
+  // 检测无完成节点的错误
+  useEffect(() => {
+    if (initialLoading) return;
+    if (courseError) {
+      setError(courseError.message);
+    } else if (progressError) {
+      setError(progressError.message);
+    } else if (!cidFromUrl) {
+      setError('No course ID provided');
+    } else if (progressData && completedTopics.length === 0) {
+      setError('Please complete some learning content first');
+    } else {
+      setError(null);
+    }
+  }, [initialLoading, courseError, progressError, cidFromUrl, progressData, completedTopics]);
+
+  // tRPC mutations
+  const generateQuizMutation = trpc.quiz.generate.useMutation();
+  const saveDraftMutation = trpc.quiz.saveDraft.useMutation();
+  const submitQuizMutation = trpc.quiz.submit.useMutation();
+  const earnExpMutation = trpc.game.earnExp.useMutation();
+  const updateProgressMutation = trpc.nodeProgress.update.useMutation();
+  const getProgressMutation = trpc.nodeProgress.get.useQuery(
+    { courseMapId: courseMapId! },
+    { enabled: false }, // 按需手动触发 refetch
+  );
+
+  // 恢复草稿
+  const { data: draftData } = trpc.quiz.getDraft.useQuery(
+    { courseMapId: courseMapId!, nodeId: nodeId! },
+    { enabled: !initialLoading && !error && !!courseMapId && nodeId != null, retry: false },
+  );
+
+  useEffect(() => {
+    if (!draftData) return;
+    const q = draftData.quizJson?.questions;
+    const ua = draftData.quizJson?.userAnswers;
+    if (q?.length && Array.isArray(ua) && ua.length === q.length) {
+      setQuizData({
+        type: 'quiz',
+        title: 'Resumed Quiz',
+        questions: q,
+      });
+      setUserAnswers(ua);
+      setShowGreeting(false);
+      setDraftAttemptId(draftData.id);
+    }
+  }, [draftData]);
 
   // Start/stop heartbeat when entering/leaving the quiz page
   useEffect(() => {
@@ -79,112 +157,25 @@ const QuizView: React.FC = () => {
     };
   }, [courseMapId, nodeId]);
 
-  // Load course data and completed topics (initial load, no quiz generation yet)
-  useEffect(() => {
-    const loadCourseData = async () => {
-      setInitialLoading(true);
-      setError(null);
-
-      if (!cidFromUrl) {
-        setError('No course ID provided');
-        setInitialLoading(false);
-        return;
-      }
-
-      try {
-        // Get course data and node progress from backend
-        const [fetchedCourseData, progressData] = await Promise.all([
-          getCourseDetail(cidFromUrl),
-          getNodeProgress(cidFromUrl),
-        ]);
-
-        setCourseMapId(fetchedCourseData.course_map_id);
-        setCourseData(fetchedCourseData);
-
-        // Find all completed nodes
-        const completedNodeIds = progressData.progress
-          .filter(p => p.status === 'completed')
-          .map(p => p.node_id);
-
-        if (completedNodeIds.length === 0) {
-          setError('Please complete some learning content first');
-          setInitialLoading(false);
-          return;
-        }
-
-        // Prepare learned topics for quiz generation (will be used when user clicks start)
-        const topics = (fetchedCourseData.nodes as DAGNode[])
-          .filter(node => completedNodeIds.includes(node.id))
-          .map(node => ({
-            topic_name: node.title,
-            pages_markdown: node.description, // Use description as fallback
-          }));
-
-        setCompletedTopics(topics);
-
-      } catch (err) {
-        console.error('Failed to load course data:', err);
-        setError(err instanceof Error ? err.message : 'Failed to load course data');
-      } finally {
-        setInitialLoading(false);
-      }
-    };
-
-    loadCourseData();
-  }, [cidFromUrl]);
-
-  // Try to restore quiz from draft when we have courseMapId and nodeId
-  useEffect(() => {
-    if (initialLoading || error || !courseMapId || nodeId == null) return;
-
-    let cancelled = false;
-    getQuizDraft(courseMapId, nodeId)
-      .then((draft) => {
-        if (cancelled) return;
-        const q = draft.quiz_json?.questions;
-        const ua = draft.quiz_json?.user_answers;
-        if (q?.length && Array.isArray(ua) && ua.length === q.length) {
-          setQuizData({
-            type: 'quiz',
-            title: 'Resumed Quiz',
-            questions: q,
-          });
-          setUserAnswers(ua);
-          setShowGreeting(false);
-          setDraftAttemptId(draft.id);
-        }
-      })
-      .catch(() => {
-        // No draft (404) or network error - stay on greeting, user will click Start
-        if (!cancelled) {
-          // Ignore - normal when no draft exists
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [initialLoading, error, courseMapId, nodeId]);
-
-  // Debounced save of quiz draft when user answers change
+  // 答题过程中防抖保存草稿
   const saveDraft = useCallback(() => {
     if (!courseMapId || nodeId == null || !quizData || submitted) return;
 
-    saveQuizDraft({
-      course_map_id: courseMapId,
-      node_id: nodeId,
-      quiz_json: {
+    saveDraftMutation.mutateAsync({
+      courseMapId,
+      nodeId,
+      quizJson: {
         questions: quizData.questions,
         user_answers: userAnswers,
       },
     })
       .then((res) => {
-        setDraftAttemptId(res.attempt_id);
+        setDraftAttemptId(res.attemptId);
       })
       .catch((err) => {
         console.warn('[QuizView] Failed to save draft:', err);
       });
-  }, [courseMapId, nodeId, quizData, userAnswers, submitted]);
+  }, [courseMapId, nodeId, quizData, userAnswers, submitted, saveDraftMutation]);
 
   useEffect(() => {
     if (!quizData || submitted) return;
@@ -202,7 +193,7 @@ const QuizView: React.FC = () => {
     };
   }, [quizData, userAnswers, submitted, saveDraft]);
 
-  // Generate quiz when user clicks start button
+  // 用户点击开始按钮时生成 quiz
   const handleStartQuiz = async () => {
     if (!courseData || completedTopics.length === 0) return;
 
@@ -210,37 +201,36 @@ const QuizView: React.FC = () => {
     setError(null);
 
     try {
-      // Call LLM to generate quiz
-      const response = await generateQuiz({
-        language: language,
-        mode: courseData.map_meta.mode,
-        learned_topics: completedTopics,
+      const response = await generateQuizMutation.mutateAsync({
+        language,
+        mode: (courseData as any).mapMeta?.mode ?? (courseData as any).mode,
+        learnedTopics: completedTopics.map(t => ({
+          topicName: t.topic_name,
+          pagesMarkdown: t.pages_markdown,
+        })),
       });
 
       setQuizData(response);
 
-      // Initialize user answers
-      const initialAnswers = response.questions.map((_, idx) => ({
+      const initialAnswers = response.questions.map((_: any, idx: number) => ({
         questionIdx: idx,
         selected: null as string | string[] | boolean | null,
       }));
       setUserAnswers(initialAnswers);
-
-      // Hide greeting and show quiz
       setShowGreeting(false);
 
-      // Persist generated quiz immediately as draft
+      // 生成后立即保存为草稿
       if (courseMapId && nodeId != null) {
         try {
-          const draftRes = await saveQuizDraft({
-            course_map_id: courseMapId,
-            node_id: nodeId,
-            quiz_json: {
+          const draftRes = await saveDraftMutation.mutateAsync({
+            courseMapId,
+            nodeId,
+            quizJson: {
               questions: response.questions,
               user_answers: initialAnswers,
             },
           });
-          setDraftAttemptId(draftRes.attempt_id);
+          setDraftAttemptId(draftRes.attemptId);
         } catch (e) {
           console.warn('[QuizView] Failed to save quiz draft after generate:', e);
         }
@@ -548,37 +538,35 @@ const QuizView: React.FC = () => {
           <button
             onClick={async () => {
               if (submitted) {
-                // Second click: View Results - earn rewards and show modal
+                // 第二次点击：查看结果，发放奖励并显示弹窗
                 const stats = calculateScore();
-                // Call earnExp to actually award gold/dice/EXP
                 if (courseMapId && nodeId) {
                   try {
-                    const expResponse = await earnExp({
-                      exp_amount: 50,
-                      gold_reward: stats.gold,
-                      dice_reward: 2,
+                    const expResponse = await earnExpMutation.mutateAsync({
+                      expAmount: 50,
+                      goldReward: stats.gold,
+                      diceReward: 2,
                       source: 'quiz_completion',
-                      source_details: {
-                        course_map_id: courseMapId,
-                        node_id: nodeId,
-                        activity_type: 'quiz_complete',
+                      sourceDetails: {
+                        courseMapId,
+                        nodeId,
+                        activityType: 'quiz_complete',
                         score: stats.total > 0 ? Math.round((stats.correct / stats.total) * 100) : 0,
                       },
                     });
 
                     setRewardData({
-                      diceRolls: expResponse.rewards.dice_rolls,
-                      expEarned: expResponse.exp_earned,
+                      diceRolls: expResponse.rewards.diceRolls,
+                      expEarned: expResponse.expEarned,
                       goldEarned: expResponse.rewards.gold,
                     });
 
-                    // Dispatch events for GameHeader
                     window.dispatchEvent(new CustomEvent('exp-changed', {
                       detail: {
-                        newExp: expResponse.current_exp,
-                        levelUp: expResponse.level_up,
-                        newLevel: expResponse.current_level,
-                        expToNextLevel: 100 + 50 * (expResponse.current_level - 1),
+                        newExp: expResponse.currentExp,
+                        levelUp: expResponse.levelUp,
+                        newLevel: expResponse.currentLevel,
+                        expToNextLevel: 100 + 50 * (expResponse.currentLevel - 1),
                       }
                     }));
 
@@ -595,33 +583,30 @@ const QuizView: React.FC = () => {
                 }
                 setShowReward(true);
               } else {
-                // First click: Submit Answers - submit to backend immediately
-                if (submitting) return; // Prevent duplicate submissions
+                // 第一次点击：提交答案
+                if (submitting) return;
                 
                 setSubmitting(true);
                 
                 try {
-                  // Submit quiz attempt to backend
                   if (courseMapId && nodeId && quizData) {
-                    await submitQuizAttempt({
-                      course_map_id: courseMapId,
-                      node_id: nodeId,
-                      quiz_json: {
+                    await submitQuizMutation.mutateAsync({
+                      courseMapId,
+                      nodeId,
+                      quizJson: {
                         questions: quizData.questions,
                         user_answers: userAnswers,
                       },
                       score: Math.round((calculateScore().correct / calculateScore().total) * 100),
-                      attempt_id: draftAttemptId ?? undefined,
+                      attemptId: draftAttemptId ?? undefined,
                     });
                     console.log('[QuizView] Quiz attempt submitted successfully');
                   }
                   
-                  // Calculate and display results
                   calculateScore();
                   setSubmitted(true);
                 } catch (error) {
                   console.error('[QuizView] Failed to submit quiz:', error);
-                  // Still show results even if submission failed
                   calculateScore();
                   setSubmitted(true);
                 } finally {
@@ -654,15 +639,20 @@ const QuizView: React.FC = () => {
       <RewardModal
         isOpen={showReward}
         onClose={async () => {
-          // Quiz already submitted when user clicked "Submit Answers"
-          // Now just check if this is the first completion and update node progress
+          // quiz 已在"提交答案"时提交，此处仅检查是否首次完成并更新节点进度
           if (courseMapId && nodeId) {
             try {
-              const progressData = await getNodeProgress(courseMapId);
-              const currentNodeProgress = progressData.progress.find(p => p.node_id === nodeId);
+              const latestProgress = await getProgressMutation.refetch();
+              const currentNodeProgress = latestProgress.data?.progress.find(
+                (p: any) => p.nodeId === nodeId,
+              );
 
               if (currentNodeProgress?.status !== 'completed') {
-                await updateNodeProgress(courseMapId, nodeId, 'completed');
+                await updateProgressMutation.mutateAsync({
+                  courseMapId,
+                  nodeId,
+                  status: 'completed',
+                });
                 console.log('[QuizView] Node marked as completed');
               } else {
                 console.log('[QuizView] Node already completed, not updating status');

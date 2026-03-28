@@ -1,9 +1,10 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import Header from '../../components/Header';
 import SuccessFeedbackPill from '../../components/SuccessFeedbackPill';
-import { getCourseDetail, buildLearningPath } from '../../utils/api';
+import { buildLearningPath } from '../../utils/helpers';
+import { trpc } from '../../utils/trpc/client';
 import { useAppStore } from '../../utils/stores';
 import { ROUTES } from '../../utils/routes';
 import { useThemeColor, PAGE_THEME_COLORS } from '../../utils/themeColor';
@@ -20,36 +21,17 @@ const CourseDetail: React.FC = () => {
   const [showSuccess, setShowSuccess] = useState(false);
   const [isMainCourse, setIsMainCourse] = useState(false);
 
-  // Course data from backend
-  const [courseName, setCourseName] = useState('Loading...');
-  const [topic, setTopic] = useState('');
-  const [knowledgeTags, setKnowledgeTags] = useState<string[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const { data: courseDetailData, isLoading } = trpc.courseMap.getDetail.useQuery(
+    { courseMapId: cidFromUrl! },
+    { enabled: !!cidFromUrl },
+  );
 
-  useEffect(() => {
-    const loadCourseData = async () => {
-      if (!cidFromUrl) {
-        setIsLoading(false);
-        return;
-      }
-
-      try {
-        const data = await getCourseDetail(cidFromUrl);
-        setCourseName(data.map_meta.course_name as string);
-        setTopic(data.topic);
-
-        // Extract knowledge tags from node titles
-        const tags = (data.nodes as any[]).slice(0, 6).map((n: any) => n.title);
-        setKnowledgeTags(tags);
-      } catch (error) {
-        console.error('Failed to load course:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    loadCourseData();
-  }, [cidFromUrl]);
+  const courseName = courseDetailData?.mapMeta?.courseName ?? 'Loading...';
+  const topic = courseDetailData?.topic ?? '';
+  const knowledgeTags = useMemo(
+    () => (courseDetailData?.nodes ?? []).slice(0, 6).map((n: any) => n.title),
+    [courseDetailData],
+  );
 
   const handleSetMainCourse = () => {
     setIsMainCourse(true);

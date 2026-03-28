@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import GuideOverlay, { GuideStep } from './GuideOverlay';
-import { getProfile, updateProfile } from '../../utils/api';
+import { trpc } from '../../utils/trpc/client';
 
 interface KnowledgeTreeGuideProps {
   onComplete: (showToast?: boolean) => void;
@@ -22,42 +22,36 @@ const KnowledgeTreeGuide: React.FC<KnowledgeTreeGuideProps> = ({
   const [currentStep, setCurrentStep] = useState(0);
   const [isVisible, setIsVisible] = useState(false);
 
+  // tRPC 查询和 mutation
+  const { data: profile } = trpc.profile.get.useQuery();
+  const updateProfileMutation = trpc.profile.update.useMutation();
+  const utils = trpc.useUtils();
+
   useEffect(() => {
-    // If forced to show, skip the check
     if (forceShow) {
       setIsVisible(true);
       return;
     }
 
-    // Check if user has already seen this guide
-    const checkGuideStatus = async () => {
-      try {
-        const profile = await getProfile();
-        const guidesCompleted = profile.guides_completed || [];
-        if (guidesCompleted.includes(GUIDE_ID)) {
-          // Already completed, silently don't show guide
-          setIsVisible(false);
-          return;
-        }
-        setIsVisible(true);
-      } catch (error) {
-        console.error('Failed to check guide status:', error);
-        // On error, don't show guide
+    // 检查用户是否已完成此引导
+    if (profile) {
+      const guidesCompleted = profile.guidesCompleted || [];
+      if (guidesCompleted.includes(GUIDE_ID)) {
         setIsVisible(false);
+      } else {
+        setIsVisible(true);
       }
-    };
-
-    checkGuideStatus();
-  }, [forceShow]);
+    }
+  }, [forceShow, profile]);
 
   const markGuideCompleted = async () => {
     try {
-      const profile = await getProfile();
-      const guidesCompleted = profile.guides_completed || [];
+      const guidesCompleted = profile?.guidesCompleted || [];
       if (!guidesCompleted.includes(GUIDE_ID)) {
-        await updateProfile({
-          guides_completed: [...guidesCompleted, GUIDE_ID],
+        await updateProfileMutation.mutateAsync({
+          guidesCompleted: [...guidesCompleted, GUIDE_ID],
         });
+        utils.profile.get.invalidate();
       }
     } catch (error) {
       console.error('Failed to mark guide as completed:', error);

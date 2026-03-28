@@ -32,19 +32,19 @@ Start-Sleep -Milliseconds 500
 
 # 启动后端
 Write-Host ""
-Write-Host "[2/3] 启动后端 (FastAPI :$BACKEND_PORT)..." -ForegroundColor Yellow
+Write-Host "[2/3] 启动后端 (Hono+tRPC :$BACKEND_PORT)..." -ForegroundColor Yellow
 Start-Process powershell -ArgumentList "-NoExit", "-Command", `
-    "cd '$ROOT\backend'; `
+    "cd '$ROOT\apps\api'; `
     Write-Host '--- 后端启动中 ---' -ForegroundColor Cyan; `
-    uvicorn app.main:app --reload --host 0.0.0.0 --port $BACKEND_PORT"
+    pnpm dev"
 Start-Sleep -Seconds 2
 
 # 启动前端
 Write-Host "[3/3] 启动前端 (Vite :$FRONTEND_PORT)..." -ForegroundColor Yellow
 Start-Process powershell -ArgumentList "-NoExit", "-Command", `
-    "cd '$ROOT\frontend'; `
+    "cd '$ROOT\apps\web'; `
     Write-Host '--- 前端启动中 ---' -ForegroundColor Cyan; `
-    npm run dev"
+    pnpm dev"
 
 Write-Host ""
 Write-Host "==============================" -ForegroundColor Green

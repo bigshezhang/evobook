@@ -6,6 +6,7 @@
  */
 
 import { BUSINESS_CONFIG } from './constants';
+import { trpcVanilla } from './trpc/vanilla';
 
 interface HeartbeatSession {
   courseMapId: string;
@@ -14,12 +15,6 @@ interface HeartbeatSession {
 
 interface QueuedHeartbeat extends HeartbeatSession {
   timestamp: number;
-}
-
-interface HeartbeatResponse {
-  acknowledged: boolean;
-  total_study_seconds: number;
-  reason?: string;
 }
 
 class LearningHeartbeatManager {
@@ -33,7 +28,6 @@ class LearningHeartbeatManager {
    * 启动心跳（用户进入 node 学习页面时调用）
    */
   start(courseMapId: string, nodeId: number): void {
-    // 如果已有会话在运行，先停止
     if (this.intervalId !== null) {
       this.stop();
     }
@@ -42,10 +36,8 @@ class LearningHeartbeatManager {
 
     this.currentSession = { courseMapId, nodeId };
 
-    // 立即发送一次心跳
     this.sendHeartbeat();
 
-    // 启动定时器（每 30s 发送）
     this.intervalId = window.setInterval(() => {
       this.sendHeartbeat();
     }, this.HEARTBEAT_INTERVAL_MS);
@@ -75,25 +67,21 @@ class LearningHeartbeatManager {
     const { courseMapId, nodeId } = this.currentSession;
 
     try {
-      // 动态导入 api.ts 以避免循环依赖
-      const { sendLearningHeartbeat } = await import('./api');
-
-      const response: HeartbeatResponse = await sendLearningHeartbeat({
-        course_map_id: courseMapId,
-        node_id: nodeId,
-        client_timestamp: new Date().toISOString(),
+      const response = await trpcVanilla.learningSession.heartbeat.mutate({
+        courseMapId,
+        nodeId,
+        clientTimestamp: new Date().toISOString(),
       });
 
       if (response.acknowledged) {
         console.log('[Heartbeat] Acknowledged', {
-          total_study_seconds: response.total_study_seconds,
+          totalStudySeconds: response.totalStudySeconds,
         });
 
-        // 触发自定义事件，通知其他组件学习时长已更新
         window.dispatchEvent(
           new CustomEvent('study-time-updated', {
-            detail: { total_study_seconds: response.total_study_seconds },
-          })
+            detail: { totalStudySeconds: response.totalStudySeconds },
+          }),
         );
       } else {
         console.warn('[Heartbeat] Not acknowledged', {
@@ -102,8 +90,6 @@ class LearningHeartbeatManager {
       }
     } catch (error) {
       console.error('[Heartbeat] Failed to send', error);
-
-      // 失败时存到队列
       this.queueFailedHeartbeat();
     }
   }
@@ -119,7 +105,6 @@ class LearningHeartbeatManager {
     try {
       const queue = this.getQueue();
 
-      // 限制队列大小（最多 10 个）
       if (queue.length >= this.MAX_QUEUE_SIZE) {
         console.warn('[Heartbeat] Queue is full, dropping oldest entry');
         queue.shift();
@@ -137,9 +122,6 @@ class LearningHeartbeatManager {
     }
   }
 
-  /**
-   * 获取队列中的心跳
-   */
   private getQueue(): QueuedHeartbeat[] {
     try {
       const queueData = localStorage.getItem(this.QUEUE_KEY);
@@ -165,17 +147,16 @@ class LearningHeartbeatManager {
 
     console.log('[Heartbeat] Retrying queued heartbeats', { count: queue.length });
 
-    const { sendLearningHeartbeat } = await import('./api');
     const successfulIndices: number[] = [];
 
     for (let i = 0; i < queue.length; i++) {
       const heartbeat = queue[i];
 
       try {
-        const response: HeartbeatResponse = await sendLearningHeartbeat({
-          course_map_id: heartbeat.courseMapId,
-          node_id: heartbeat.nodeId,
-          client_timestamp: new Date(heartbeat.timestamp).toISOString(),
+        const response = await trpcVanilla.learningSession.heartbeat.mutate({
+          courseMapId: heartbeat.courseMapId,
+          nodeId: heartbeat.nodeId,
+          clientTimestamp: new Date(heartbeat.timestamp).toISOString(),
         });
 
         if (response.acknowledged) {
@@ -187,7 +168,6 @@ class LearningHeartbeatManager {
       }
     }
 
-    // 移除成功的心跳
     if (successfulIndices.length > 0) {
       const newQueue = queue.filter((_, index) => !successfulIndices.includes(index));
       localStorage.setItem(this.QUEUE_KEY, JSON.stringify(newQueue));
