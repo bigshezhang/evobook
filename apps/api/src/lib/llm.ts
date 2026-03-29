@@ -1,6 +1,4 @@
 import crypto from 'crypto';
-import { generateText } from 'ai';
-import { createOpenAI } from '@ai-sdk/openai';
 import { db } from '../db';
 import { promptRuns } from '../db/schema';
 
@@ -22,19 +20,60 @@ export type OutputFormat = 'json' | 'yaml' | 'markdown' | 'text';
 
 // ─── 环境变量配置 ─────────────────────────────────────────────────────────────
 
-const LLM_MODEL = process.env.LITELLM_MODEL ?? 'gpt-4o-mini';
-const LLM_BASE_URL = process.env.LITELLM_BASE_URL;
-const LLM_API_KEY = process.env.LITELLM_API_KEY ?? '';
-const LLM_TIMEOUT_MS =
-  parseInt(process.env.LLM_TIMEOUT ?? '60', 10) * 1000;
+const LLM_MODEL = process.env.LITELLM_MODEL ?? 'gemini-3.1-flash-lite-preview';
+const LLM_API_KEY = process.env.EVOBOOK_LLM_KEY ?? '';
+const LLM_BASE_URL = process.env.LITELLM_BASE_URL ?? 'https://generativelanguage.googleapis.com';
+const LLM_TIMEOUT_MS = parseInt(process.env.LLM_TIMEOUT ?? '60', 10) * 1000;
 const LLM_MAX_RETRIES = parseInt(process.env.LLM_MAX_RETRIES ?? '2', 10);
+const USE_MOCK_LLM = process.env.MOCK_LLM === 'true';
 
-// ─── OpenAI-compatible provider ──────────────────────────────────────────────
+// ─── Mock 数据（MOCK_LLM=true 时跳过所有真实 LLM 调用） ─────────────────────
 
-const openai = createOpenAI({
-  baseURL: LLM_BASE_URL,
-  apiKey: LLM_API_KEY,
-});
+const MOCK_RESPONSES: Record<string, string> = {
+  dag: JSON.stringify({
+    map_meta: {
+      course_name: 'Mock Course',
+      strategy_rationale: 'Mock strategy',
+      mode: 'Fast',
+      time_budget_minutes: 60,
+      time_sum_minutes: 60,
+      time_delta_minutes: 0,
+    },
+    nodes: [
+      { id: 1, title: 'Introduction', description: 'Getting started', type: 'learn', layer: 1, pre_requisites: [], estimated_minutes: 15 },
+      { id: 2, title: 'Core Concepts', description: 'Main ideas', type: 'learn', layer: 2, pre_requisites: [1], estimated_minutes: 20 },
+      { id: 3, title: 'Practice', description: 'Hands on', type: 'learn', layer: 2, pre_requisites: [1], estimated_minutes: 15 },
+      { id: 4, title: 'Quiz', description: 'Test knowledge', type: 'quiz', layer: 3, pre_requisites: [2, 3], estimated_minutes: 10 },
+    ],
+  }),
+  knowledge_card: JSON.stringify({
+    type: 'knowledge_card',
+    node_id: 1,
+    totalPagesInCard: 2,
+    markdown: '## Introduction\\n\\nThis is a mock knowledge card.\\n\\n<EVOBK_PAGE_BREAK />\\n\\n## Details\\n\\nMore content here.',
+    yaml: 'key_elements:\\n  - Point 1\\n  - Point 2\\nexpert_tips:\\n  - Tip 1',
+  }),
+  clarification: JSON.stringify({
+    type: 'clarification',
+    corrected_title: 'Mock Question',
+    short_answer: 'This is a mock clarification answer.',
+  }),
+  qa_detail: JSON.stringify({
+    type: 'qa_detail',
+    title: 'Mock QA Detail',
+    body_markdown: '## Answer\\n\\nDetailed mock answer here.',
+    image: { placeholder: 'Mock diagram', prompt: 'A simple diagram' },
+  }),
+  quiz: JSON.stringify({
+    type: 'quiz',
+    title: 'Mock Quiz',
+    greeting: { topicsIncluded: ['Topic 1'], message: 'Ready?' },
+    questions: [
+      { qtype: 'single', prompt: 'What is 1+1?', options: ['1', '2', '3'], answer: '2' },
+      { qtype: 'boolean', prompt: 'The sky is blue.', answer: 'True' },
+    ],
+  }),
+};
 
 // ─── 工具函数 ─────────────────────────────────────────────────────────────────
 
@@ -46,13 +85,6 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/**
- * 验证并解析 LLM 输出。
- * - json: 尝试 JSON.parse，返回对象
- * - yaml: 仅检查非空（前端负责解析）
- * - markdown: 非空 + 最小长度检查
- * - text: 原样返回
- */
 function validateOutput(
   text: string,
   format: OutputFormat,
@@ -87,6 +119,58 @@ function validateOutput(
   }
 }
 
+// ─── Gemini 原生 API 调用 ────────────────────────────────────────────────────
+
+interface GeminiContent {
+  role: 'user' | 'model';
+  parts: Array<{ text: string }>;
+}
+
+async function callGeminiAPI(
+  promptText: string,
+  systemMessage?: string,
+): Promise<string> {
+  const url = `${LLM_BASE_URL}/v1beta/models/${LLM_MODEL}:generateContent?key=${LLM_API_KEY}`;
+
+  const contents: GeminiContent[] = [
+    { role: 'user', parts: [{ text: promptText }] },
+  ];
+
+  const body: Record<string, unknown> = { contents };
+
+  // Gemini 的 system instruction
+  if (systemMessage) {
+    body.systemInstruction = {
+      parts: [{ text: systemMessage }],
+    };
+  }
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(LLM_TIMEOUT_MS),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => 'unknown');
+    throw new Error(`Gemini API error ${response.status}: ${errorText.slice(0, 200)}`);
+  }
+
+  const data = await response.json() as {
+    candidates?: Array<{
+      content?: { parts?: Array<{ text?: string }> };
+    }>;
+  };
+
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) {
+    throw new Error('Gemini API returned no text content');
+  }
+
+  return text;
+}
+
 // ─── 核心函数 ─────────────────────────────────────────────────────────────────
 
 export async function completeLLM(options: {
@@ -104,12 +188,28 @@ export async function completeLLM(options: {
     systemMessage,
   } = options;
 
+  // 全局 mock 模式：跳过所有 LLM 调用，返回预设数据
+  if (USE_MOCK_LLM) {
+    const mockText = MOCK_RESPONSES[promptName] ?? '{"message": "Mock response", "options": ["A", "B"]}';
+    const parsedData = outputFormat === 'json' ? JSON.parse(mockText) as Record<string, unknown> : mockText;
+    console.log(`[llm] MOCK mode: prompt=${promptName}, outputFormat=${outputFormat}`);
+    return {
+      requestId: crypto.randomUUID(),
+      promptName,
+      promptHash: 'mock',
+      rawText: mockText,
+      parsedData,
+      success: true,
+      retries: 0,
+      latencyMs: 0,
+      model: 'mock',
+    };
+  }
+
   const requestId = crypto.randomUUID();
-  // hash 基于原始模板（systemMessage + promptText），用于追踪 prompt 版本
   const hashSource = (systemMessage ?? '') + rawPromptText;
   const promptHash = calculatePromptHash(hashSource);
 
-  // 变量替换（{key} → value）
   let promptText = rawPromptText;
   if (variables) {
     for (const [key, value] of Object.entries(variables)) {
@@ -126,15 +226,7 @@ export async function completeLLM(options: {
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     try {
-      const result = await generateText({
-        model: openai(LLM_MODEL),
-        prompt: promptText,
-        ...(systemMessage ? { system: systemMessage } : {}),
-        maxRetries: 0,
-        abortSignal: AbortSignal.timeout(LLM_TIMEOUT_MS),
-      });
-
-      rawText = result.text;
+      rawText = await callGeminiAPI(promptText, systemMessage);
       const parsedData = validateOutput(rawText, outputFormat);
       const latencyMs = Math.round(performance.now() - startTime);
 
@@ -150,14 +242,13 @@ export async function completeLLM(options: {
         model: LLM_MODEL,
       };
 
-      // 异步记录到数据库，不阻塞返回
       persistPromptRun(response).catch((err) =>
         console.error(`[llm] Failed to persist prompt run: ${err}`),
       );
 
       console.log(
         `[llm] Completion success: requestId=${requestId}, prompt=${promptName}, ` +
-          `hash=${promptHash.slice(0, 16)}..., retries=${retries}, latencyMs=${latencyMs}`,
+          `retries=${retries}, latencyMs=${latencyMs}`,
       );
 
       return response;
@@ -176,7 +267,6 @@ export async function completeLLM(options: {
     }
   }
 
-  // 所有重试均失败
   const latencyMs = Math.round(performance.now() - startTime);
 
   const failedResponse: LLMResponse = {

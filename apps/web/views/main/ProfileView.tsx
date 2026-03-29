@@ -286,7 +286,7 @@ const ProfileView: React.FC = () => {
   // 监听心跳的学习时长更新，乐观更新 tRPC 缓存
   useEffect(() => {
     const handleStudyTimeUpdate = (event: CustomEvent) => {
-      const newSeconds = event.detail.total_study_seconds;
+      const newSeconds = event.detail.totalStudySeconds;
       utils.profile.getStats.setData(undefined, (old) => {
         if (!old) return old;
         return {
@@ -553,7 +553,7 @@ const ProfileView: React.FC = () => {
                         <span className={`${isSmallScreen ? 'text-xs' : 'text-sm'} font-black text-primary`}>#{index + 1}</span>
                       </div>
                       <p className={`${isSmallScreen ? 'text-[12px]' : 'text-[14px]'} font-bold text-slate-700 leading-tight flex-1 overflow-hidden text-ellipsis whitespace-nowrap`}>
-                        {(course.mapMeta as Record<string, unknown>)?.courseName as string}
+                        {(course.mapMeta as any)?.course_name as string}
                       </p>
                     </div>
                   ))}

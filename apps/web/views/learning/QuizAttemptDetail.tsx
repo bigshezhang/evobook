@@ -110,7 +110,7 @@ const QuizAttemptDetail: React.FC = () => {
   }
 
   const questions = attemptData.quizJson.questions as QuizQuestion[];
-  const userAnswers = attemptData.quizJson.userAnswers as UserAnswer[];
+  const userAnswers = attemptData.quizJson.user_answers as UserAnswer[];
 
   return (
     <div className="flex flex-col h-screen bg-white font-display overflow-hidden">

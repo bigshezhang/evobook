@@ -1,0 +1,35 @@
+# 开发启动与热更新规则
+
+## API 后端（apps/api）
+
+- 开发启动命令：`cd apps/api && pnpm dev`（使用 `tsx watch`，自动监听文件变更并重启）
+- 如果用 `npx tsx --env-file=.env src/index.ts` 手动启动，**不会**自动重启，改了代码必须手动杀进程再启动
+- 修改 `.env` 后必须重启进程（`--env-file` 只在启动时读取一次）
+- 修改 `schema.ts` 后如果涉及数据库结构变更，需要 `npx drizzle-kit push`
+- 验证 API 是否在运行：`curl http://localhost:8002/healthz`
+- API 监听 `0.0.0.0:8002`，iOS 模拟器通过本机 IP 访问（如 `http://10.0.0.193:8002`），不能用 `localhost`
+
+## Web 前端（apps/web）
+
+- 开发启动命令：`cd apps/web && pnpm dev`（Vite dev server，端口 3000）
+- Vite 自动 HMR，改了代码立即生效，无需手动刷新
+- Vite proxy 配置在 `vite.config.ts`，转发 `/api`、`/healthz`、`/trpc` 到后端
+
+## Mobile 前端（apps/mobile）
+
+- **首次构建**：`cd apps/mobile && npx expo run:ios`（编译 native 模块，安装到模拟器）
+- **后续开发**：`cd apps/mobile && npx expo start --dev-client`（只启动 Metro bundler）
+- Metro bundler 端口 8081
+- **关键**：如果环境变量 `CI=true` 被设置，Metro 会以 CI 模式运行（禁用热更新）。启动前执行 `unset CI`
+- 清缓存重启：`npx expo start --dev-client --clear`
+- 模拟器中强制刷新：按 **Cmd+D** 打开开发菜单 → 选 **Reload**
+- 如果模拟器中 app 没反应，检查 Metro 是否在运行（`lsof -i :8081`）
+- mobile 项目用 **npm**（不是 pnpm），因为 Expo 和 pnpm workspace 有兼容问题
+- API 地址配置在 `apps/mobile/utils/constants.ts`，开发时用本机 IP 而非 localhost
+
+## 常见问题
+
+- **改了后端代码但没生效**：检查 API 进程是否是 `tsx watch` 模式。`ps -p $(lsof -ti :8002) -o lstart,command` 看启动时间
+- **改了 mobile 代码但没生效**：检查 Metro 是否在 CI 模式（日志里会显示 "Metro is running in CI mode"）。`unset CI` 后重启
+- **mobile 网络请求失败**：确认 API 在运行 + `constants.ts` 中 IP 地址正确 + API 监听 `0.0.0.0`
+- **drizzle-kit push 报错**：检查 DATABASE_URL 中的用户名大小写（PostgreSQL 角色名大小写敏感，需要双引号）

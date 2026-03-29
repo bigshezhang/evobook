@@ -8,7 +8,7 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { FinishData } from '../api';
+import type { FinishData } from '../helpers';
 
 // ── Types ──────────────────────────────────────────────
 

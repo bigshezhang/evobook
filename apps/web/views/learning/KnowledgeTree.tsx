@@ -224,7 +224,7 @@ const KnowledgeTree: React.FC = () => {
     };
   }, [courseData, layers, nodeProgress]);
 
-  const courseName = (courseData?.mapMeta as any)?.courseName || 'Loading...';
+  const courseName = (courseData?.mapMeta as any)?.course_name || 'Loading...';
 
   // Color for banner
   const bannerColor = "bg-secondary";
@@ -235,12 +235,15 @@ const KnowledgeTree: React.FC = () => {
     if (progress?.status === NODE_STATUS.COMPLETED) return 'completed';
     if (progress?.status === NODE_STATUS.IN_PROGRESS || progress?.status === NODE_STATUS.UNLOCKED) return 'current';
 
-    const genStatus = nodeGenerationStatus.find((s: any) => s.nodeId === nodeId);
-    if (genStatus && (genStatus.status === 'generating' || genStatus.status === 'pending')) {
-      return 'generating';
-    }
-
     const node = courseData?.nodes.find(n => n.id === nodeId);
+
+    // quiz 节点不需要预生成内容
+    if (node?.type !== 'quiz') {
+      const genStatus = nodeGenerationStatus.find((s: any) => s.nodeId === nodeId);
+      if (genStatus && (genStatus.status === 'generating' || genStatus.status === 'pending')) {
+        return 'generating';
+      }
+    }
     if (!node) return 'locked';
 
     const prereqsCompleted = node.pre_requisites.every(prereqId =>

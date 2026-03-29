@@ -7,7 +7,7 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { Language } from '../api';
+import type { Language } from '../helpers';
 
 // ── Types ──────────────────────────────────────────────
 

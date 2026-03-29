@@ -660,7 +660,7 @@ const KnowledgeCard: React.FC = () => {
           return;
         }
 
-        const courseNameValue = courseMapData.mapMeta?.courseName || courseMapData.topic;
+        const courseNameValue = (courseMapData.mapMeta as any)?.course_name || courseMapData.topic;
         const moduleInfoValue = `Module ${String(currentNode.layer).padStart(2, '0')}`;
         const completedCountValue = courseMapData.nodes.filter(n => n.layer < currentNode.layer).length;
 
@@ -670,7 +670,7 @@ const KnowledgeCard: React.FC = () => {
           courseMapId: courseMapData.courseMapId,
           course: {
             courseName: courseNameValue,
-            courseContext: courseMapData.mapMeta?.strategyRationale || '',
+            courseContext: (courseMapData.mapMeta as any)?.strategy_rationale || '',
             topic: courseMapData.topic,
             level: courseMapData.level,
             mode: courseMapData.mode,
@@ -690,7 +690,7 @@ const KnowledgeCard: React.FC = () => {
         setTotalPagesInCard(response.totalPagesInCard || 1);
         setCurrentPage(1);
         setCourseName(courseNameValue);
-        setCourseContext(courseMapData.mapMeta?.strategyRationale || '');
+        setCourseContext((courseMapData.mapMeta as any)?.strategy_rationale || '');
         setTotalNodes(courseMapData.nodes.length);
         setCourseMapId(courseMapData.courseMapId);
         setCurrentNodeId(currentNode.id);

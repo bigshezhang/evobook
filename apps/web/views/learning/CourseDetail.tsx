@@ -26,7 +26,7 @@ const CourseDetail: React.FC = () => {
     { enabled: !!cidFromUrl },
   );
 
-  const courseName = courseDetailData?.mapMeta?.courseName ?? 'Loading...';
+  const courseName = (courseDetailData?.mapMeta as any)?.course_name ?? 'Loading...';
   const topic = courseDetailData?.topic ?? '';
   const knowledgeTags = useMemo(
     () => (courseDetailData?.nodes ?? []).slice(0, 6).map((n: any) => n.title),

@@ -148,14 +148,18 @@ async function callLLM(
     .filter(Boolean)
     .join('\n');
 
+  const jsonInstruction = `\n\nIMPORTANT: You MUST respond with valid JSON only. No markdown, no extra text. Format:
+{"message": "your response text", "options": ["option1", "option2", "option3"]}
+For concept_list_check phase: {"message": "text", "concepts": ["concept1", "concept2"]}
+For handoff phase: {"message": "text", "data": {"topic": "...", "level": "...", "verifiedConcept": "...", "focus": "...", "source": "...", "mode": "...", "intent": "learn"}}`;
+
   const response = await completeLLM({
     promptName: 'onboarding',
     promptText: userMessage,
     outputFormat: 'json',
-    systemMessage: systemPrompt,
+    systemMessage: systemPrompt + jsonInstruction,
   });
 
-  // 解析 LLM 返回的 JSON
   const parsed = response.parsedData as Record<string, unknown>;
   return {
     message: (parsed.message as string) ?? '',
@@ -225,9 +229,15 @@ export async function processOnboardingNext(
     const [newSession] = await db
       .insert(onboardingSessions)
       .values({
-        userId: userId ?? undefined,
+        userId: userId ?? null,
         phase: 'exploration',
         topic: input.initialTopic ?? null,
+        level: null,
+        verifiedConcept: null,
+        focus: null,
+        mode: null,
+        source: null,
+        intent: null,
         stateJson: {
           initialTopic: input.initialTopic ?? null,
           discoveryPresetId: input.discoveryPresetId ?? null,
@@ -279,25 +289,36 @@ export async function processOnboardingNext(
     updateFields.stateJson = newState;
   }
 
-  // 5. 根据当前阶段决定响应类型
-  if (currentPhase === 'handoff' && llmResult.data) {
-    // 完成 onboarding
-    const data = llmResult.data as Record<string, string>;
-    updateFields.topic = data.topic;
-    updateFields.level = data.level;
-    updateFields.verifiedConcept = data.verifiedConcept;
-    updateFields.focus = data.focus;
-    updateFields.mode = data.mode;
-    updateFields.source = data.source;
-    updateFields.intent = data.intent;
-    updateFields.phase = 'completed';
+  // 5. 如果当前 phase 是 handoff，强制完成（不再循环）
+  if (currentPhase === 'handoff') {
+    const llmData = (llmResult.data ?? {}) as Record<string, string>;
+    const finishData = {
+      topic: llmData.topic || (session.topic as string) || 'General Topic',
+      level: llmData.level || (session.level as string) || 'Beginner',
+      verifiedConcept: llmData.verifiedConcept || (session.verifiedConcept as string) || (session.topic as string) || 'Core Concept',
+      focus: llmData.focus || (session.focus as string) || 'theory',
+      source: llmData.source || (session.source as string) || 'self',
+      mode: llmData.mode || (session.mode as string) || 'Fast',
+      intent: llmData.intent || 'learn',
+    };
+
+    const validLevels2 = ['Novice', 'Beginner', 'Intermediate', 'Advanced'];
+    const validModes2 = ['Deep', 'Fast', 'Light'];
 
     await db
       .update(onboardingSessions)
-      .set(updateFields)
+      .set({
+        phase: 'completed' as const,
+        topic: finishData.topic,
+        level: (validLevels2.includes(finishData.level) ? finishData.level : 'Beginner') as 'Beginner',
+        verifiedConcept: finishData.verifiedConcept,
+        focus: finishData.focus,
+        mode: (validModes2.includes(finishData.mode) ? finishData.mode : 'Fast') as 'Fast',
+        source: finishData.source,
+        intent: finishData.intent,
+      })
       .where(eq(onboardingSessions.id, sessionId));
 
-    // 标记用户 onboarding 完成
     if (userId) {
       await db
         .update(profiles)
@@ -305,20 +326,12 @@ export async function processOnboardingNext(
         .where(eq(profiles.id, userId));
     }
 
-    console.log(`[onboarding.next] Session ${sessionId} completed handoff`);
+    console.log(`[onboarding.next] Session ${sessionId} completed handoff with data:`, finishData);
 
     return {
       type: 'finish',
       message: llmResult.message,
-      data: {
-        topic: data.topic,
-        level: data.level,
-        verifiedConcept: data.verifiedConcept,
-        focus: data.focus,
-        source: data.source,
-        mode: data.mode,
-        intent: data.intent,
-      },
+      data: finishData,
       sessionId,
     };
   }
@@ -358,6 +371,72 @@ export async function processOnboardingNext(
     .where(eq(onboardingSessions.id, sessionId));
 
   console.log(`[onboarding.next] Session ${sessionId} phase ${currentPhase} -> ${nextPhase ?? currentPhase}`);
+
+  // 如果下一个阶段是 handoff，直接构造 finish 响应（从 session 已收集的数据）
+  if (nextPhase === 'handoff') {
+    console.log(`[onboarding.next] Auto-completing handoff for session ${sessionId}`);
+
+    // 从 session 上下文和 stateJson 中提取所有已收集的数据
+    const allState = {
+      ...stateJson,
+      ...(updateFields.stateJson as Record<string, unknown> ?? {}),
+    };
+
+    // 从 stateJson 的 phase_response 中提取用户选择
+    // phase 顺序: exploration → calibration → focus → mode → source
+    const modeResponse = (allState.mode_response as string) ?? '';
+    // 从 mode 选项文本中提取模式名（如 "⚡ 标准版 (Fast) — ..." → "Fast"）
+    const extractedMode = modeResponse.includes('Deep') ? 'Deep'
+      : modeResponse.includes('Fast') ? 'Fast'
+      : modeResponse.includes('Light') ? 'Light'
+      : (session.mode as string) || 'Fast';
+
+    const finishData = {
+      topic: (session.topic as string) || (allState.topic as string) || (allState.exploration_response as string) || 'General Topic',
+      level: (session.level as string) || (allState.level as string) || 'Beginner',
+      verifiedConcept: (session.verifiedConcept as string) || (allState.verifiedConcept as string) || (session.topic as string) || 'Core Concept',
+      focus: (session.focus as string) || (allState.focus_response as string) || 'theory',
+      source: (allState.source_response as string) || (input.userChoice as string) || 'self',
+      mode: extractedMode,
+      intent: 'learn',
+    };
+
+    // 写入 DB 时确保 enum 值合法
+    const validLevels = ['Novice', 'Beginner', 'Intermediate', 'Advanced'];
+    const validModes = ['Deep', 'Fast', 'Light'];
+    const dbLevel = validLevels.includes(finishData.level) ? finishData.level : 'Beginner';
+    const dbMode = validModes.includes(finishData.mode) ? finishData.mode : 'Fast';
+
+    await db
+      .update(onboardingSessions)
+      .set({
+        phase: 'completed' as const,
+        topic: finishData.topic,
+        level: dbLevel as 'Novice' | 'Beginner' | 'Intermediate' | 'Advanced',
+        verifiedConcept: finishData.verifiedConcept,
+        focus: finishData.focus,
+        mode: dbMode as 'Deep' | 'Fast' | 'Light',
+        source: finishData.source,
+        intent: finishData.intent,
+      })
+      .where(eq(onboardingSessions.id, sessionId));
+
+    if (userId) {
+      await db
+        .update(profiles)
+        .set({ onboardingCompleted: true })
+        .where(eq(profiles.id, userId));
+    }
+
+    console.log(`[onboarding.next] Session ${sessionId} handoff completed with data:`, finishData);
+
+    return {
+      type: 'finish',
+      message: llmResult.message,
+      data: finishData,
+      sessionId,
+    };
+  }
 
   return {
     type: 'chat',

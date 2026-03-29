@@ -58,6 +58,9 @@ const AssessmentChat: React.FC = () => {
   // Selected topic from InterestSelection page
   const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
 
+  // onboarding 完成数据，用于显示「开始学习」按钮
+  const [finishData, setFinishData] = useState<OnboardingResult['data'] | null>(null);
+
   // Check if this is onboarding or returning user
   const [isOnboarding, setIsOnboarding] = useState(true);
 
@@ -238,18 +241,10 @@ const AssessmentChat: React.FC = () => {
         content: response.message
       }]);
 
-      setTimeout(() => {
-        useAppStore.getState().setOnboardingData(response.data);
-        useAppStore.getState().setSelectedTopic(null);
-
-        const hasCompletedOnboarding = useAppStore.getState().onboardingCompleted;
-
-        if (hasCompletedOnboarding) {
-          navigate(ROUTES.GENERATING);
-        } else {
-          navigate(ROUTES.COMPANION);
-        }
-      }, 1500);
+      // 保存数据到 store，但不自动跳转；由用户点击按钮触发导航
+      useAppStore.getState().setOnboardingData(response.data);
+      useAppStore.getState().setSelectedTopic(null);
+      setFinishData(response.data);
     }
   };
 
@@ -543,6 +538,25 @@ const AssessmentChat: React.FC = () => {
                 </button>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* onboarding 完成后的显式跳转按钮 */}
+        {finishData && (
+          <div className="p-4">
+            <button
+              className="w-full py-3 bg-indigo-600 text-white rounded-xl font-semibold text-lg"
+              onClick={() => {
+                const hasCompletedOnboarding = useAppStore.getState().onboardingCompleted;
+                if (hasCompletedOnboarding) {
+                  navigate(ROUTES.GENERATING);
+                } else {
+                  navigate(ROUTES.COMPANION);
+                }
+              }}
+            >
+              开始学习之旅 →
+            </button>
           </div>
         )}
       </main>

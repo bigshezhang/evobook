@@ -6,7 +6,7 @@
  * the user's language is not supported (aligned with backend SUPPORTED_LANGUAGES).
  */
 
-import type { Language } from './api';
+import type { Language } from './helpers';
 
 const SUPPORTED_LANGUAGES = new Set(['en', 'zh']);
 const DEFAULT_LANGUAGE = 'en';

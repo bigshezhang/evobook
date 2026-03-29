@@ -2,6 +2,7 @@ import { eq, and, desc, sql } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import type { Database } from '../../db';
 import { courseMaps, nodeContents, nodeProgress, profiles } from '../../db/schema';
+import type { DAGNodeJson, MapMetaJson } from '../../db/schema';
 import { completeLLM } from '../../lib/llm';
 import { loadPrompt } from '../../lib/prompts';
 
@@ -22,8 +23,9 @@ export interface CourseMapNode {
   title: string;
   description: string;
   type: string;
-  estimatedMinutes: number;
+  estimated_minutes: number;
   pre_requisites: number[];
+  layer?: number;
 }
 
 export interface CourseMapMeta {
@@ -124,20 +126,21 @@ async function callLLMGenerateCourseMap(
     title: n.title as string,
     description: n.description as string,
     type: n.type as string,
-    estimatedMinutes: n.estimated_minutes as number,
+    estimated_minutes: n.estimated_minutes as number,
     pre_requisites: (n.pre_requisites as number[]) ?? [],
+    layer: (n.layer as number) ?? 0,
   }));
 
   const mapMeta: CourseMapMeta = {
     totalNodes: nodes.length,
-    totalMinutes: nodes.reduce((sum, n) => sum + n.estimatedMinutes, 0),
+    totalMinutes: nodes.reduce((sum, n) => sum + n.estimated_minutes, 0),
     difficulty: input.level,
-    courseName: rawMeta.course_name as string,
-    strategyRationale: rawMeta.strategy_rationale as string,
+    course_name: rawMeta.course_name as string,
+    strategy_rationale: rawMeta.strategy_rationale as string,
     mode: rawMeta.mode as string,
-    timeBudgetMinutes: rawMeta.time_budget_minutes as number,
-    timeSumMinutes: rawMeta.time_sum_minutes as number,
-    timeDeltaMinutes: rawMeta.time_delta_minutes as number,
+    time_budget_minutes: rawMeta.time_budget_minutes as number,
+    time_sum_minutes: rawMeta.time_sum_minutes as number,
+    time_delta_minutes: rawMeta.time_delta_minutes as number,
   };
 
   return { mapMeta, nodes };
@@ -149,13 +152,14 @@ async function triggerContentPregeneration(
   db: Database,
   courseMapId: string,
   nodes: CourseMapNode[],
+  courseInfo: { topic: string; level: string; mode: string; focus: string },
 ): Promise<void> {
-  // 为每个 learn 节点创建 pending 状态的 node_content 记录
   const learnNodes = nodes.filter((n) => n.type === 'learn');
   console.log(
-    `[courseMap.pregenerate] Creating pending records: courseMapId=${courseMapId}, learnNodes=${learnNodes.length}`,
+    `[courseMap.pregenerate] Starting content generation: courseMapId=${courseMapId}, learnNodes=${learnNodes.length}`,
   );
 
+  // 为每个 learn 节点创建 pending 记录
   for (const node of learnNodes) {
     await db
       .insert(nodeContents)
@@ -169,6 +173,103 @@ async function triggerContentPregeneration(
       })
       .onConflictDoNothing();
   }
+
+  // 后台异步生成每个节点的知识卡片（不阻塞返回）
+  generateAllNodeContents(db, courseMapId, learnNodes, courseInfo).catch((err) =>
+    console.error(`[courseMap.pregenerate] Background generation failed: ${err}`),
+  );
+}
+
+/**
+ * 后台逐个生成所有 learn 节点的知识卡片。
+ * 失败的节点标记为 failed，不影响其他节点。
+ */
+async function generateAllNodeContents(
+  db: Database,
+  courseMapId: string,
+  nodes: CourseMapNode[],
+  courseInfo: { topic: string; level: string; mode: string; focus: string },
+): Promise<void> {
+  const systemPrompt = loadPrompt('knowledge_card');
+
+  for (const node of nodes) {
+    try {
+      // 标记为生成中
+      await db
+        .update(nodeContents)
+        .set({ generationStatus: 'generating', generationStartedAt: new Date() })
+        .where(
+          and(
+            eq(nodeContents.courseMapId, courseMapId),
+            eq(nodeContents.nodeId, node.id),
+            eq(nodeContents.contentType, 'knowledge_card'),
+          ),
+        );
+
+      const userMessage = [
+        `Language: zh`,
+        `Course: ${courseInfo.topic}`,
+        `Level: ${courseInfo.level}`,
+        `Mode: ${courseInfo.mode}`,
+        `Node Title: ${node.title}`,
+        `Node Description: ${node.description}`,
+        `Estimated Minutes: ${node.estimated_minutes}`,
+      ].join('\n');
+
+      const response = await completeLLM({
+        promptName: 'knowledge_card',
+        promptText: userMessage,
+        outputFormat: 'json',
+        systemMessage: systemPrompt,
+      });
+
+      const parsed = response.parsedData as Record<string, unknown>;
+      const contentJson = {
+        type: 'knowledge_card',
+        nodeId: node.id,
+        totalPagesInCard: (parsed.totalPagesInCard as number) ?? 1,
+        markdown: (parsed.markdown as string) ?? '',
+        yaml: (parsed.yaml as string) ?? '',
+      };
+
+      await db
+        .update(nodeContents)
+        .set({
+          contentJson,
+          generationStatus: 'completed',
+          generationCompletedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(nodeContents.courseMapId, courseMapId),
+            eq(nodeContents.nodeId, node.id),
+            eq(nodeContents.contentType, 'knowledge_card'),
+          ),
+        );
+
+      console.log(`[pregenerate] Node ${node.id} (${node.title}) completed`);
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      console.error(`[pregenerate] Node ${node.id} (${node.title}) failed: ${errorMsg}`);
+
+      await db
+        .update(nodeContents)
+        .set({
+          generationStatus: 'failed',
+          generationError: errorMsg.slice(0, 1000),
+          generationCompletedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(nodeContents.courseMapId, courseMapId),
+            eq(nodeContents.nodeId, node.id),
+            eq(nodeContents.contentType, 'knowledge_card'),
+          ),
+        );
+    }
+  }
+
+  console.log(`[pregenerate] All nodes processed for courseMapId=${courseMapId}`);
 }
 
 // ─── 生成课程路径 DAG ────────────────────────────────────────────────────────
@@ -187,13 +288,13 @@ export async function generateCourseMap(
     .values({
       userId: userId ?? undefined,
       topic: input.topic,
-      level: input.level,
+      level: input.level as 'Novice' | 'Beginner' | 'Intermediate' | 'Advanced',
       focus: input.focus,
       verifiedConcept: input.verifiedConcept,
-      mode: input.mode,
+      mode: input.mode as 'Deep' | 'Fast' | 'Light',
       totalCommitmentMinutes: input.totalCommitmentMinutes,
-      mapMeta,
-      nodes,
+      mapMeta: mapMeta as unknown as MapMetaJson,
+      nodes: nodes as unknown as DAGNodeJson[],
     })
     .returning({ id: courseMaps.id });
 
@@ -222,7 +323,12 @@ export async function generateCourseMap(
   }
 
   // 4. 后台触发内容预生成
-  await triggerContentPregeneration(db, courseMapId, nodes);
+  await triggerContentPregeneration(db, courseMapId, nodes, {
+    topic: input.topic,
+    level: input.level,
+    mode: input.mode,
+    focus: input.focus,
+  });
 
   return { courseMapId, mapMeta, nodes };
 }

@@ -1,9 +1,24 @@
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
-import { router, protectedProcedure } from '../../trpc';
-import { saveDraft, getDraft, submitQuiz, getHistory, getAttemptDetail } from './service';
+import { router, protectedProcedure, optionalAuthProcedure } from '../../trpc';
+import { saveDraft, getDraft, submitQuiz, getHistory, getAttemptDetail, generateQuiz } from './service';
 
 export const quizRouter = router({
+  // 生成 quiz（LLM）
+  generate: optionalAuthProcedure
+    .input(
+      z.object({
+        language: z.string().min(2).max(5),
+        mode: z.enum(['Deep', 'Fast', 'Light']),
+        learnedTopics: z
+          .array(z.object({ topicName: z.string(), pagesMarkdown: z.string() }))
+          .min(1),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      return generateQuiz(input);
+    }),
+
   // 保存 quiz 草稿
   saveDraft: protectedProcedure
     .input(

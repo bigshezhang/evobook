@@ -7,6 +7,7 @@ import {
   nodeProgress,
   profiles,
 } from '../../db/schema';
+import type { DAGNodeJson, MapMetaJson } from '../../db/schema';
 
 // ─── 类型定义 ─────────────────────────────────────────────────────────────────
 
@@ -128,21 +129,21 @@ export async function joinCourse(
   }
 
   // 3. 从 seed_context 提取数据，克隆到 course_maps
-  const seed = (dc.seedContext as Record<string, unknown>) ?? {};
+  const seed = dc.seedContext as unknown as Record<string, unknown>;
   const newCourseMapId = crypto.randomUUID();
 
   await db.insert(courseMaps).values({
     id: newCourseMapId,
     userId,
     topic: (seed.topic as string) || dc.title,
-    level: (seed.suggested_level as string) || (seed.level as string) || 'Beginner',
+    level: ((seed.suggested_level as string) || (seed.level as string) || 'Beginner') as 'Novice' | 'Beginner' | 'Intermediate' | 'Advanced',
     focus: (seed.focus as string) || '',
     verifiedConcept: (seed.verified_concept as string) || (seed.topic as string) || dc.title,
-    mode: 'Deep',
+    mode: 'Deep' as const,
     language: (seed.language as string) || 'en',
-    totalCommitmentMinutes: (mapMeta.total_commitment_minutes as number) ?? 60,
-    mapMeta,
-    nodes,
+    totalCommitmentMinutes: (mapMeta as Record<string, unknown>).time_budget_minutes as number ?? (mapMeta as Record<string, unknown>).total_commitment_minutes as number ?? 60,
+    mapMeta: mapMeta as unknown as MapMetaJson,
+    nodes: nodes as unknown as DAGNodeJson[],
   });
 
   // 4. 克隆 node_contents（从 source_course_map_id 对应的内容）

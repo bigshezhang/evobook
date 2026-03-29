@@ -9,15 +9,32 @@ export type { Level, Mode, NodeType, NodeStatus } from './constants';
 // ISO 639-1 语言代码
 export type Language = string;
 
+// onboarding finish data（存储在 appStore 中）
+export interface FinishData {
+  topic: string;
+  level: string;
+  verifiedConcept: string;
+  focus: string;
+  source: string;
+  mode: string;
+  intent: string;
+  interestedConcepts?: string[];
+  // 兼容旧 snake_case 数据
+  verified_concept?: string;
+  interested_concepts?: string[];
+  [key: string]: unknown;
+}
+
 // ─── 仍被组件引用的类型（和 tRPC 返回对齐为 camelCase） ──────────────────
 
 export interface MapMeta {
-  courseName: string;
-  strategyRationale: string;
+  course_name: string;
+  strategy_rationale: string;
   mode: string;
-  timeBudgetMinutes: number;
-  timeSumMinutes: number;
-  timeDeltaMinutes: number;
+  time_budget_minutes: number;
+  time_sum_minutes: number;
+  time_delta_minutes: number;
+  [key: string]: unknown;
 }
 
 export interface DAGNode {
@@ -26,8 +43,9 @@ export interface DAGNode {
   description: string;
   type: string;
   layer: number;
-  preRequisites: number[];
-  estimatedMinutes: number;
+  pre_requisites: number[];
+  estimated_minutes: number;
+  reward_multiplier?: number;
 }
 
 export interface QuizQuestion {

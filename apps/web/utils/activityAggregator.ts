@@ -8,7 +8,7 @@
 import { ACTIVITY_INTENSITY, ActivityIntensity } from './constants';
 
 export interface Activity {
-  completed_at: string; // ISO 8601 UTC string
+  createdAt: string | Date; // Drizzle 返回的 camelCase 列名
 }
 
 export interface DayActivity {
@@ -37,7 +37,7 @@ export function aggregateActivitiesToHeatmap(
 
   activities.forEach(activity => {
     // Parse UTC timestamp and convert to local date
-    const utcDate = new Date(activity.completed_at);
+    const utcDate = new Date(activity.createdAt);
     const localDateStr = formatDateToLocal(utcDate);
 
     dailyCounts[localDateStr] = (dailyCounts[localDateStr] || 0) + 1;

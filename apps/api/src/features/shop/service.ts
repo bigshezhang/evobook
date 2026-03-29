@@ -136,7 +136,7 @@ export async function purchaseItem(
   // 记录交易
   await db.insert(gameTransactions).values({
     userId,
-    transactionType: 'spend',
+    transactionType: 'spend_gold' as const,
     amount: -item.price,
     balanceAfter: newBalance,
     source: 'shop_purchase',

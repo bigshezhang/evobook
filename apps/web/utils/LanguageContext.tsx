@@ -6,7 +6,7 @@
  */
 
 import { useLanguageStore } from './stores/languageStore';
-import type { Language } from './api';
+import type { Language } from './helpers';
 
 // Re-export Language type for convenience
 export type { Language };

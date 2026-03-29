@@ -41,7 +41,7 @@ export interface LearningActivityItem {
   courseMapId: string;
   nodeId: number;
   activityType: string;
-  completedAt: string;
+  createdAt: string;
   extraData: unknown;
 }
 
@@ -167,17 +167,17 @@ export async function getLearningActivities(
     .where(
       and(
         eq(learningActivities.userId, userId),
-        gte(learningActivities.completedAt, cutoff),
+        gte(learningActivities.createdAt, cutoff),
       ),
     )
-    .orderBy(desc(learningActivities.completedAt));
+    .orderBy(desc(learningActivities.createdAt));
 
   const activities: LearningActivityItem[] = rows.map((r) => ({
     id: r.id,
     courseMapId: r.courseMapId,
     nodeId: r.nodeId,
     activityType: r.activityType,
-    completedAt: r.completedAt.toISOString(),
+    createdAt: r.createdAt.toISOString(),
     extraData: r.extraData,
   }));
 

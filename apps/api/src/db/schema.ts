@@ -1,5 +1,7 @@
+import { relations, sql } from 'drizzle-orm';
 import {
   pgTable,
+  pgEnum,
   uuid,
   text,
   boolean,
@@ -9,11 +11,137 @@ import {
   varchar,
   numeric,
   index,
-  uniqueIndex,
   unique,
   serial,
+  primaryKey,
 } from 'drizzle-orm/pg-core';
-import { sql } from 'drizzle-orm';
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Enums
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export const onboardingPhaseEnum = pgEnum('onboarding_phase', [
+  'exploration',
+  'calibration_r1',
+  'calibration_r2',
+  'focus',
+  'mode',
+  'source',
+  'handoff',
+  'completed',
+]);
+
+export const learningLevelEnum = pgEnum('learning_level', [
+  'Novice',
+  'Beginner',
+  'Intermediate',
+  'Advanced',
+]);
+
+export const learningModeEnum = pgEnum('learning_mode', [
+  'Deep',
+  'Fast',
+  'Light',
+]);
+
+export const contentTypeEnum = pgEnum('content_type', [
+  'knowledge_card',
+  'clarification',
+  'qa_detail',
+]);
+
+export const generationStatusEnum = pgEnum('generation_status', [
+  'pending',
+  'generating',
+  'completed',
+  'failed',
+  'quiz_pending',
+  'quiz_completed',
+]);
+
+export const nodeStatusEnum = pgEnum('node_status', [
+  'locked',
+  'unlocked',
+  'in_progress',
+  'completed',
+]);
+
+export const transactionTypeEnum = pgEnum('transaction_type', [
+  'earn_gold',
+  'spend_gold',
+  'earn_dice',
+  'use_dice',
+  'earn_exp',
+  'earn_item',
+  'earn_gift',
+]);
+
+export const itemTypeEnum = pgEnum('item_type', ['clothes', 'furniture']);
+
+export const rarityEnum = pgEnum('rarity', [
+  'common',
+  'rare',
+  'epic',
+  'legendary',
+]);
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// JSONB 类型定义
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export interface MapMetaJson {
+  course_name: string;
+  strategy_rationale: string;
+  mode: string;
+  time_budget_minutes: number;
+  time_sum_minutes: number;
+  time_delta_minutes: number;
+}
+
+export interface DAGNodeJson {
+  id: number;
+  title: string;
+  description: string;
+  type: 'learn' | 'quiz';
+  layer: number;
+  pre_requisites: number[];
+  estimated_minutes: number;
+  reward_multiplier?: number;
+}
+
+export interface OnboardingStateJson {
+  initialTopic?: string | null;
+  discoveryPresetId?: string | null;
+  [key: string]: unknown;
+}
+
+export interface SeedContextJson {
+  topic: string;
+  suggested_level: string;
+  key_concepts: string;
+  focus: string;
+  verified_concept?: string;
+}
+
+export interface QuizQuestionJson {
+  qtype: 'single' | 'multi' | 'boolean';
+  prompt: string;
+  options?: string[];
+  answer?: string;
+  answers?: string[];
+}
+
+export interface QuizJson {
+  questions: QuizQuestionJson[];
+  userAnswers?: Array<{
+    questionIdx: number;
+    selected: string | string[] | boolean | null;
+  }>;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 表定义
+// ═══════════════════════════════════════════════════════════════════════════════
 
 // ─── profiles ────────────────────────────────────────────────────────────────
 
@@ -56,15 +184,15 @@ export const onboardingSessions = pgTable(
     userId: uuid('user_id').references(() => profiles.id, {
       onDelete: 'set null',
     }),
-    phase: text('phase').notNull().default('exploration'),
+    phase: onboardingPhaseEnum('phase').notNull().default('exploration'),
     topic: text('topic'),
-    level: text('level'),
+    level: learningLevelEnum('level'),
     verifiedConcept: text('verified_concept'),
     focus: text('focus'),
-    mode: text('mode'),
+    mode: learningModeEnum('mode'),
     source: text('source'),
     intent: text('intent'),
-    stateJson: jsonb('state_json').notNull().default({}),
+    stateJson: jsonb('state_json').$type<OnboardingStateJson>().notNull().default({}),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -92,14 +220,14 @@ export const courseMaps = pgTable(
       onDelete: 'set null',
     }),
     topic: text('topic').notNull(),
-    level: text('level').notNull(),
+    level: learningLevelEnum('level').notNull(),
     focus: text('focus').notNull(),
     verifiedConcept: text('verified_concept').notNull(),
-    mode: text('mode').notNull(),
+    mode: learningModeEnum('mode').notNull(),
     language: text('language').notNull().default('en'),
     totalCommitmentMinutes: integer('total_commitment_minutes').notNull(),
-    mapMeta: jsonb('map_meta').notNull(),
-    nodes: jsonb('nodes').notNull(),
+    mapMeta: jsonb('map_meta').$type<MapMetaJson>().notNull(),
+    nodes: jsonb('nodes').$type<DAGNodeJson[]>().notNull(),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -124,10 +252,10 @@ export const nodeContents = pgTable(
       .notNull()
       .references(() => courseMaps.id, { onDelete: 'cascade' }),
     nodeId: integer('node_id').notNull(),
-    contentType: text('content_type').notNull(),
+    contentType: contentTypeEnum('content_type').notNull(),
     questionKey: text('question_key'),
-    contentJson: jsonb('content_json').notNull(),
-    generationStatus: varchar('generation_status', { length: 50 })
+    contentJson: jsonb('content_json').$type<Record<string, unknown>>().notNull(),
+    generationStatus: generationStatusEnum('generation_status')
       .notNull()
       .default('pending'),
     generationStartedAt: timestamp('generation_started_at', {
@@ -137,7 +265,7 @@ export const nodeContents = pgTable(
       withTimezone: true,
     }),
     generationError: text('generation_error'),
-    nodeType: varchar('node_type', { length: 50 }),
+    nodeType: text('node_type'),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -150,14 +278,11 @@ export const nodeContents = pgTable(
   ],
 );
 
-// ─── node_progress ───────────────────────────────────────────────────────────
+// ─── node_progress（复合主键） ───────────────────────────────────────────────
 
 export const nodeProgress = pgTable(
   'node_progress',
   {
-    id: uuid('id')
-      .primaryKey()
-      .default(sql`gen_random_uuid()`),
     userId: uuid('user_id')
       .notNull()
       .references(() => profiles.id, { onDelete: 'cascade' }),
@@ -165,14 +290,14 @@ export const nodeProgress = pgTable(
       .notNull()
       .references(() => courseMaps.id, { onDelete: 'cascade' }),
     nodeId: integer('node_id').notNull(),
-    status: text('status').notNull().default('locked'),
+    status: nodeStatusEnum('status').notNull().default('locked'),
     updatedAt: timestamp('updated_at', { withTimezone: true })
       .notNull()
       .defaultNow()
       .$onUpdate(() => new Date()),
   },
   (t) => [
-    unique('uq_user_course_node').on(t.userId, t.courseMapId, t.nodeId),
+    primaryKey({ columns: [t.userId, t.courseMapId, t.nodeId] }),
     index('idx_node_progress_user_id').on(t.userId),
     index('idx_node_progress_course_map_id').on(t.courseMapId),
   ],
@@ -193,7 +318,7 @@ export const quizAttempts = pgTable(
       .notNull()
       .references(() => courseMaps.id, { onDelete: 'cascade' }),
     nodeId: integer('node_id').notNull(),
-    quizJson: jsonb('quiz_json').notNull(),
+    quizJson: jsonb('quiz_json').$type<QuizJson>().notNull(),
     score: integer('score'),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
@@ -217,11 +342,11 @@ export const gameTransactions = pgTable('game_transactions', {
   userId: uuid('user_id')
     .notNull()
     .references(() => profiles.id, { onDelete: 'cascade' }),
-  transactionType: text('transaction_type').notNull(),
+  transactionType: transactionTypeEnum('transaction_type').notNull(),
   amount: integer('amount').notNull(),
   balanceAfter: integer('balance_after'),
   source: text('source').notNull(),
-  sourceDetail: jsonb('source_detail'),
+  sourceDetail: jsonb('source_detail').$type<Record<string, unknown>>(),
   createdAt: timestamp('created_at', { withTimezone: true })
     .notNull()
     .defaultNow(),
@@ -243,16 +368,13 @@ export const learningActivities = pgTable(
       .references(() => courseMaps.id, { onDelete: 'cascade' }),
     nodeId: integer('node_id').notNull(),
     activityType: text('activity_type').notNull(),
-    completedAt: timestamp('completed_at', { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-    extraData: jsonb('extra_data'),
+    extraData: jsonb('extra_data').$type<Record<string, unknown>>(),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
   },
   (t) => [
-    index('idx_learning_activities_user_time').on(t.userId, t.completedAt),
+    index('idx_learning_activities_user_time').on(t.userId, t.createdAt),
     index('idx_learning_activities_user_course').on(t.userId, t.courseMapId),
     index('idx_learning_activities_type').on(t.activityType),
   ],
@@ -265,10 +387,10 @@ export const shopItems = pgTable('shop_items', {
     .primaryKey()
     .default(sql`gen_random_uuid()`),
   name: text('name').notNull(),
-  itemType: text('item_type').notNull(),
+  itemType: itemTypeEnum('item_type').notNull(),
   price: integer('price').notNull(),
   imagePath: text('image_path').notNull(),
-  rarity: text('rarity').notNull().default('common'),
+  rarity: rarityEnum('rarity').notNull().default('common'),
   isDefault: boolean('is_default').notNull().default(false),
   createdAt: timestamp('created_at', { withTimezone: true })
     .notNull()
@@ -319,9 +441,7 @@ export const userStats = pgTable(
       .defaultNow()
       .$onUpdate(() => new Date()),
   },
-  (t) => [
-    index('idx_user_stats_study_time').on(t.totalStudySeconds),
-  ],
+  (t) => [index('idx_user_stats_study_time').on(t.totalStudySeconds)],
 );
 
 // ─── discovery_courses ───────────────────────────────────────────────────────
@@ -338,12 +458,14 @@ export const discoveryCourses = pgTable(
     imageUrl: text('image_url'),
     category: text('category').notNull(),
     displayOrder: integer('display_order').notNull().default(0),
-    rating: numeric('rating', { precision: 3, scale: 1 }).notNull().default('4.5'),
-    seedContext: jsonb('seed_context').notNull(),
-    nodes: jsonb('nodes'),
-    mapMeta: jsonb('map_meta'),
+    rating: numeric('rating', { precision: 3, scale: 1 })
+      .notNull()
+      .default('4.5'),
+    seedContext: jsonb('seed_context').$type<SeedContextJson>().notNull(),
+    nodes: jsonb('nodes').$type<DAGNodeJson[]>(),
+    mapMeta: jsonb('map_meta').$type<MapMetaJson>(),
     sourceCourseMapId: uuid('source_course_map_id'),
-    tags: jsonb('tags'),
+    tags: jsonb('tags').$type<string[]>(),
     isActive: boolean('is_active').notNull().default(true),
     viewCount: integer('view_count').notNull().default(0),
     startCount: integer('start_count').notNull().default(0),
@@ -379,7 +501,7 @@ export const promptRuns = pgTable(
     retries: integer('retries').notNull().default(0),
     latencyMs: integer('latency_ms').notNull(),
     rawText: text('raw_text'),
-    parsedJson: jsonb('parsed_json'),
+    parsedJson: jsonb('parsed_json').$type<Record<string, unknown>>(),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -388,63 +510,6 @@ export const promptRuns = pgTable(
     index('idx_prompt_runs_prompt_name').on(t.promptName),
     index('idx_prompt_runs_prompt_hash').on(t.promptHash),
     index('idx_prompt_runs_created_at').on(t.createdAt),
-  ],
-);
-
-// ─── prompt_test_runs ────────────────────────────────────────────────────────
-
-export const promptTestRuns = pgTable(
-  'prompt_test_runs',
-  {
-    id: uuid('id')
-      .primaryKey()
-      .default(sql`gen_random_uuid()`),
-    promptName: text('prompt_name').notNull(),
-    promptText: text('prompt_text').notNull(),
-    promptHash: text('prompt_hash').notNull(),
-    courseMapIds: jsonb('course_map_ids').notNull(),
-    status: text('status').notNull().default('running'),
-    score: integer('score'),
-    reviewComment: text('review_comment'),
-    createdAt: timestamp('created_at', { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-  },
-  (t) => [
-    index('idx_prompt_test_runs_prompt_name').on(t.promptName),
-    index('idx_prompt_test_runs_status').on(t.status),
-    index('idx_prompt_test_runs_created_at').on(t.createdAt),
-  ],
-);
-
-// ─── prompt_test_results ─────────────────────────────────────────────────────
-
-export const promptTestResults = pgTable(
-  'prompt_test_results',
-  {
-    id: uuid('id')
-      .primaryKey()
-      .default(sql`gen_random_uuid()`),
-    runId: uuid('run_id')
-      .notNull()
-      .references(() => promptTestRuns.id, { onDelete: 'cascade' }),
-    courseMapId: uuid('course_map_id')
-      .notNull()
-      .references(() => courseMaps.id, { onDelete: 'cascade' }),
-    inputVariables: jsonb('input_variables').notNull(),
-    outputRaw: text('output_raw'),
-    outputParsed: jsonb('output_parsed'),
-    status: text('status').notNull().default('pending'),
-    errorMessage: text('error_message'),
-    latencyMs: integer('latency_ms'),
-    createdAt: timestamp('created_at', { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-  },
-  (t) => [
-    index('idx_prompt_test_results_run_id').on(t.runId),
-    index('idx_prompt_test_results_course_map_id').on(t.courseMapId),
-    index('idx_prompt_test_results_status').on(t.status),
   ],
 );
 
@@ -498,3 +563,144 @@ export const userRewards = pgTable('user_rewards', {
     .notNull()
     .defaultNow(),
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Relations（启用 db.query.xxx.findMany({ with: {...} })）
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export const profilesRelations = relations(profiles, ({ many, one }) => ({
+  courseMaps: many(courseMaps),
+  stats: one(userStats),
+  invite: one(userInvites),
+  inventory: many(userInventory),
+  gameTransactions: many(gameTransactions),
+  learningActivities: many(learningActivities),
+  quizAttempts: many(quizAttempts),
+  rewards: many(userRewards),
+}));
+
+export const courseMapsRelations = relations(courseMaps, ({ one, many }) => ({
+  user: one(profiles, {
+    fields: [courseMaps.userId],
+    references: [profiles.id],
+  }),
+  nodeProgress: many(nodeProgress),
+  nodeContents: many(nodeContents),
+  quizAttempts: many(quizAttempts),
+  learningActivities: many(learningActivities),
+}));
+
+export const onboardingSessionsRelations = relations(
+  onboardingSessions,
+  ({ one }) => ({
+    user: one(profiles, {
+      fields: [onboardingSessions.userId],
+      references: [profiles.id],
+    }),
+  }),
+);
+
+export const nodeContentsRelations = relations(nodeContents, ({ one }) => ({
+  courseMap: one(courseMaps, {
+    fields: [nodeContents.courseMapId],
+    references: [courseMaps.id],
+  }),
+}));
+
+export const nodeProgressRelations = relations(nodeProgress, ({ one }) => ({
+  user: one(profiles, {
+    fields: [nodeProgress.userId],
+    references: [profiles.id],
+  }),
+  courseMap: one(courseMaps, {
+    fields: [nodeProgress.courseMapId],
+    references: [courseMaps.id],
+  }),
+}));
+
+export const quizAttemptsRelations = relations(quizAttempts, ({ one }) => ({
+  user: one(profiles, {
+    fields: [quizAttempts.userId],
+    references: [profiles.id],
+  }),
+  courseMap: one(courseMaps, {
+    fields: [quizAttempts.courseMapId],
+    references: [courseMaps.id],
+  }),
+}));
+
+export const gameTransactionsRelations = relations(
+  gameTransactions,
+  ({ one }) => ({
+    user: one(profiles, {
+      fields: [gameTransactions.userId],
+      references: [profiles.id],
+    }),
+  }),
+);
+
+export const learningActivitiesRelations = relations(
+  learningActivities,
+  ({ one }) => ({
+    user: one(profiles, {
+      fields: [learningActivities.userId],
+      references: [profiles.id],
+    }),
+    courseMap: one(courseMaps, {
+      fields: [learningActivities.courseMapId],
+      references: [courseMaps.id],
+    }),
+  }),
+);
+
+export const userStatsRelations = relations(userStats, ({ one }) => ({
+  user: one(profiles, {
+    fields: [userStats.userId],
+    references: [profiles.id],
+  }),
+}));
+
+export const userInventoryRelations = relations(userInventory, ({ one }) => ({
+  user: one(profiles, {
+    fields: [userInventory.userId],
+    references: [profiles.id],
+  }),
+  item: one(shopItems, {
+    fields: [userInventory.itemId],
+    references: [shopItems.id],
+  }),
+}));
+
+export const shopItemsRelations = relations(shopItems, ({ many }) => ({
+  inventory: many(userInventory),
+}));
+
+export const userInvitesRelations = relations(userInvites, ({ one }) => ({
+  user: one(profiles, {
+    fields: [userInvites.userId],
+    references: [profiles.id],
+  }),
+}));
+
+export const inviteBindingsRelations = relations(
+  inviteBindings,
+  ({ one }) => ({
+    inviter: one(profiles, {
+      fields: [inviteBindings.inviterId],
+      references: [profiles.id],
+      relationName: 'inviter',
+    }),
+    invitee: one(profiles, {
+      fields: [inviteBindings.inviteeId],
+      references: [profiles.id],
+      relationName: 'invitee',
+    }),
+  }),
+);
+
+export const userRewardsRelations = relations(userRewards, ({ one }) => ({
+  user: one(profiles, {
+    fields: [userRewards.userId],
+    references: [profiles.id],
+  }),
+}));

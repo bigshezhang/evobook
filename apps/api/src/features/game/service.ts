@@ -45,7 +45,7 @@ async function recordTransaction(
 ) {
   await db.insert(gameTransactions).values({
     userId,
-    transactionType,
+    transactionType: transactionType as 'earn_gold' | 'spend_gold' | 'earn_dice' | 'use_dice' | 'earn_exp' | 'earn_item' | 'earn_gift',
     amount,
     source,
     sourceDetail: sourceDetail ?? null,

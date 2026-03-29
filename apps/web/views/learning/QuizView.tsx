@@ -131,7 +131,7 @@ const QuizView: React.FC = () => {
   useEffect(() => {
     if (!draftData) return;
     const q = draftData.quizJson?.questions;
-    const ua = draftData.quizJson?.userAnswers;
+    const ua = draftData.quizJson?.user_answers;
     if (q?.length && Array.isArray(ua) && ua.length === q.length) {
       setQuizData({
         type: 'quiz',
@@ -170,7 +170,7 @@ const QuizView: React.FC = () => {
       },
     })
       .then((res) => {
-        setDraftAttemptId(res.attemptId);
+        setDraftAttemptId(res.id);
       })
       .catch((err) => {
         console.warn('[QuizView] Failed to save draft:', err);
@@ -230,7 +230,7 @@ const QuizView: React.FC = () => {
               user_answers: initialAnswers,
             },
           });
-          setDraftAttemptId(draftRes.attemptId);
+          setDraftAttemptId(draftRes.id);
         } catch (e) {
           console.warn('[QuizView] Failed to save quiz draft after generate:', e);
         }

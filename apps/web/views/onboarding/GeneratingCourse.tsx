@@ -62,10 +62,10 @@ const GeneratingCourse: React.FC = () => {
           topic: onboardingData.topic,
           level: onboardingData.level,
           focus: onboardingData.focus,
-          verifiedConcept: onboardingData.verified_concept,
+          verifiedConcept: onboardingData.verifiedConcept || onboardingData.topic || 'General',
           mode,
           totalCommitmentMinutes,
-          interestedConcepts: onboardingData.interested_concepts,
+          interestedConcepts: onboardingData.interestedConcepts,
         });
 
         if (abortController.signal.aborted) return;
