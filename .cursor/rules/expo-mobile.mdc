@@ -1,0 +1,695 @@
+# Expo React Native 移动端编码规范
+
+本规则适用于 `apps/mobile/` 目录下所有代码。目标：每次生成的代码都是生产级质量，不需要返工。
+
+---
+
+## 技术栈
+
+- Expo ~54 / React Native 0.81 / React 19（New Architecture 已启用）
+- Expo Router（文件系统路由）
+- tRPC + TanStack React Query（数据层）
+- Zustand（客户端状态）
+- Supabase Auth（认证）
+- TypeScript strict mode
+
+---
+
+## 项目结构约定
+
+```
+apps/mobile/
+  app/                    # Expo Router 文件系统路由（只放页面）
+    _layout.tsx           # Root layout（Providers 挂载点）
+    login.tsx
+    (tabs)/
+      _layout.tsx
+      index.tsx
+    [feature]/            # 按业务域分子目录
+      [id].tsx
+  components/
+    ui/                   # 基础 UI 原子组件（与业务无关）
+      index.ts            # Barrel export
+      Button.tsx
+      BackButton.tsx
+      LoadingScreen.tsx
+      ErrorScreen.tsx
+      ProgressBar.tsx
+      Badge.tsx
+    [feature]/            # 业务组件（CourseCard, NodeCard, MessageBubble 等）
+      index.ts
+  hooks/                  # 自定义 hooks（数据获取、业务逻辑）
+    useKnowledgeTree.ts
+    useCourseMaps.ts
+  utils/
+    theme.ts              # 设计 token（colors, spacing, radii, typography）
+    constants.ts          # 环境变量（通过 expo-constants 读取）
+    trpc.ts               # tRPC client
+    auth.tsx              # AuthContext + useAuth
+    supabase.ts           # Supabase client
+    stores/               # Zustand stores
+      onboardingStore.ts
+```
+
+### 关键原则
+
+- `app/` 目录中的路由文件只做**编排**：组合 hooks + 组合 components + 处理导航。不直接写 DB 查询逻辑、不直接写复杂计算。
+- 超过 30 行的 `renderItem` / 渲染块必须提取为独立组件。
+- 超过 15 行的 `useMemo` / 计算逻辑必须提取为自定义 hook。
+
+---
+
+## 类型安全（最高优先级）
+
+### 严格禁止
+
+```typescript
+// ❌ 绝对禁止
+as any
+(data as any)
+catch (err: any)
+// eslint-disable @typescript-eslint/no-explicit-any
+```
+
+### 处理 tRPC 返回数据
+
+tRPC 返回类型由后端自动推断。直接使用推断类型，不手动定义 interface：
+
+```typescript
+// ✅ 直接用 tRPC 推断
+const { data } = trpc.courseMap.list.useQuery();
+const courses = data?.courses; // 类型自动推断
+
+// ✅ 获取单条数据的类型
+type CourseItem = NonNullable<typeof data>['courses'][number];
+
+// ✅ renderItem 的类型
+const renderCourse = ({ item }: { item: CourseItem }) => ( ... );
+```
+
+### 处理 JSONB 字段（后端返回 unknown 时）
+
+当后端某些 JSONB 字段返回 `unknown` 时，在**一个地方**定义共享类型，不在多个文件中重复定义：
+
+```typescript
+// utils/types.ts — 集中定义 JSONB 字段的前端映射类型
+export interface DAGNode {
+  id: number;
+  title: string;
+  description: string;
+  type: 'learn' | 'quiz';
+  layer: number;
+  pre_requisites: number[];
+  estimated_minutes: number;
+}
+
+export interface MapMeta {
+  course_name: string;
+  strategy_rationale?: string;
+  [key: string]: unknown;
+}
+```
+
+使用时用 `as` 断言到具体类型，**不用 `as any`，不用 `as Record<string, unknown>`**：
+
+```typescript
+import type { DAGNode, MapMeta } from '../../utils/types';
+
+const nodes = (courseData?.nodes ?? []) as DAGNode[];
+const meta = courseData?.mapMeta as MapMeta | undefined;
+```
+
+### 错误捕获
+
+```typescript
+// ✅ 正确
+catch (err: unknown) {
+  const message = err instanceof Error ? err.message : String(err);
+}
+
+// ❌ 禁止
+catch (err: any)
+catch {}
+```
+
+任何 `catch` 块必须至少 `console.warn` 记录错误。禁止空 `catch {}`。
+
+---
+
+## 组件编写规范
+
+### 文件结构
+
+```typescript
+// 1. Import（按 RN → expo → 第三方 → 项目内 排序）
+import { View, Text } from 'react-native';
+import { useRouter } from 'expo-router';
+import { trpc } from '../../utils/trpc';
+import { colors, spacing } from '../../utils/theme';
+import { BackButton, LoadingScreen } from '../../components/ui';
+
+// 2. 类型定义（如果需要）
+interface Props { ... }
+
+// 3. 组件（使用 function 声明，不用 arrow + export default）
+export function MyComponent({ ... }: Props) {
+  // hooks 在最顶部
+  // 然后是 derived state / useMemo
+  // 然后是 handlers
+  // 最后是 return JSX
+}
+
+// 4. 如果是路由页面，使用 export default function
+export default function MyScreen() { ... }
+```
+
+### 组件拆分规则
+
+- **UI 组件**（`components/ui/`）：不依赖 tRPC、不依赖业务逻辑，只接收 props 渲染。必须有 TypeScript interface 定义 props。
+- **业务组件**（`components/[feature]/`）：可以使用 tRPC hooks、业务类型、导航，但不直接管理页面级状态。
+- **页面组件**（`app/`）：组合 hooks 和组件，管理页面级状态，处理导航跳转。
+
+### UI 组件编写标准
+
+```typescript
+// components/ui/Button.tsx
+import { TouchableOpacity, Text, ActivityIndicator } from 'react-native';
+import { colors, spacing, radii, typography } from '../../utils/theme';
+
+interface ButtonProps {
+  title: string;
+  onPress: () => void;
+  variant?: 'primary' | 'outline' | 'text';
+  loading?: boolean;
+  disabled?: boolean;
+}
+
+export function Button({
+  title,
+  onPress,
+  variant = 'primary',
+  loading = false,
+  disabled = false,
+}: ButtonProps) {
+  // ...
+}
+```
+
+每个 UI 组件必须：
+- 有完整的 Props interface
+- 有合理的默认值
+- 使用 theme token，不硬编码颜色/间距
+- 在 `components/ui/index.ts` 中 barrel export
+
+---
+
+## 样式规范
+
+### 设计 Token
+
+所有视觉属性必须使用 `utils/theme.ts` 中的 token：
+
+```typescript
+// ✅ 使用 token
+style={{ backgroundColor: colors.primary, padding: spacing.lg, borderRadius: radii.md }}
+
+// ❌ 禁止硬编码
+style={{ backgroundColor: '#4F46E5', padding: 16, borderRadius: 12 }}
+```
+
+唯一允许硬编码的场景：一次性的精确像素调整（如 `paddingBottom: 34` 适配 iPhone 底部安全区）。
+
+### 样式组织
+
+对于重复使用的样式组合，提取为局部变量或 StyleSheet：
+
+```typescript
+// ✅ 简单场景用 inline style + theme token
+<View style={{ padding: spacing.lg, backgroundColor: colors.surface }}>
+
+// ✅ 复杂/重复场景用 StyleSheet
+const styles = StyleSheet.create({
+  card: {
+    backgroundColor: colors.surface,
+    borderRadius: radii.xl,
+    padding: spacing.xl,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+});
+```
+
+### 新增颜色/间距
+
+需要新颜色或间距时，**先添加到 `theme.ts`**，再在组件中使用。不允许在组件中引入 `theme.ts` 未定义的值。
+
+---
+
+## 状态管理
+
+### 选择策略
+
+| 数据类型 | 方案 | 示例 |
+|---------|------|------|
+| 服务端数据 | tRPC + TanStack Query | 课程列表、节点进度、知识卡片 |
+| 跨页面临时状态 | Zustand store | onboarding → generating 的数据传递 |
+| 页面内 UI 状态 | useState | 输入框、loading、展开/收起 |
+| 全局认证状态 | React Context | user / session / signIn / signOut |
+
+### Zustand Store 规范
+
+```typescript
+// utils/stores/xxxStore.ts
+import { create } from 'zustand';
+
+// 1. 先定义数据类型
+export interface MyData { ... }
+
+// 2. 定义 store interface
+interface MyStore {
+  data: MyData | null;
+  setData: (data: MyData) => void;
+  clear: () => void;
+}
+
+// 3. 创建 store
+export const useMyStore = create<MyStore>((set) => ({
+  data: null,
+  setData: (data) => set({ data }),
+  clear: () => set({ data: null }),
+}));
+```
+
+- Store 用于**临时**跨页面数据传递，用完即 `clear()`
+- 不用 Zustand 存储服务端数据（那是 TanStack Query 的职责）
+- 不把整个 app 的状态塞进一个 store（按功能拆分）
+
+### 禁止的状态传递方式
+
+```typescript
+// ❌ 禁止通过路由参数传递大对象
+router.push({ pathname: '/next', params: { data: JSON.stringify(bigObject) } });
+
+// ✅ 用 Zustand store
+useMyStore.getState().setData(bigObject);
+router.push('/next');
+```
+
+路由参数只传 **ID 和简单标量值**（string / number），不传 JSON 序列化的对象。
+
+---
+
+## 数据获取（tRPC + TanStack Query）
+
+### Query 使用模式
+
+```typescript
+// ✅ 条件查询（ID 可能为空）
+const { data, isLoading, error } = trpc.courseMap.getDetail.useQuery(
+  { courseMapId: courseMapId! },
+  { enabled: !!courseMapId },
+);
+
+// ✅ 页面聚焦时刷新
+useFocusEffect(
+  useCallback(() => {
+    utils.nodeProgress.get.invalidate({ courseMapId });
+  }, [courseMapId]),
+);
+
+// ✅ 轮询（生成进度等）
+const { data: genData } = trpc.courseMap.getGenerationProgress.useQuery(
+  { courseMapId: courseMapId! },
+  { enabled: !!courseMapId, refetchInterval: 3000 },
+);
+```
+
+### Mutation 使用模式
+
+```typescript
+const mutation = trpc.nodeProgress.update.useMutation();
+
+const handleAction = async () => {
+  try {
+    const result = await mutation.mutateAsync({ ... });
+    // 成功后 invalidate 相关查询
+    await utils.nodeProgress.get.invalidate({ courseMapId });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : '操作失败';
+    // 向用户展示错误
+  }
+};
+```
+
+### Cache Invalidation 原则
+
+- mutation 成功后，invalidate **所有可能受影响的 query**
+- 使用 `Promise.all` 并行 invalidate 多个 query
+- 从详情页返回列表页时，用 `useFocusEffect` 刷新
+
+---
+
+## 导航规范
+
+### 路由参数
+
+```typescript
+// ✅ 只传 ID
+router.push({ pathname: '/course/card', params: { cid: courseMapId, nid: String(nodeId) } });
+
+// ✅ 读取参数
+const { cid, nid } = useLocalSearchParams<{ cid: string; nid: string }>();
+```
+
+### 页面跳转
+
+```typescript
+// 替换当前页面（不留返回栈）
+router.replace('/generating');
+
+// 推入新页面（可返回）
+router.push(`/course/${courseId}`);
+
+// 返回（有 fallback）
+router.canGoBack() ? router.back() : router.replace('/');
+```
+
+### 登录态守卫
+
+登录态检查集中在 `_layout.tsx` 的 `AuthNavigator` 中。各页面不需要自行检查。如果某个页面需要特殊权限，在该页面的 `useEffect` 中处理。
+
+---
+
+## 列表渲染
+
+### FlatList 规范
+
+```typescript
+// ✅ key 必须是唯一且稳定的业务 ID
+<FlatList
+  data={items}
+  keyExtractor={(item) => item.id}
+  renderItem={renderItem}
+/>
+
+// ❌ 禁止用数组索引
+keyExtractor={(_, index) => String(index)}
+```
+
+### 列表项组件
+
+超过 20 行的 renderItem 必须提取为独立组件：
+
+```typescript
+// ✅ 提取为组件
+function CourseCard({ item, onPress }: { item: CourseItem; onPress: () => void }) { ... }
+
+<FlatList
+  data={courses}
+  keyExtractor={(item) => item.courseMapId}
+  renderItem={({ item }) => <CourseCard item={item} onPress={() => router.push(...)} />}
+/>
+```
+
+对于列表项中的复杂交互（长按、滑动删除等），用 `React.memo` 避免不必要的重渲染。
+
+---
+
+## Hook 编写规范
+
+### 自定义 Hook 提取时机
+
+- 同一段 `useMemo` / 计算逻辑在 2+ 个页面出现 → 提取为 hook
+- 单个 `useMemo` 超过 15 行 → 提取为 hook
+- 涉及多个 tRPC query 的聚合 → 提取为 hook
+
+### Hook 命名
+
+```typescript
+// hooks/useKnowledgeTree.ts
+export function useKnowledgeTree(courseMapId: string | undefined) {
+  // 内部管理多个 query + 计算 DAG 状态
+  return { layers, computedStatusMap, getNodeStatus, isLoading, progressPercent };
+}
+```
+
+### Hook 返回值
+
+返回**具名对象**，不返回数组（除非只有 2 个值且意义明确）：
+
+```typescript
+// ✅
+return { data, isLoading, error, refresh };
+
+// ❌
+return [data, isLoading, error, refresh];
+```
+
+---
+
+## 错误处理
+
+### 页面级错误
+
+使用 `ErrorScreen` 组件展示全屏错误：
+
+```typescript
+if (error) {
+  return <ErrorScreen message={error.message} onRetry={() => refetch()} />;
+}
+```
+
+### 操作级错误
+
+用 Toast / Alert 展示，不跳转：
+
+```typescript
+try {
+  await mutation.mutateAsync({ ... });
+} catch (err: unknown) {
+  Alert.alert('操作失败', err instanceof Error ? err.message : '请稍后重试');
+}
+```
+
+### ErrorBoundary
+
+在 `_layout.tsx` 中包裹 ErrorBoundary 兜底未捕获的渲染错误：
+
+```typescript
+import { ErrorBoundary } from 'react-error-boundary';
+
+function ErrorFallback({ error, resetErrorBoundary }) {
+  return <ErrorScreen message={error.message} onRetry={resetErrorBoundary} />;
+}
+
+// 在 Provider 内层包裹
+<ErrorBoundary FallbackComponent={ErrorFallback}>
+  <AuthNavigator />
+</ErrorBoundary>
+```
+
+---
+
+## 环境变量
+
+### 读取方式
+
+通过 `expo-constants` 从 `app.config.ts` 的 `extra` 字段读取：
+
+```typescript
+// utils/constants.ts
+import Constants from 'expo-constants';
+const extra = Constants.expoConfig?.extra ?? {};
+
+export const API_BASE_URL: string = extra.apiBaseUrl ?? 'http://localhost:8002';
+```
+
+### 禁止
+
+```typescript
+// ❌ 禁止直接硬编码凭证
+export const SUPABASE_URL = 'https://xxx.supabase.co';
+
+// ❌ 禁止硬编码 IP 地址
+export const API_BASE_URL = 'http://10.0.0.193:8002';
+```
+
+所有环境相关的值都应通过 `app.config.ts` extra 或 `.env` 注入。fallback 值只允许 `localhost` 或空字符串。
+
+---
+
+## Context 规范
+
+### 创建安全的 Context
+
+```typescript
+// ✅ 默认值为 null + hook 中抛异常
+const MyContext = createContext<MyContextType | null>(null);
+
+export function useMyContext() {
+  const ctx = useContext(MyContext);
+  if (!ctx) throw new Error('useMyContext must be used within MyProvider');
+  return ctx;
+}
+
+// ❌ 禁止不安全的默认值
+const MyContext = createContext<MyContextType>({} as MyContextType);
+```
+
+---
+
+## 性能
+
+### React Query 配置
+
+```typescript
+new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 0,          // 每次 mount 都认为过期
+      refetchOnMount: true,
+      retry: 1,              // 移动网络不稳定，只重试 1 次
+    },
+  },
+});
+```
+
+### App 恢复时刷新
+
+```typescript
+// _layout.tsx 中配置
+useEffect(() => {
+  const sub = AppState.addEventListener('change', (status) => {
+    if (Platform.OS !== 'web') {
+      focusManager.setFocused(status === 'active');
+    }
+  });
+  return () => sub.remove();
+}, []);
+```
+
+### 避免不必要的重渲染
+
+- 列表项用 `React.memo`（当列表 > 20 项时）
+- 复杂计算用 `useMemo`（DAG 状态、进度百分比等）
+- 回调函数用 `useCallback`（传递给子组件的 onPress 等）
+- 不在 render 中创建新对象 / 数组作为 props
+
+### 图片
+
+- 使用 `expo-image`（而非 RN 的 `Image`），性能更好且支持缓存
+- 指定图片尺寸，避免布局抖动
+- 列表中的图片使用 `placeholder` 属性
+
+---
+
+## useEffect 规范
+
+### 依赖数组
+
+- 必须包含所有在 effect 内使用的外部变量
+- 如果确实只需执行一次，使用 `useRef` guard 模式并注释原因：
+
+```typescript
+const hasRun = useRef(false);
+useEffect(() => {
+  if (hasRun.current) return;
+  hasRun.current = true;
+  // 执行一次性操作（如页面初始化数据加载）
+  doSomething();
+}, []);
+```
+
+### 清理
+
+返回 cleanup 函数，避免内存泄漏：
+
+```typescript
+useEffect(() => {
+  const sub = someEmitter.addListener('event', handler);
+  return () => sub.remove();
+}, []);
+```
+
+---
+
+## 无障碍（Accessibility）
+
+所有可交互元素必须有 `accessibilityLabel`：
+
+```typescript
+<TouchableOpacity
+  onPress={handlePress}
+  accessibilityLabel="返回上一页"
+  accessibilityRole="button"
+>
+  <Text>← 返回</Text>
+</TouchableOpacity>
+```
+
+图标 / emoji 按钮必须有 label。纯装饰性图片设置 `accessibilityElementsHidden`。
+
+---
+
+## 动画与交互
+
+- 简单动画用 `Animated` API 或 `LayoutAnimation`
+- 复杂手势用 `react-native-gesture-handler` + `react-native-reanimated`
+- 页面切换动画通过 Expo Router 的 `screenOptions.animation` 配置
+- 列表空状态、加载状态之间的过渡要平滑，避免布局跳动
+
+---
+
+## 安全
+
+- 敏感 token（access_token）只存储在 `expo-secure-store` 中
+- 不在 console.log 中输出 token 或用户密码
+- API 请求中 Authorization header 通过 tRPC link 统一注入，不在各页面手动设置
+- 禁止在路由参数中传递敏感信息
+
+---
+
+## 国际化预留
+
+当前 UI 文案硬编码中文。如果未来需要国际化：
+
+- 文案统一放在 `utils/i18n/` 下的 JSON 文件中
+- 组件中通过 `t('key')` 函数引用
+- 不在组件中直接写中文字符串（除了开发阶段可以）
+
+---
+
+## Barrel Export
+
+每个 `components/` 子目录必须有 `index.ts` 做 barrel export：
+
+```typescript
+// components/ui/index.ts
+export { BackButton } from './BackButton';
+export { LoadingScreen } from './LoadingScreen';
+export { ErrorScreen } from './ErrorScreen';
+export { ProgressBar } from './ProgressBar';
+export { Badge } from './Badge';
+```
+
+使用时统一从 barrel 导入：
+
+```typescript
+// ✅
+import { BackButton, LoadingScreen, Badge } from '../../components/ui';
+
+// ❌
+import { BackButton } from '../../components/ui/BackButton';
+```
+
+---
+
+## 依赖管理
+
+- 移动端使用 **npm**（不是 pnpm），因为 Expo 兼容性问题
+- 不安装 `@trpc/server`（移动端只需 client + react-query，类型通过 tsconfig paths 解析）
+- 新增依赖前检查 Expo 兼容性（`npx expo install <package>`）
+- 定期用 `npx depcheck` 清理未使用的依赖

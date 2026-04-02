@@ -130,7 +130,7 @@ async function callGeminiAPI(
   promptText: string,
   systemMessage?: string,
 ): Promise<string> {
-  const url = `${LLM_BASE_URL}/v1beta/models/${LLM_MODEL}:generateContent?key=${LLM_API_KEY}`;
+  const url = `${LLM_BASE_URL}/v1beta/models/${LLM_MODEL}:generateContent`;
 
   const contents: GeminiContent[] = [
     { role: 'user', parts: [{ text: promptText }] },
@@ -138,7 +138,6 @@ async function callGeminiAPI(
 
   const body: Record<string, unknown> = { contents };
 
-  // Gemini 的 system instruction
   if (systemMessage) {
     body.systemInstruction = {
       parts: [{ text: systemMessage }],
@@ -147,7 +146,10 @@ async function callGeminiAPI(
 
   const response = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'x-goog-api-key': LLM_API_KEY,
+    },
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(LLM_TIMEOUT_MS),
   });

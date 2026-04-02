@@ -46,8 +46,8 @@ export interface CourseListItem {
   topic: string;
   level: string;
   mode: string;
-  mapMeta: unknown;
-  nodes: unknown;
+  mapMeta: MapMetaJson;
+  nodes: DAGNodeJson[];
   createdAt: string;
   progressPercentage: number;
 }
@@ -61,8 +61,8 @@ export interface CourseMapDetail {
   mode: string;
   language: string;
   totalCommitmentMinutes: number;
-  mapMeta: unknown;
-  nodes: unknown;
+  mapMeta: MapMetaJson;
+  nodes: DAGNodeJson[];
   createdAt: string;
 }
 
@@ -339,6 +339,7 @@ export async function listCourseMaps(
   db: Database,
   userId: string,
 ): Promise<{ courses: CourseListItem[] }> {
+  // 一次查询获取所有课程
   const rows = await db
     .select({
       id: courseMaps.id,
@@ -353,34 +354,38 @@ export async function listCourseMaps(
     .where(eq(courseMaps.userId, userId))
     .orderBy(desc(courseMaps.createdAt));
 
-  // 对每个课程计算进度百分比
-  const courses: CourseListItem[] = [];
-  for (const row of rows) {
-    const nodes = row.nodes as CourseMapNode[] | null;
-    const totalNodes = nodes?.length ?? 0;
+  // 一次 GROUP BY 聚合查询获取所有课程的完成节点数（替代 N+1）
+  const courseIds = rows.map((r) => r.id);
+  const completedMap: Record<string, number> = {};
 
-    let completedNodes = 0;
-    if (totalNodes > 0) {
-      const progressRows = await db
-        .select({
-          count: sql<number>`count(*)::int`,
-        })
-        .from(nodeProgress)
-        .where(
-          and(
-            eq(nodeProgress.userId, userId),
-            eq(nodeProgress.courseMapId, row.id),
-            eq(nodeProgress.status, 'completed'),
-          ),
-        );
-      completedNodes = progressRows[0]?.count ?? 0;
-    }
+  if (courseIds.length > 0) {
+    const progressAgg = await db
+      .select({
+        courseMapId: nodeProgress.courseMapId,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(nodeProgress)
+      .where(
+        and(
+          eq(nodeProgress.userId, userId),
+          eq(nodeProgress.status, 'completed'),
+        ),
+      )
+      .groupBy(nodeProgress.courseMapId);
 
+    progressAgg.forEach((r) => {
+      completedMap[r.courseMapId] = r.count;
+    });
+  }
+
+  const courses: CourseListItem[] = rows.map((row) => {
+    const totalNodes = (row.nodes as DAGNodeJson[])?.length ?? 0;
+    const completedNodes = completedMap[row.id] ?? 0;
     const progressPercentage = totalNodes > 0
       ? Math.round((completedNodes / totalNodes) * 100)
       : 0;
 
-    courses.push({
+    return {
       courseMapId: row.id,
       topic: row.topic,
       level: row.level,
@@ -389,8 +394,8 @@ export async function listCourseMaps(
       nodes: row.nodes,
       createdAt: row.createdAt.toISOString(),
       progressPercentage,
-    });
-  }
+    };
+  });
 
   console.log(`[courseMap.list] userId=${userId}, count=${courses.length}`);
   return { courses };

@@ -37,7 +37,7 @@ function AuthNavigator() {
 }
 
 export default function RootLayout() {
-  // React Query: app 从后台恢复时自动 refetch stale queries
+  // app 从后台恢复时自动 refetch stale queries
   useEffect(() => {
     const sub = AppState.addEventListener('change', (status) => {
       if (Platform.OS !== 'web') {
@@ -50,9 +50,9 @@ export default function RootLayout() {
   const [queryClient] = useState(() => new QueryClient({
     defaultOptions: {
       queries: {
-        staleTime: 0,           // 数据立即标记为 stale
-        refetchOnMount: true,   // 组件挂载时 refetch
-        refetchOnWindowFocus: true, // 窗口获得焦点时 refetch
+        staleTime: 0,
+        refetchOnMount: true,
+        refetchOnWindowFocus: true,
         retry: 1,
       },
     },
@@ -70,7 +70,9 @@ export default function RootLayout() {
               if (session?.access_token) {
                 headers['Authorization'] = `Bearer ${session.access_token}`;
               }
-            } catch {}
+            } catch (err) {
+              console.warn('[trpc] Failed to get auth session:', err);
+            }
             return headers;
           },
         }),

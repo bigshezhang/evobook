@@ -1,0 +1,210 @@
+# 项目架构原则
+
+本规则适用于整个 monorepo（`apps/api`、`apps/mobile`、`apps/web`）。
+
+---
+
+## Monorepo 结构
+
+```
+/
+  apps/
+    api/       # 后端 — Hono + tRPC + Drizzle
+    web/       # Web 前端 — Vite + React + Tailwind
+    mobile/    # 移动端 — Expo + React Native
+  packages/    # （如需要）共享代码包
+  docs/        # 架构文档
+```
+
+- 用 **pnpm workspace + Turbo** 管理 monorepo
+- 移动端例外使用 **npm**（Expo 兼容性）
+- 各 app 之间通过 **tRPC 的 AppRouter 类型**共享接口契约，不需要共享运行时代码包
+
+---
+
+## 端到端类型安全链
+
+这是本项目最核心的架构优势，必须严格维护。
+
+```
+db/schema.ts 定义表结构和 JSONB 类型接口
+    ↓
+service.ts 使用具体类型作为返回值（不用 unknown）
+    ↓
+router.ts 通过 tRPC 暴露（Zod 校验输入，返回值自动推断）
+    ↓
+客户端 trpc.xxx.useQuery() 自动获得正确类型（零手动定义）
+```
+
+### 类型链断裂的常见原因及预防
+
+| 断裂点 | 原因 | 预防 |
+|--------|------|------|
+| Service 返回 `unknown` | JSONB 列默认 `unknown` | 返回类型 interface 中使用具体 JSON 类型 |
+| 客户端用 `as any` | 不信任 tRPC 推断 | 先检查后端返回类型是否正确，而非在客户端绕过 |
+| 手动定义 API 类型 | 前端自己写 interface | 删除，直接用 tRPC 推断 |
+| Zod schema 不完整 | 只校验部分字段 | `.input()` 中完整定义所有字段 |
+
+### JSONB 类型黄金规则
+
+在 `db/schema.ts` 中定义 JSONB 类型接口，在 service 返回类型中使用它们，这样 tRPC 会自动将类型传播到所有客户端：
+
+```typescript
+// db/schema.ts
+export interface MapMetaJson {
+  course_name: string;
+  strategy_rationale: string;
+  mode: string;
+  time_budget_minutes: number;
+  time_sum_minutes: number;
+  time_delta_minutes: number;
+}
+
+// service.ts 返回类型引用它
+export interface CourseMapDetail {
+  mapMeta: MapMetaJson;   // ✅ 客户端自动获得类型
+  nodes: DAGNodeJson[];   // ✅
+}
+```
+
+---
+
+## 跨端代码复用策略
+
+### 当前（轻量方案）
+
+- 类型通过 tRPC 自动共享，不需要手动维护
+- 前端通过 `tsconfig.json` 的 `paths` 引用后端类型：
+  ```json
+  { "paths": { "@evobook/api/*": ["../api/*"] } }
+  ```
+
+### 如果需要共享运行时逻辑
+
+当同一段计算逻辑（如 DAG 状态计算）在 web 和 mobile 中重复出现时：
+
+1. 创建 `packages/shared/` 目录
+2. 在 `pnpm-workspace.yaml` 中添加 `packages/*`
+3. 将共享逻辑放入 `packages/shared/src/`
+4. 各 app 通过 workspace 依赖引用
+
+触发条件：同一段逻辑在 2+ 个 app 中出现且行数 > 20 行。
+
+---
+
+## 数据流架构
+
+### 请求流
+
+```
+客户端 → httpBatchLink → Hono /trpc/* → fetchRequestHandler
+  → createContext（JWT 校验，profile 自动创建）
+    → tRPC procedure（Zod 校验）
+      → service 函数（业务逻辑 + DB）
+        → 返回业务类型
+```
+
+### 认证流
+
+```
+客户端：Supabase Auth → access_token → Authorization header
+服务端：jose JWKS 校验 → userId → createContext → protectedProcedure
+```
+
+- 客户端通过 tRPC `httpBatchLink` 的 `headers()` 函数统一注入 token
+- 服务端在 `createContext` 中一次性校验，各 procedure 不需要重复
+- `protectedProcedure` 中间件保证 `ctx.userId` 为 `string`（已断言）
+
+### LLM 调用流
+
+```
+service 拼 prompt → completeLLM() → callGeminiAPI() → Gemini REST API
+                         ↕
+                   prompt_runs 表（全量日志）
+                         ↕
+                   MOCK_LLM=true 时短路
+```
+
+---
+
+## 防腐层原则
+
+### 后端不依赖前端细节
+
+- Service 不返回 UI 文案（如 `{ message: '操作成功！' }`）
+- Service 不返回 HTTP 状态码
+- Service 不知道自己被 tRPC 还是 CLI 调用
+
+### 前端不依赖后端实现细节
+
+- 前端不直接操作 DB schema 类型（通过 tRPC 推断的接口类型间接使用）
+- 前端不依赖后端的错误 message 措辞来判断逻辑（用 tRPC error code）
+- 前端不关心 LLM 调用细节（只调 mutation，等结果）
+
+### 切片不依赖切片
+
+- `features/A/service.ts` 禁止 import `features/B/service.ts`
+- 如果两个 feature 需要共享逻辑：
+  - 提取到 `lib/` 中（基础设施级）
+  - 或在 DB schema 层面通过表关联（数据级）
+  - 但不做 feature 级 import
+
+---
+
+## 性能备忘
+
+### 已知需注意的点
+
+1. **N+1 查询**：列表接口中对每个项做子查询。用 `GROUP BY` 聚合替代。
+2. **逐条 INSERT**：循环中单条插入。用批量 `insert().values([...])` 替代。
+3. **createContext 开销**：每个请求（含公开接口）都会查 DB 确保 profile 存在。理想方案是移到 `protectedProcedure` 中且用进程级缓存。
+4. **LLM 调用是最大延迟源**：知识卡片生成 3-10 秒。用预生成（fire-and-forget）+ 缓存 + 客户端轮询进度来优化体验。
+
+### 数据库索引
+
+Drizzle schema 中已定义索引（`index(...)`）。新增查询条件前，确认对应列有索引。高频查询路径：
+- `node_progress` 按 `userId + courseMapId` 查询
+- `node_contents` 按 `courseMapId + nodeId + contentType` 查询
+- `course_maps` 按 `userId` 查询
+
+---
+
+## 环境与配置
+
+### 后端
+
+- 环境变量在 `.env` 中定义，`tsx --env-file=.env` 加载
+- 必需变量缺失时在启动阶段 `throw new Error` 快速失败
+- LLM 配置（模型名、base URL、API key、超时、重试次数）全部通过环境变量控制
+
+### 移动端
+
+- 通过 `app.config.ts` 的 `extra` 字段注入环境变量
+- `utils/constants.ts` 从 `expo-constants` 读取
+- 凭证不硬编码在源码中，走 `.env` 或 EAS secrets
+
+---
+
+## 测试策略（预留）
+
+当前项目无测试。未来引入时的建议路径：
+
+1. **优先测 Service 层**：函数式、无副作用（除 DB）、参数显式传入 → 最容易测
+2. **DB 测试**：用测试数据库 + 事务回滚，或 `drizzle-kit push` 到测试 schema
+3. **LLM 测试**：`MOCK_LLM=true` 已内置，直接用 mock 模式跑 service 测试
+4. **E2E 测试**：启动 Hono server，通过 tRPC client 发请求，验证完整链路
+
+---
+
+## 命名约定
+
+| 层级 | 命名规则 | 示例 |
+|------|---------|------|
+| Feature 目录 | kebab-case | `course-map/`, `node-progress/` |
+| Router 导出 | camelCase + Router | `courseMapRouter` |
+| Service 函数 | camelCase 动词开头 | `generateCourseMap`, `getProgress` |
+| 类型 interface | PascalCase | `CourseMapDetail`, `NodeProgressItem` |
+| DB 表名 | snake_case | `course_maps`, `node_progress` |
+| DB 列名 | camelCase（Drizzle 自动映射） | `courseMapId` → `course_map_id` |
+| 日志前缀 | `[模块.方法]` | `[courseMap.generate]`, `[llm]` |
+| 环境变量 | UPPER_SNAKE | `DATABASE_URL`, `MOCK_LLM` |

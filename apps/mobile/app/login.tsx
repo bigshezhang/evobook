@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../utils/auth';
+import { colors, spacing, radii, typography } from '../utils/theme';
 
 export default function LoginScreen() {
   const { signIn, signUp } = useAuth();
@@ -33,58 +34,72 @@ export default function LoginScreen() {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.surface }}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
-        <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', paddingHorizontal: 24 }}>
+        <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', paddingHorizontal: spacing.xxl }}>
           {/* 品牌区 */}
-          <View style={{ alignItems: 'center', marginBottom: 48 }}>
-            <Text style={{ fontSize: 36, fontWeight: '800', color: '#4F46E5' }}>EvoBook</Text>
-            <Text style={{ fontSize: 16, color: '#6B7280', marginTop: 8 }}>AI 驱动的个性化学习</Text>
+          <View style={{ alignItems: 'center', marginBottom: spacing.xxxxl }}>
+            <Text style={{ fontSize: 36, fontWeight: '800', color: colors.primary }}>EvoBook</Text>
+            <Text style={{ ...typography.body, color: colors.textSecondary, marginTop: spacing.sm }}>
+              AI 驱动的个性化学习
+            </Text>
           </View>
 
           {/* 表单 */}
-          <View style={{ gap: 16 }}>
+          <View style={{ gap: spacing.lg }}>
             <TextInput
               placeholder="邮箱"
               value={email}
               onChangeText={setEmail}
               autoCapitalize="none"
               keyboardType="email-address"
-              style={{ borderWidth: 1, borderColor: '#D1D5DB', borderRadius: 12, padding: 16, fontSize: 16 }}
+              style={{
+                borderWidth: 1,
+                borderColor: colors.borderLight,
+                borderRadius: radii.md,
+                padding: spacing.lg,
+                ...typography.body,
+              }}
             />
             <TextInput
               placeholder="密码"
               value={password}
               onChangeText={setPassword}
               secureTextEntry
-              style={{ borderWidth: 1, borderColor: '#D1D5DB', borderRadius: 12, padding: 16, fontSize: 16 }}
+              style={{
+                borderWidth: 1,
+                borderColor: colors.borderLight,
+                borderRadius: radii.md,
+                padding: spacing.lg,
+                ...typography.body,
+              }}
             />
 
-            {error ? <Text style={{ color: '#EF4444', textAlign: 'center' }}>{error}</Text> : null}
-            {success ? <Text style={{ color: '#10B981', textAlign: 'center' }}>{success}</Text> : null}
+            {error ? <Text style={{ color: colors.error, textAlign: 'center' }}>{error}</Text> : null}
+            {success ? <Text style={{ color: colors.success, textAlign: 'center' }}>{success}</Text> : null}
 
             <TouchableOpacity
               onPress={handleSubmit}
               disabled={loading}
               style={{
-                backgroundColor: '#4F46E5',
-                borderRadius: 12,
-                padding: 16,
+                backgroundColor: colors.primary,
+                borderRadius: radii.md,
+                padding: spacing.lg,
                 alignItems: 'center',
                 opacity: loading ? 0.6 : 1,
               }}
             >
               {loading ? (
-                <ActivityIndicator color="#fff" />
+                <ActivityIndicator color={colors.surface} />
               ) : (
-                <Text style={{ color: '#fff', fontSize: 18, fontWeight: '600' }}>
+                <Text style={{ color: colors.surface, ...typography.h3 }}>
                   {isSignUp ? '注册' : '登录'}
                 </Text>
               )}
             </TouchableOpacity>
 
             <TouchableOpacity onPress={() => { setIsSignUp(!isSignUp); setError(''); setSuccess(''); }}>
-              <Text style={{ textAlign: 'center', color: '#4F46E5', fontSize: 15 }}>
+              <Text style={{ textAlign: 'center', color: colors.primary, ...typography.bodySmall }}>
                 {isSignUp ? '已有账号？去登录' : '没有账号？去注册'}
               </Text>
             </TouchableOpacity>

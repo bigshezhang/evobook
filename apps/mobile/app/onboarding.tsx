@@ -3,11 +3,20 @@ import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, TextInput, K
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { trpc } from '../utils/trpc';
+import { useOnboardingStore, OnboardingFinishData } from '../utils/stores/onboardingStore';
+import { colors, spacing, radii, typography } from '../utils/theme';
+import { BackButton } from '../components/ui';
+import { MessageBubble } from '../components/chat/MessageBubble';
+import { OptionButton } from '../components/chat/OptionButton';
+import { ConceptPicker } from '../components/chat/ConceptPicker';
 
 interface Message {
+  id: string;
   role: 'assistant' | 'user';
   content: string;
 }
+
+const generateId = () => Date.now().toString() + Math.random().toString(36).slice(2);
 
 export default function OnboardingScreen() {
   const router = useRouter();
@@ -18,11 +27,11 @@ export default function OnboardingScreen() {
   const [options, setOptions] = useState<string[]>([]);
   const [concepts, setConcepts] = useState<{ list: string[]; selected: Set<string> } | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
-  const [finishData, setFinishData] = useState<any>(null);
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // 初始化对话
+  const finishData = useOnboardingStore((s) => s.finishData);
+
   useEffect(() => {
     sendMessage({});
   }, []);
@@ -38,25 +47,28 @@ export default function OnboardingScreen() {
       });
 
       setSessionId(response.sessionId);
-
-      // 添加 AI 消息
-      setMessages((prev) => [...prev, { role: 'assistant', content: response.message }]);
+      setMessages((prev) => [...prev, { id: generateId(), role: 'assistant', content: response.message }]);
 
       if (response.type === 'chat') {
         setOptions(response.options ?? []);
       } else if (response.type === 'concept_list_check') {
-        setConcepts({ list: (response as any).concepts ?? [], selected: new Set() });
+        const conceptList = 'concepts' in response ? (response.concepts as string[]) : [];
+        setConcepts({ list: conceptList, selected: new Set() });
       } else if (response.type === 'finish') {
-        setFinishData((response as any).data);
+        const data = 'data' in response ? (response.data as OnboardingFinishData) : null;
+        if (data) {
+          useOnboardingStore.getState().setFinishData(data);
+        }
       }
-    } catch (err: any) {
-      setMessages((prev) => [...prev, { role: 'assistant', content: `出错了：${err.message}` }]);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      setMessages((prev) => [...prev, { id: generateId(), role: 'assistant', content: `出错了：${message}` }]);
     }
     setLoading(false);
   };
 
   const handleOptionSelect = (option: string) => {
-    setMessages((prev) => [...prev, { role: 'user', content: option }]);
+    setMessages((prev) => [...prev, { id: generateId(), role: 'user', content: option }]);
     sendMessage({ userChoice: option });
   };
 
@@ -64,14 +76,14 @@ export default function OnboardingScreen() {
     if (!inputText.trim()) return;
     const text = inputText.trim();
     setInputText('');
-    setMessages((prev) => [...prev, { role: 'user', content: text }]);
+    setMessages((prev) => [...prev, { id: generateId(), role: 'user', content: text }]);
     sendMessage({ userMessage: text });
   };
 
   const handleConceptConfirm = () => {
     if (!concepts) return;
     const selected = Array.from(concepts.selected);
-    setMessages((prev) => [...prev, { role: 'user', content: `已选择 ${selected.length} 个概念` }]);
+    setMessages((prev) => [...prev, { id: generateId(), role: 'user', content: `已选择 ${selected.length} 个概念` }]);
     sendMessage({ userMessage: JSON.stringify({ interested_concepts: selected }) });
   };
 
@@ -83,27 +95,18 @@ export default function OnboardingScreen() {
     setConcepts({ ...concepts, selected: newSelected });
   };
 
-  const renderMessage = ({ item }: { item: Message }) => (
-    <View style={{
-      alignSelf: item.role === 'user' ? 'flex-end' : 'flex-start',
-      backgroundColor: item.role === 'user' ? '#4F46E5' : '#F3F4F6',
-      borderRadius: 16,
-      padding: 14,
-      marginVertical: 4,
-      maxWidth: '85%',
-    }}>
-      <Text style={{ color: item.role === 'user' ? '#fff' : '#1F2937', fontSize: 15, lineHeight: 22 }}>
-        {item.content}
-      </Text>
-    </View>
-  );
-
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#E5E7EB' }}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <Text style={{ fontSize: 16, color: '#4F46E5' }}>← 返回</Text>
-        </TouchableOpacity>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.surface }}>
+      {/* 顶栏 */}
+      <View style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: spacing.lg,
+        paddingVertical: spacing.md,
+        borderBottomWidth: 1,
+        borderBottomColor: colors.border,
+      }}>
+        <BackButton />
         <Text style={{ flex: 1, textAlign: 'center', fontSize: 17, fontWeight: '600' }}>创建新课程</Text>
         <View style={{ width: 50 }} />
       </View>
@@ -112,87 +115,81 @@ export default function OnboardingScreen() {
         <FlatList
           ref={flatListRef}
           data={messages}
-          renderItem={renderMessage}
-          keyExtractor={(_, i) => String(i)}
-          contentContainerStyle={{ padding: 16, paddingBottom: 8 }}
+          renderItem={({ item }) => <MessageBubble role={item.role} content={item.content} />}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={{ padding: spacing.lg, paddingBottom: spacing.sm }}
           onContentSizeChange={() => flatListRef.current?.scrollToEnd()}
         />
 
         {loading && (
-          <View style={{ paddingHorizontal: 16, paddingVertical: 8 }}>
-            <ActivityIndicator color="#4F46E5" />
+          <View style={{ paddingHorizontal: spacing.lg, paddingVertical: spacing.sm }}>
+            <ActivityIndicator color={colors.primary} />
           </View>
         )}
 
         {/* 选项按钮 */}
         {options.length > 0 && !loading && (
-          <View style={{ paddingHorizontal: 16, paddingBottom: 8, gap: 8 }}>
+          <View style={{ paddingHorizontal: spacing.lg, paddingBottom: spacing.sm, gap: spacing.sm }}>
             {options.map((opt, i) => (
-              <TouchableOpacity
-                key={i}
-                onPress={() => handleOptionSelect(opt)}
-                style={{ borderWidth: 1, borderColor: '#4F46E5', borderRadius: 12, padding: 14 }}
-              >
-                <Text style={{ color: '#4F46E5', fontSize: 15, textAlign: 'center' }}>{opt}</Text>
-              </TouchableOpacity>
+              <OptionButton key={i} label={opt} onPress={() => handleOptionSelect(opt)} />
             ))}
           </View>
         )}
 
         {/* 概念选择 */}
         {concepts && !loading && (
-          <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
-              {concepts.list.map((c) => (
-                <TouchableOpacity
-                  key={c}
-                  onPress={() => toggleConcept(c)}
-                  style={{
-                    borderWidth: 1,
-                    borderColor: concepts.selected.has(c) ? '#4F46E5' : '#D1D5DB',
-                    backgroundColor: concepts.selected.has(c) ? '#EEF2FF' : '#fff',
-                    borderRadius: 20,
-                    paddingHorizontal: 14,
-                    paddingVertical: 8,
-                  }}
-                >
-                  <Text style={{ color: concepts.selected.has(c) ? '#4F46E5' : '#6B7280' }}>{c}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-            <TouchableOpacity
-              onPress={handleConceptConfirm}
-              style={{ backgroundColor: '#4F46E5', borderRadius: 12, padding: 14, alignItems: 'center' }}
-            >
-              <Text style={{ color: '#fff', fontWeight: '600' }}>确认选择</Text>
-            </TouchableOpacity>
-          </View>
+          <ConceptPicker
+            concepts={concepts.list}
+            selected={concepts.selected}
+            onToggle={toggleConcept}
+            onConfirm={handleConceptConfirm}
+          />
         )}
 
-        {/* 完成按钮 */}
+        {/* 完成按钮 — 跳转到生成页（数据已存入 store） */}
         {finishData && !loading && (
-          <View style={{ paddingHorizontal: 16, paddingBottom: 16 }}>
+          <View style={{ paddingHorizontal: spacing.lg, paddingBottom: spacing.lg }}>
             <TouchableOpacity
-              onPress={() => router.replace({ pathname: '/generating', params: { data: JSON.stringify(finishData) } })}
-              style={{ backgroundColor: '#4F46E5', borderRadius: 12, padding: 16, alignItems: 'center' }}
+              onPress={() => router.replace('/generating')}
+              style={{
+                backgroundColor: colors.primary,
+                borderRadius: radii.md,
+                padding: spacing.lg,
+                alignItems: 'center',
+              }}
             >
-              <Text style={{ color: '#fff', fontSize: 18, fontWeight: '700' }}>开始生成课程 →</Text>
+              <Text style={{ color: colors.surface, ...typography.h3 }}>开始生成课程 →</Text>
             </TouchableOpacity>
           </View>
         )}
 
         {/* 自由输入（当没有选项时） */}
         {options.length === 0 && !concepts && !finishData && !loading && messages.length > 0 && (
-          <View style={{ flexDirection: 'row', paddingHorizontal: 16, paddingBottom: 16, gap: 8 }}>
+          <View style={{ flexDirection: 'row', paddingHorizontal: spacing.lg, paddingBottom: spacing.lg, gap: spacing.sm }}>
             <TextInput
               value={inputText}
               onChangeText={setInputText}
               placeholder="输入你的回答..."
-              style={{ flex: 1, borderWidth: 1, borderColor: '#D1D5DB', borderRadius: 12, padding: 12, fontSize: 15 }}
+              style={{
+                flex: 1,
+                borderWidth: 1,
+                borderColor: colors.borderLight,
+                borderRadius: radii.md,
+                padding: spacing.md,
+                ...typography.bodySmall,
+              }}
               onSubmitEditing={handleTextSend}
             />
-            <TouchableOpacity onPress={handleTextSend} style={{ backgroundColor: '#4F46E5', borderRadius: 12, paddingHorizontal: 16, justifyContent: 'center' }}>
-              <Text style={{ color: '#fff', fontWeight: '600' }}>发送</Text>
+            <TouchableOpacity
+              onPress={handleTextSend}
+              style={{
+                backgroundColor: colors.primary,
+                borderRadius: radii.md,
+                paddingHorizontal: spacing.lg,
+                justifyContent: 'center',
+              }}
+            >
+              <Text style={{ color: colors.surface, fontWeight: '600' }}>发送</Text>
             </TouchableOpacity>
           </View>
         )}

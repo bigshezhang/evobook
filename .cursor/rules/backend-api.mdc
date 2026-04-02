@@ -1,0 +1,378 @@
+# 后端 API 编码规范
+
+本规则适用于 `apps/api/src/` 目录下所有代码。
+
+---
+
+## 技术栈
+
+- Node.js（ESM）
+- Hono（HTTP 框架）
+- tRPC v11（类型安全 RPC）
+- Drizzle ORM + PostgreSQL
+- Zod（输入校验）
+- Supabase Auth（JWT/JWKS 校验）
+- 自建 LLM 调用层（completeLLM）
+
+---
+
+## 架构：Vertical Slice Architecture
+
+### 目录结构
+
+```
+src/
+  index.ts               # Hono 入口
+  trpc.ts                # tRPC 初始化 + Context + Procedure
+  root-router.ts         # 合并所有 feature router
+  db/
+    index.ts             # Drizzle 客户端
+    schema.ts            # 所有表定义
+  lib/
+    llm.ts               # LLM 统一调用入口
+    prompts.ts           # Prompt 模板加载
+    supabase.ts          # JWT 校验
+  features/
+    [feature-name]/
+      router.ts          # tRPC route 定义
+      service.ts         # 业务逻辑
+```
+
+### 核心原则
+
+1. **切片间零依赖**：`features/A/` 禁止 import `features/B/` 的任何内容。切片只允许依赖 `db/`、`lib/`、`trpc.ts`。
+2. **添加功能 = 添加文件**：新建 `features/xxx/router.ts` + `service.ts`，在 `root-router.ts` 中注册，不改动其他 feature。
+3. **Router 只做编排**：Zod 输入校验 → 调 service → 错误映射。不写业务逻辑。
+4. **Service 是业务核心**：所有 DB 查询、LLM 调用、业务判断都在 service 中。
+
+---
+
+## Service 函数签名约定
+
+```typescript
+// 第一个参数必须是 db: Database（保持可测试性）
+export async function myFunction(
+  db: Database,
+  userId: string,
+  input: MyInput,
+): Promise<MyResult> {
+  // ...
+}
+```
+
+- 返回值必须是业务类型 interface，不是 Drizzle row 类型
+- 不返回 HTTP 语义的内容（如 `{ message: 'success' }`），message 由 router/客户端决定
+- 函数命名：`getXxx`（查询）、`createXxx`（创建）、`updateXxx`（更新）、`deleteXxx`（删除）、`generateXxx`（LLM 生成）
+
+---
+
+## 类型安全
+
+### JSONB 字段必须使用具体类型
+
+```typescript
+// ✅ 正确 — tRPC 会将类型传播到客户端
+export interface CourseMapDetail {
+  mapMeta: MapMetaJson;
+  nodes: DAGNodeJson[];
+}
+
+// ❌ 禁止 — 会导致客户端收到 unknown，被迫 as any
+export interface CourseMapDetail {
+  mapMeta: unknown;
+  nodes: unknown;
+}
+```
+
+所有 JSONB 列的 TypeScript 接口必须在 `db/schema.ts`（或未来的 `db/schema/types.ts`）中定义，并在 service 返回类型中使用。
+
+### Zod Schema 即接口文档
+
+Router 的 `.input()` 同时充当运行时校验和接口文档。定义要完整：
+
+```typescript
+.input(z.object({
+  courseMapId: z.string().uuid(),
+  nodeId: z.number().int(),
+  status: z.enum(['locked', 'unlocked', 'in_progress', 'completed']),
+}))
+```
+
+---
+
+## 错误处理
+
+### Service 层
+
+Service 不依赖 tRPC，使用自定义 `AppError`（如果已创建）或带语义的 `Error`：
+
+```typescript
+// ✅ 推荐（如果有 AppError）
+throw AppError.notFound(`Course '${id}' not found`);
+
+// ✅ 可接受（直到 AppError 就位）
+throw new TRPCError({ code: 'NOT_FOUND', message: `Course '${id}' not found` });
+
+// ❌ 禁止 — 靠字符串匹配转换错误类型
+throw new Error('xxx not found');
+// router 里: if (message.includes('not found')) throw TRPCError
+```
+
+### Router 层
+
+```typescript
+// ✅ 直接处理
+const result = await myService(ctx.db, ctx.userId, input.id);
+if (!result) throw new TRPCError({ code: 'NOT_FOUND', message: '...' });
+return result;
+
+// ❌ 禁止 message.includes 模式
+catch (err) {
+  if (err.message.includes('not found')) ...
+}
+```
+
+### catch 块规范
+
+```typescript
+// ✅ 至少记录错误
+catch (err) {
+  console.error(`[feature.method] Error: ${err}`);
+}
+
+// ❌ 禁止空 catch
+catch {}
+catch {
+  // 忽略
+}
+```
+
+---
+
+## LLM 调用规范
+
+### 统一入口
+
+所有 LLM 调用必须通过 `completeLLM()`，不允许直接调用 `fetch` 或任何 LLM SDK：
+
+```typescript
+import { completeLLM } from '../../lib/llm';
+import { loadPrompt } from '../../lib/prompts';
+
+const systemPrompt = loadPrompt('knowledge_card');
+const response = await completeLLM({
+  promptName: 'knowledge_card',
+  promptText: userMessage,
+  outputFormat: 'json',
+  systemMessage: systemPrompt,
+});
+```
+
+### Prompt 模板
+
+- 存放于 `src/lib/prompts/*.txt`
+- 使用 `loadPrompt(name)` 加载（带缓存）
+- 新增 prompt 必须在 `prompts.ts` 的 `PROMPT_MAP` 中注册
+- Prompt 中的变量用 `{variable_name}` 格式，`completeLLM` 的 `variables` 参数自动替换
+
+### LLM 结果校验
+
+`completeLLM` 返回后，在 service 中校验关键字段存在性：
+
+```typescript
+const parsed = response.parsedData as Record<string, unknown> | null;
+if (!parsed || typeof parsed.markdown !== 'string') {
+  throw new TRPCError({
+    code: 'INTERNAL_SERVER_ERROR',
+    message: 'LLM returned invalid structure: missing markdown field',
+  });
+}
+```
+
+### LLM 结果缓存模式
+
+对于可缓存的 LLM 输出（知识卡片、QA），采用 "查缓存 → 标记生成中 → 调 LLM → 存结果" 模式：
+
+```typescript
+// 1. 查缓存
+const cached = await db.select().from(nodeContents).where(...).limit(1);
+if (cached.length > 0 && cached[0].generationStatus === 'completed') {
+  return cached[0].contentJson;
+}
+
+// 2. 标记为 generating
+await db.update(nodeContents).set({ generationStatus: 'generating' }).where(...);
+
+// 3. 调用 LLM
+try {
+  const result = await completeLLM({ ... });
+  // 4. 保存结果
+  await db.update(nodeContents).set({ contentJson: result, generationStatus: 'completed' }).where(...);
+  return result;
+} catch (err) {
+  // 5. 标记失败
+  await db.update(nodeContents).set({ generationStatus: 'failed', generationError: err.message }).where(...);
+  throw err;
+}
+```
+
+---
+
+## 数据库查询
+
+### 避免 N+1
+
+```typescript
+// ❌ 循环中查询
+for (const course of courses) {
+  const count = await db.select({ count }).from(progress).where(eq(courseMapId, course.id));
+}
+
+// ✅ 一次聚合
+const counts = await db
+  .select({ courseMapId: progress.courseMapId, count: sql<number>`count(*)::int` })
+  .from(progress)
+  .where(eq(progress.userId, userId))
+  .groupBy(progress.courseMapId);
+```
+
+### 批量插入
+
+```typescript
+// ❌ 循环单条插入
+for (const node of nodes) {
+  await db.insert(nodeProgress).values({ ... });
+}
+
+// ✅ 批量插入
+await db.insert(nodeProgress).values(
+  nodes.map(node => ({ userId, courseMapId, nodeId: node.id, status: 'locked' }))
+);
+```
+
+### 事务
+
+涉及多表写入且需要一致性时，使用事务：
+
+```typescript
+await db.transaction(async (tx) => {
+  await tx.insert(courseMaps).values({ ... });
+  await tx.insert(nodeProgress).values([...]);
+  await tx.update(profiles).set({ activeCourseMapId }).where(...);
+});
+```
+
+---
+
+## 日志规范
+
+```typescript
+// 格式：[模块.方法] 关键字段=值
+console.log(`[courseMap.generate] userId=${userId}, courseMapId=${courseMapId}, nodes=${nodes.length}`);
+console.error(`[nodeContent.knowledgeCard] Failed: nodeId=${nodeId}, error=${err.message}`);
+console.warn(`[llm] Attempt ${attempt} failed for prompt="${promptName}", retrying in ${delay}ms`);
+```
+
+- 日志使用英文
+- 成功操作用 `console.log`
+- 重试/降级用 `console.warn`
+- 失败用 `console.error`
+- 必须包含足够的上下文字段（userId、courseMapId 等）用于排查
+
+---
+
+## 后台任务
+
+对于长时间运行的 LLM 生成任务，使用 fire-and-forget 模式：
+
+```typescript
+// 后台触发，不阻塞 HTTP 响应
+generateAllNodeContents(db, courseMapId, nodes, courseInfo).catch((err) =>
+  console.error(`[courseMap.pregenerate] Background generation failed: ${err}`),
+);
+```
+
+- 必须 `.catch()` 捕获错误，禁止 unhandled rejection
+- 每个子任务（节点）独立 try/catch，单个失败不影响其他
+- 通过 DB 状态（`generating` / `completed` / `failed`）追踪进度
+- 前端通过轮询 query（refetchInterval）获取进度
+
+---
+
+## 认证
+
+### Procedure 类型
+
+| 类型 | 用途 | userId |
+|------|------|--------|
+| `publicProcedure` | 无需登录 | null |
+| `protectedProcedure` | 必须登录 | string（已断言） |
+| `optionalAuthProcedure` | 可选登录 | string \| null |
+
+### 权限检查
+
+在 router 层通过 procedure 类型控制，不在 service 层做权限判断。Service 接收的 `userId` 已经是可信的。
+
+---
+
+## 新 Feature 模板
+
+创建新 feature 时，复制以下结构：
+
+### router.ts
+
+```typescript
+import { z } from 'zod';
+import { router, protectedProcedure } from '../../trpc';
+import { myQuery, myMutation } from './service';
+
+export const myFeatureRouter = router({
+  get: protectedProcedure
+    .input(z.object({ id: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      return await myQuery(ctx.db, ctx.userId, input.id);
+    }),
+
+  create: protectedProcedure
+    .input(z.object({ name: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      return await myMutation(ctx.db, ctx.userId, input);
+    }),
+});
+```
+
+### service.ts
+
+```typescript
+import type { Database } from '../../db';
+// import 需要的 schema 表
+
+export interface MyResult { ... }
+
+export async function myQuery(
+  db: Database,
+  userId: string,
+  id: string,
+): Promise<MyResult | null> {
+  // Drizzle 查询
+}
+
+export async function myMutation(
+  db: Database,
+  userId: string,
+  input: { name: string },
+): Promise<MyResult> {
+  // 业务逻辑 + DB 写入
+}
+```
+
+### 注册到 root-router.ts
+
+```typescript
+import { myFeatureRouter } from './features/my-feature/router';
+
+export const appRouter = router({
+  // ...existing routes
+  myFeature: myFeatureRouter,
+});
+```

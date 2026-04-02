@@ -9,7 +9,7 @@ export interface QuizAttemptRow {
   id: string;
   courseMapId: string;
   nodeId: number;
-  quizJson: unknown;
+  quizJson: QuizJson;
   score: number | null;
   createdAt: string;
 }
@@ -18,7 +18,7 @@ function toAttemptRow(row: {
   id: string;
   courseMapId: string;
   nodeId: number;
-  quizJson: unknown;
+  quizJson: QuizJson;
   score: number | null;
   createdAt: Date;
 }): QuizAttemptRow {

@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router';
-import { Text } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 export default function TabLayout() {
   return (
@@ -8,7 +8,7 @@ export default function TabLayout() {
         name="index"
         options={{
           title: '学习',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>📚</Text>,
+          tabBarIcon: ({ color, size }) => <Ionicons name="book-outline" size={size} color={color} />,
         }}
       />
     </Tabs>
